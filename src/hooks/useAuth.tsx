@@ -60,8 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, username: string) {
     try {
-      // Since we're now using the email as the username, we don't need to pass a separate username
-      const { error } = await supabase.auth.signUp({ 
+      // First create the auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
@@ -70,19 +70,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      if (error) throw error;
+      if (authError) throw authError;
       
-      // Create user_info entry manually since we're working around trigger issues
-      try {
-        // We'll manually create the user_info entry after sign up
-        // This is a workaround until we fix the DB trigger
-        await supabase.from('user_info').insert({
-          username: email, // Use email as username
-          password: null // Password is handled by Supabase Auth
-        });
-      } catch (infoError) {
-        console.error("Error creating user info:", infoError);
-        // We don't throw here as the auth part succeeded
+      // Then explicitly create the user_info entry
+      if (authData.user) {
+        const { error: infoError } = await supabase
+          .from('user_info')
+          .insert({
+            username: email,
+            password: null // Password is handled by Supabase Auth
+          });
+        
+        if (infoError) {
+          console.error("Error creating user info:", infoError);
+          // Don't throw here as we want auth to succeed even if this fails
+        }
       }
 
       toast({
