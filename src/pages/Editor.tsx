@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +10,21 @@ const Editor = () => {
   const [emailContent, setEmailContent] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const { toast } = useToast();
+
+  // Load the saved email content from localStorage when the component mounts
+  useEffect(() => {
+    const savedContent = localStorage.getItem('savedEmailContent');
+    if (savedContent) {
+      setEmailContent(savedContent);
+      // Optional: Remove it from localStorage after loading
+      localStorage.removeItem('savedEmailContent');
+      
+      toast({
+        title: "Content restored",
+        description: "Your previous email description has been loaded.",
+      });
+    }
+  }, [toast]);
 
   const handleGenerateEmail = () => {
     if (!emailContent.trim()) {

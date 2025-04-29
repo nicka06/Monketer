@@ -13,19 +13,16 @@ export type Database = {
         Row: {
           created_at: string
           id: number
-          password: string | null
           username: string | null
         }
         Insert: {
           created_at?: string
           id?: number
-          password?: string | null
           username?: string | null
         }
         Update: {
           created_at?: string
           id?: number
-          password?: string | null
           username?: string | null
         }
         Relationships: []

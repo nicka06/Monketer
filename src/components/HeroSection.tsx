@@ -1,15 +1,41 @@
+
 import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
+import { useNavigate } from "react-router-dom";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "./ui/dialog";
+import { Link } from "react-router-dom";
+
 const HeroSection = () => {
   const [emailContent, setEmailContent] = useState("");
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const navigate = useNavigate();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Functionality will be added later
-    console.log("Email content submitted:", emailContent);
+    // Show the authentication dialog instead of proceeding directly
+    setShowAuthDialog(true);
   };
+
+  const handleAuthOption = (route: string) => {
+    // Save the email content to localStorage before navigating
+    if (emailContent.trim()) {
+      localStorage.setItem('savedEmailContent', emailContent);
+    }
+    
+    // Close dialog and navigate to the selected route
+    setShowAuthDialog(false);
+    navigate(route);
+  };
+
   return <div className="relative overflow-hidden bg-white pt-24 pb-16 sm:pt-32">
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute left-[calc(50%-30rem)] top-[calc(50%-20rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-emailore-purple-light to-white opacity-30 sm:left-[calc(50%-30rem)] sm:top-[calc(50%-25rem)] sm:w-[72.1875rem]"></div>
@@ -36,11 +62,39 @@ const HeroSection = () => {
                   <ArrowRight className="ml-2 h-4 w-4 inline-block transition-all group-hover:translate-x-1" />
                 </Button>
               </div>
-              
             </div>
           </form>
         </div>
       </div>
+      
+      {/* Authentication Dialog */}
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create your email</DialogTitle>
+            <DialogDescription>
+              Sign up or sign in to continue generating your email
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <Button
+              className="flex-1 bg-emailore-purple hover:bg-emailore-purple-dark"
+              onClick={() => handleAuthOption('/signup')}
+            >
+              Sign Up
+            </Button>
+            <Button
+              className="flex-1"
+              variant="outline"
+              onClick={() => handleAuthOption('/login')}
+            >
+              Sign In
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>;
 };
+
 export default HeroSection;
