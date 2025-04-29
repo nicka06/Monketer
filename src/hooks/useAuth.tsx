@@ -60,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, username: string) {
     try {
+      console.log("Starting signup process for:", email);
+      
       // First create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({ 
         email, 
@@ -70,10 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      if (authError) throw authError;
+      if (authError) {
+        console.error("Auth error during signup:", authError);
+        throw authError;
+      }
+      
+      console.log("Auth signup successful, user:", authData?.user?.id);
       
       // Then explicitly create the user_info entry
-      if (authData.user) {
+      if (authData?.user) {
         const { error: infoError } = await supabase
           .from('user_info')
           .insert({
@@ -84,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (infoError) {
           console.error("Error creating user info:", infoError);
           // Don't throw here as we want auth to succeed even if this fails
+        } else {
+          console.log("User info created successfully");
         }
       }
 
@@ -92,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "Your account has been created successfully.",
       });
     } catch (error: any) {
+      console.error("Signup process failed:", error);
       toast({
         title: "Sign Up Failed",
         description: error.message || "An unexpected error occurred",

@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,9 +22,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   
   if (!user) {
+    console.log("No user found, redirecting to login");
     return <Navigate to="/login" />;
   }
   
+  console.log("User authenticated, rendering protected content");
   return <>{children}</>;
 };
 
@@ -31,6 +34,8 @@ const AppRoutes = () => {
   const { user, loading } = useAuth();
   
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  
+  console.log("Auth state in AppRoutes:", user ? "Authenticated" : "Unauthenticated");
   
   return (
     <Routes>

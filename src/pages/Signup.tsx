@@ -18,6 +18,7 @@ const Signup = () => {
     
     try {
       await signUp(email, password, email);
+      console.log("Signup successful, navigating to /editor");
       // Navigate to the editor page after successful signup
       navigate('/editor');
     } catch (error) {
