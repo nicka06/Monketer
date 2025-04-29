@@ -138,7 +138,9 @@ export async function getProjectByNameAndUsername(projectName: string, username:
       }
       
       // Find the user with the matching email
-      const matchedUser = users.users.find(user => user.email === username);
+      // Explicitly type the user object to avoid TypeScript errors
+      type User = { id: string; email: string | null };
+      const matchedUser = users.users.find((user: User) => user.email === username);
       
       if (!matchedUser) {
         throw new Error('User not found');
