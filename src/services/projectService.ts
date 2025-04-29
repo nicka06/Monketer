@@ -8,10 +8,32 @@ export async function createProject(name: string, initialContent?: EmailTemplate
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
+    // Check if project name already exists for this user
+    const { data: existingProjects, error: checkError } = await supabase
+      .from('projects')
+      .select('name')
+      .eq('user_id', user.id)
+      .ilike('name', `${name}%`);
+    
+    if (checkError) throw checkError;
+    
+    // Modify name if it already exists
+    let uniqueName = name;
+    if (existingProjects && existingProjects.length > 0) {
+      // Find similar names and generate a name with an incremented number
+      const similarNames = existingProjects.map(p => p.name);
+      let counter = 1;
+      
+      while (similarNames.includes(uniqueName)) {
+        uniqueName = `${name} (${counter})`;
+        counter++;
+      }
+    }
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
-        name,
+        name: uniqueName,
         user_id: user.id,
         last_edited_at: new Date().toISOString(),
         created_at: new Date().toISOString()
@@ -20,7 +42,7 @@ export async function createProject(name: string, initialContent?: EmailTemplate
       .single();
 
     if (projectError) throw projectError;
-
+    
     // If initial content is provided, create first version and update HTML/semantic fields
     if (initialContent) {
       // Create email version
@@ -54,13 +76,70 @@ export async function createProject(name: string, initialContent?: EmailTemplate
     return {
       id: project.id,
       name: project.name,
-      description: project.description,
       lastEditedAt: new Date(project.last_edited_at),
       createdAt: new Date(project.created_at),
       isArchived: project.is_archived
     } as Project;
   } catch (error) {
     console.error('Error creating project:', error);
+    throw error;
+  }
+}
+
+// Helper function to get username from user ID
+export async function getUsernameFromId(userId: string): Promise<string> {
+  try {
+    const { data: userInfo, error } = await supabase
+      .from('user_info')
+      .select('username')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching username:', error);
+      return 'user'; // Fallback username
+    }
+    
+    return userInfo?.username || 'user';
+  } catch (error) {
+    console.error('Error in getUsernameFromId:', error);
+    return 'user'; // Fallback username
+  }
+}
+
+// Helper function to get project by name and username
+export async function getProjectByNameAndUsername(projectName: string, username: string) {
+  try {
+    // Find the user ID by username
+    const { data: userInfo, error: userError } = await supabase
+      .from('user_info')
+      .select('id')
+      .eq('username', username)
+      .single();
+      
+    if (userError) throw userError;
+    
+    if (!userInfo) {
+      throw new Error('User not found');
+    }
+    
+    // Find the project by name and user ID
+    const { data: projects, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', userInfo.id)
+      .eq('name', projectName)
+      .limit(1);
+      
+    if (projectError) throw projectError;
+    
+    if (!projects || projects.length === 0) {
+      throw new Error('Project not found');
+    }
+    
+    return projects[0];
+  } catch (error) {
+    console.error('Error fetching project by name and username:', error);
     throw error;
   }
 }
@@ -207,13 +286,12 @@ export async function getProject(projectId: string) {
 }
 
 // Save chat message
-export async function saveChatMessage(projectId: string, role: 'user' | 'assistant', content: string) {
+export async function saveChatMessage(projectId: string, content: string) {
   try {
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         project_id: projectId,
-        role,
         content,
       })
       .select();

@@ -6,10 +6,11 @@ import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
-import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange, createProject } from '@/services/projectService';
+import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange, createProject, getProjectByNameAndUsername, getUsernameFromId } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -40,12 +41,13 @@ const emptyTemplate: EmailTemplate = {
 };
 
 const Editor = () => {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, username, projectName } = useParams<{ projectId?: string; username?: string; projectName?: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const [projectName, setProjectName] = useState('Untitled Document 1');
+  const [projectData, setProjectData] = useState<Project | null>(null);
+  const [projectTitle, setProjectTitle] = useState('Untitled Document 1');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -54,62 +56,109 @@ const Editor = () => {
   const [isLoadingProject, setIsLoadingProject] = useState(true);
   const [progress, setProgress] = useState(0);
   const [hasCode, setHasCode] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   
-  // Load project data if projectId exists
+  // Load username for current user
+  useEffect(() => {
+    if (user) {
+      getUsernameFromId(user.id).then(name => setCurrentUsername(name));
+    }
+  }, [user]);
+
+  // Handle projectId or username/projectName route
   useEffect(() => {
     if (!user) return;
     
-    const loadProject = async () => {
+    const loadProjectData = async () => {
       try {
         setIsLoadingProject(true);
         
+        // Case 1: Using the /editor/:projectId route
         if (projectId) {
-          const projectData = await getProject(projectId);
-          
-          setProjectName(projectData.project.name);
-          
-          // Convert chat messages to our format
-          const formattedMessages = projectData.chatMessages || [];
-          
-          setChatMessages(formattedMessages);
-          
-          if (projectData.emailContent) {
-            // Apply pending changes to the template if both email content and pending changes exist
-            if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
-              const updatedTemplate = applyPendingChangesToTemplate(
-                projectData.emailContent,
-                projectData.pendingChanges
-              );
-              setEmailTemplate(updatedTemplate);
-            } else {
-              setEmailTemplate(projectData.emailContent);
+          loadProjectById(projectId);
+        }
+        // Case 2: Using the /editor/:username/:projectName route
+        else if (username && projectName) {
+          try {
+            const project = await getProjectByNameAndUsername(decodeURIComponent(projectName), username);
+            if (project) {
+              loadProjectById(project.id);
             }
-            setPendingChanges(projectData.pendingChanges || []);
-            setHasCode(true);
-          } else {
-            // If no email content exists yet but we have a project, show empty state
-            setEmailTemplate(null);
-            setHasCode(false);
+          } catch (error) {
+            console.error('Error loading project by name:', error);
+            toast({
+              title: 'Error',
+              description: 'Project not found',
+              variant: 'destructive',
+            });
+            navigate('/dashboard');
           }
-        } else {
-          // If no projectId, we're starting from scratch - don't set template yet
+        } 
+        // Case 3: Creating a new project at /editor route
+        else {
+          setProjectTitle('Untitled Document 1');
           setEmailTemplate(null);
+          setChatMessages([]);
+          setPendingChanges([]);
           setHasCode(false);
+          setIsLoadingProject(false);
         }
       } catch (error) {
-        console.error('Error loading project:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load project data',
-          variant: 'destructive',
-        });
-      } finally {
+        console.error('Error in loadProjectData:', error);
         setIsLoadingProject(false);
       }
     };
     
-    loadProject();
-  }, [projectId, user, toast]);
+    loadProjectData();
+  }, [projectId, username, projectName, user, navigate, toast]);
+
+  const loadProjectById = async (id: string) => {
+    try {
+      const projectData = await getProject(id);
+      
+      setProjectTitle(projectData.project.name);
+      setProjectData({
+        id: projectData.project.id,
+        name: projectData.project.name,
+        lastEditedAt: new Date(projectData.project.last_edited_at),
+        createdAt: new Date(projectData.project.created_at),
+        isArchived: projectData.project.is_archived
+      });
+      
+      // Convert chat messages to our format
+      const formattedMessages = projectData.chatMessages || [];
+      
+      setChatMessages(formattedMessages);
+      
+      if (projectData.emailContent) {
+        // Apply pending changes to the template if both email content and pending changes exist
+        if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
+          const updatedTemplate = applyPendingChangesToTemplate(
+            projectData.emailContent,
+            projectData.pendingChanges
+          );
+          setEmailTemplate(updatedTemplate);
+        } else {
+          setEmailTemplate(projectData.emailContent);
+        }
+        setPendingChanges(projectData.pendingChanges || []);
+        setHasCode(true);
+      } else {
+        // If no email content exists yet but we have a project, show empty state
+        setEmailTemplate(null);
+        setHasCode(false);
+      }
+    } catch (error) {
+      console.error('Error loading project:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load project data',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingProject(false);
+    }
+  };
 
   // Simulate progress for loading animation
   useEffect(() => {
@@ -186,6 +235,40 @@ const Editor = () => {
     return updatedTemplate;
   };
 
+  // Handle title change and potentially update project name
+  const handleTitleChange = async (newTitle: string) => {
+    setProjectTitle(newTitle);
+    
+    if (projectData?.id) {
+      try {
+        // Update project title in the database
+        const { error } = await supabase
+          .from('projects')
+          .update({ name: newTitle })
+          .eq('id', projectData.id);
+          
+        if (error) throw error;
+        
+        // Update URL to reflect new project name if using the username/projectName format
+        if (username && projectName && currentUsername) {
+          navigate(`/editor/${currentUsername}/${encodeURIComponent(newTitle)}`);
+        }
+        
+        toast({
+          title: 'Success',
+          description: 'Project name updated',
+        });
+      } catch (error) {
+        console.error('Error updating project name:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to update project name',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
   // Handle sending a message to the AI
   const handleSendMessage = async (message: string) => {
     try {
@@ -193,14 +276,21 @@ const Editor = () => {
       
       // If there's no projectId yet, create one first
       let targetProjectId = projectId;
+      let newProjectCreated = false;
       
-      if (!targetProjectId) {
+      if (!targetProjectId && !projectData) {
         // Create a new project since this is the first message
-        const newProject = await createProject(projectName);
+        const newProject = await createProject(projectTitle);
         targetProjectId = newProject.id;
+        setProjectData(newProject);
+        newProjectCreated = true;
         
-        // Update URL to include the project ID
-        navigate(`/editor/${targetProjectId}`, { replace: true });
+        // Update URL to include the username and project name
+        if (currentUsername) {
+          navigate(`/editor/${currentUsername}/${encodeURIComponent(newProject.name)}`, { replace: true });
+        } else {
+          navigate(`/editor/${targetProjectId}`, { replace: true });
+        }
       }
       
       // Add user message to chat
@@ -214,7 +304,7 @@ const Editor = () => {
       setChatMessages((prev) => [...prev, userMessage]);
       
       // Save user message to the database
-      await saveChatMessage(targetProjectId, 'user', message);
+      await saveChatMessage(targetProjectId!, message);
       
       // TODO: Call AI service for response
       // For now, we'll simulate an AI response
@@ -229,7 +319,7 @@ const Editor = () => {
         setChatMessages((prev) => [...prev, aiMessage]);
         
         // Save assistant message to the database
-        await saveChatMessage(targetProjectId, 'assistant', aiMessage.content);
+        await saveChatMessage(targetProjectId!, aiMessage.content);
         
         // Simulate email code being generated after first message
         if (!hasCode) {
@@ -388,11 +478,17 @@ const Editor = () => {
             {isEditingTitle ? (
               <input
                 type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                onBlur={() => setIsEditingTitle(false)}
+                value={projectTitle}
+                onChange={(e) => setProjectTitle(e.target.value)}
+                onBlur={() => {
+                  setIsEditingTitle(false);
+                  handleTitleChange(projectTitle);
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') setIsEditingTitle(false);
+                  if (e.key === 'Enter') {
+                    setIsEditingTitle(false);
+                    handleTitleChange(projectTitle);
+                  }
                 }}
                 autoFocus
                 className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
@@ -402,7 +498,7 @@ const Editor = () => {
                 className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
                 onClick={() => setIsEditingTitle(true)}
               >
-                {projectName}
+                {projectTitle}
               </h1>
             )}
           </div>

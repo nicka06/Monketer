@@ -71,6 +71,14 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } 
       />
+      <Route 
+        path="/editor/:username/:projectName" 
+        element={
+          <ProtectedRoute>
+            <Editor />
+          </ProtectedRoute>
+        } 
+      />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>

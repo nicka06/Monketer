@@ -12,19 +12,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Plus, FileText } from 'lucide-react';
-import { getUserProjects } from '@/services/projectService';
+import { getUserProjects, getUsernameFromId } from '@/services/projectService';
 import { Project } from '@/types/editor';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState<string>('');
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadProjects();
-  }, []);
+    if (user?.id) {
+      getUsernameFromId(user.id).then(name => setUsername(name));
+    }
+  }, [user]);
 
   const loadProjects = async () => {
     try {
@@ -99,7 +105,7 @@ const Dashboard = () => {
                 <TableCell>{formatDate(project.lastEditedAt.toString())}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="outline" asChild>
-                    <Link to={`/editor/${project.id}`}>Open</Link>
+                    <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
                   </Button>
                 </TableCell>
               </TableRow>

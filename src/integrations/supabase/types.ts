@@ -118,7 +118,6 @@ export type Database = {
         Row: {
           created_at: string | null
           current_html: string | null
-          description: string | null
           id: string
           is_archived: boolean | null
           last_edited_at: string | null
@@ -129,7 +128,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_html?: string | null
-          description?: string | null
           id?: string
           is_archived?: boolean | null
           last_edited_at?: string | null
@@ -140,7 +138,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_html?: string | null
-          description?: string | null
           id?: string
           is_archived?: boolean | null
           last_edited_at?: string | null
