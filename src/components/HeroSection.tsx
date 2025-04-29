@@ -26,7 +26,7 @@ const HeroSection = () => {
           
           <form onSubmit={handleSubmit} className="mt-10 mx-auto max-w-2xl">
             <div className="flex flex-col items-center">
-              <label htmlFor="email-content" className="text-left self-start mb-2 text-sm font-medium text-gray-700 px-[209px]">
+              <label htmlFor="email-content" className="text-left self-start mb-2 text-sm font-medium text-gray-700 px-[240px]">
                 Describe the email you want to create
               </label>
               <div className="relative w-full">
