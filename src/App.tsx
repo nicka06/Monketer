@@ -10,7 +10,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
-import Dashboard from "./pages/Dashboard";
+// import Dashboard from "./pages/Dashboard"; // Temporarily disabled
 import Editor from "./pages/Editor";
 
 const queryClient = new QueryClient();
@@ -48,6 +48,7 @@ const AppRoutes = () => {
         path="/signup" 
         element={user ? <Navigate to="/editor" /> : <Signup />} 
       />
+      {/* Dashboard route temporarily disabled
       <Route 
         path="/dashboard" 
         element={
@@ -55,7 +56,7 @@ const AppRoutes = () => {
             <Dashboard />
           </ProtectedRoute>
         } 
-      />
+      /> */}
       <Route 
         path="/editor" 
         element={

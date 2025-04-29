@@ -23,6 +23,7 @@ const HeroSection = () => {
     e.preventDefault();
     // Show the authentication dialog instead of proceeding directly
     setShowAuthDialog(true);
+    console.log("Email content submitted:", emailContent);
   };
 
   const handleAuthOption = (route: string) => {
