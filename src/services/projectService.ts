@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
 
@@ -202,7 +203,6 @@ export async function getUserProjects() {
     return (data || []).map(project => ({
       id: project.id,
       name: project.name,
-      description: project.description,
       lastEditedAt: new Date(project.last_edited_at),
       createdAt: new Date(project.created_at),
       isArchived: project.is_archived

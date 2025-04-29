@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types/editor';
 import { Button } from './ui/button';
@@ -43,6 +42,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  // Determine if a message is from the user or assistant
+  // For now, we'll assume even indices are from assistant, odd indices are from user
+  // In a real app, you'd have a more robust check or store the role in the message
+  const isUserMessage = (index: number, message: ChatMessage) => {
+    // If there's a role property, use it
+    if (message.role) {
+      return message.role === 'user';
+    }
+    // Otherwise, use a simple heuristic - odd indices are user messages
+    return index % 2 !== 0;
+  };
+
   return (
     <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-white">
       <div className="p-3 border-b bg-gray-50">
@@ -51,26 +62,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
-          {messages.map((message) => (
+          {messages.map((message, index) => (
             <div
               key={message.id}
               className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
+                isUserMessage(index, message) ? 'justify-end' : 'justify-start'
               }`}
             >
               <div
                 className={`max-w-[80%] p-3 rounded-lg ${
-                  message.role === 'user'
+                  isUserMessage(index, message)
                     ? 'bg-emailore-purple text-white'
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Avatar className="h-6 w-6">
-                    {message.role === 'assistant' ? 'AI' : 'You'}
+                    {isUserMessage(index, message) ? 'You' : 'AI'}
                   </Avatar>
                   <span className="text-xs opacity-70">
-                    {message.role === 'assistant' ? 'Assistant' : 'You'}
+                    {isUserMessage(index, message) ? 'You' : 'Assistant'}
                   </span>
                 </div>
                 <div className="text-sm whitespace-pre-wrap">
