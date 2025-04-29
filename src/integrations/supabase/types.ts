@@ -120,29 +120,35 @@ export type Database = {
       projects: {
         Row: {
           created_at: string | null
+          current_html: string | null
           description: string | null
           id: string
           is_archived: boolean | null
           last_edited_at: string | null
           name: string
+          semantic_email: Json | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
+          current_html?: string | null
           description?: string | null
           id?: string
           is_archived?: boolean | null
           last_edited_at?: string | null
           name?: string
+          semantic_email?: Json | null
           user_id: string
         }
         Update: {
           created_at?: string | null
+          current_html?: string | null
           description?: string | null
           id?: string
           is_archived?: boolean | null
           last_edited_at?: string | null
           name?: string
+          semantic_email?: Json | null
           user_id?: string
         }
         Relationships: []

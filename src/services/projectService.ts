@@ -1,7 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
-import { useToast } from '@/hooks/use-toast';
 
 // Create a new project
 export async function createProject(name: string, initialContent?: EmailTemplate) {
@@ -15,14 +13,17 @@ export async function createProject(name: string, initialContent?: EmailTemplate
       .insert({
         name,
         user_id: user.id,
+        last_edited_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
       })
       .select()
       .single();
 
     if (projectError) throw projectError;
 
-    // If initial content is provided, create first version
+    // If initial content is provided, create first version and update HTML/semantic fields
     if (initialContent) {
+      // Create email version
       const { error: versionError } = await supabase
         .from('email_versions')
         .insert({
@@ -32,13 +33,80 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         });
 
       if (versionError) throw versionError;
+      
+      // Convert template to HTML
+      const htmlOutput = convertTemplateToHtml(initialContent);
+      
+      // Update project with HTML and semantic data
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({
+          current_html: htmlOutput,
+          semantic_email: initialContent as any,
+          last_edited_at: new Date().toISOString()
+        })
+        .eq('id', project.id);
+        
+      if (updateError) throw updateError;
     }
 
-    return project;
+    // Convert from database schema to our app schema
+    return {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      lastEditedAt: new Date(project.last_edited_at),
+      createdAt: new Date(project.created_at),
+      isArchived: project.is_archived
+    } as Project;
   } catch (error) {
     console.error('Error creating project:', error);
     throw error;
   }
+}
+
+// Helper function to convert email template to HTML
+function convertTemplateToHtml(template: EmailTemplate): string {
+  // This is a simplified version - in a real app, this would be more sophisticated
+  let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${template.name}</title></head><body style="${styleObjectToString(template.styles)}">`;
+  
+  // Process each section
+  template.sections.forEach(section => {
+    html += `<div style="${styleObjectToString(section.styles)}">`;
+    
+    // Process each element in the section
+    section.elements.forEach(element => {
+      switch (element.type) {
+        case 'header':
+          html += `<h2 style="${styleObjectToString(element.styles)}">${element.content}</h2>`;
+          break;
+        case 'text':
+          html += `<p style="${styleObjectToString(element.styles)}">${element.content}</p>`;
+          break;
+        case 'button':
+          html += `<button style="${styleObjectToString(element.styles)}">${element.content}</button>`;
+          break;
+        case 'image':
+          html += `<img src="${element.content}" alt="Email image" style="${styleObjectToString(element.styles)}" />`;
+          break;
+        case 'divider':
+          html += `<hr style="${styleObjectToString(element.styles)}" />`;
+          break;
+      }
+    });
+    
+    html += `</div>`;
+  });
+  
+  html += `</body></html>`;
+  return html;
+}
+
+// Helper function to convert style object to inline CSS string
+function styleObjectToString(styles: Record<string, string>): string {
+  return Object.entries(styles)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('; ');
 }
 
 // Get all projects for current user
@@ -210,6 +278,9 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
 
     const nextVersionNumber = versions && versions.length > 0 ? versions[0].version_number + 1 : 1;
 
+    // Convert template to HTML
+    const htmlOutput = convertTemplateToHtml(updatedEmailContent);
+
     const { error: saveVersionError } = await supabase
       .from('email_versions')
       .insert({
@@ -220,10 +291,14 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
 
     if (saveVersionError) throw saveVersionError;
 
-    // Update the project last_edited_at timestamp
+    // Update the project last_edited_at timestamp and HTML content
     const { error: projectUpdateError } = await supabase
       .from('projects')
-      .update({ last_edited_at: new Date().toISOString() })
+      .update({ 
+        last_edited_at: new Date().toISOString(),
+        current_html: htmlOutput,
+        semantic_email: updatedEmailContent as any
+      })
       .eq('id', projectId);
 
     if (projectUpdateError) throw projectUpdateError;

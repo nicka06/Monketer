@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -6,9 +7,10 @@ import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
-import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange } from '@/services/projectService';
+import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange, createProject } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
+import { Progress } from '@/components/ui/progress';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -51,8 +53,11 @@ const Editor = () => {
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
-
-  // Load project data
+  const [progress, setProgress] = useState(0);
+  const [newProject, setNewProject] = useState<Project | null>(null);
+  const [hasCode, setHasCode] = useState(false);
+  
+  // Load project data if projectId exists
   useEffect(() => {
     if (!user) return;
     
@@ -82,13 +87,16 @@ const Editor = () => {
               setEmailTemplate(projectData.emailContent);
             }
             setPendingChanges(projectData.pendingChanges || []);
+            setHasCode(true);
           } else {
-            // If no email content exists, use empty template
-            setEmailTemplate(emptyTemplate);
+            // If no email content exists yet but we have a project, show empty state
+            setEmailTemplate(null);
+            setHasCode(false);
           }
         } else {
-          // If no project ID, use empty template
-          setEmailTemplate(emptyTemplate);
+          // If no projectId, we're starting from scratch - don't set template yet
+          setEmailTemplate(null);
+          setHasCode(false);
         }
       } catch (error) {
         console.error('Error loading project:', error);
@@ -104,6 +112,23 @@ const Editor = () => {
     
     loadProject();
   }, [projectId, user, toast]);
+
+  // Simulate progress for loading animation
+  useEffect(() => {
+    if (isLoading) {
+      const interval = setInterval(() => {
+        setProgress((prevProgress) => {
+          const increment = Math.random() * 10;
+          const newProgress = prevProgress + increment;
+          return newProgress >= 90 ? 90 : newProgress;
+        });
+      }, 500);
+
+      return () => clearInterval(interval);
+    } else {
+      setProgress(0);
+    }
+  }, [isLoading]);
 
   // Apply pending changes to the email template
   const applyPendingChangesToTemplate = (
@@ -165,10 +190,21 @@ const Editor = () => {
 
   // Handle sending a message to the AI
   const handleSendMessage = async (message: string) => {
-    if (!projectId) return;
-    
     try {
       setIsLoading(true);
+      
+      // If there's no projectId yet, create one first
+      let targetProjectId = projectId;
+      
+      if (!targetProjectId) {
+        // Create a new project since this is the first message
+        const newProject = await createProject(projectName);
+        setNewProject(newProject);
+        targetProjectId = newProject.id;
+        
+        // Update URL to include the project ID
+        navigate(`/editor/${targetProjectId}`, { replace: true });
+      }
       
       // Add user message to chat
       const userMessageId = generateId();
@@ -182,7 +218,7 @@ const Editor = () => {
       setChatMessages((prev) => [...prev, userMessage]);
       
       // Save user message to the database
-      await saveChatMessage(projectId, 'user', message);
+      await saveChatMessage(targetProjectId, 'user', message);
       
       // TODO: Call AI service for response
       // For now, we'll simulate an AI response
@@ -198,10 +234,20 @@ const Editor = () => {
         setChatMessages((prev) => [...prev, aiMessage]);
         
         // Save assistant message to the database
-        await saveChatMessage(projectId, 'assistant', aiMessage.content);
+        await saveChatMessage(targetProjectId, 'assistant', aiMessage.content);
+        
+        // Simulate email code being generated after first message
+        if (!hasCode) {
+          setEmailTemplate(emptyTemplate);
+          setHasCode(true);
+          
+          // Here you would also save the semantic email structure and HTML
+          // This is simplified for the demo
+          // In a real implementation, this would come from the AI response
+        }
         
         setIsLoading(false);
-      }, 1000);
+      }, 2000);
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -324,28 +370,13 @@ const Editor = () => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emailore-purple mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your project...</p>
         </div>
       </div>
     );
   }
 
-  // If project exists but has no email content yet, show loading
-  if (projectId && !emailTemplate) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="w-64 h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-emailore-purple animate-pulse"></div>
-          </div>
-          <p className="text-gray-600 mt-4">Preparing your email editor...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Otherwise show the full editor interface
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Top navigation bar */}
@@ -369,11 +400,11 @@ const Editor = () => {
                   if (e.key === 'Enter') setIsEditingTitle(false);
                 }}
                 autoFocus
-                className="text-lg font-medium text-center border-b border-gray-300 focus:border-emailore-purple focus:outline-none px-2"
+                className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
               />
             ) : (
               <h1 
-                className="text-lg font-medium cursor-pointer hover:text-emailore-purple transition-colors"
+                className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
                 onClick={() => setIsEditingTitle(true)}
               >
                 {projectName}
@@ -395,13 +426,31 @@ const Editor = () => {
         {/* Email preview panel */}
         <div className="flex-1 p-6 overflow-auto">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-lg font-medium mb-4">Email Preview</h2>
-            {emailTemplate && (
-              <EmailPreview
-                template={emailTemplate}
-                onAcceptChange={handleAcceptChange}
-                onRejectChange={handleRejectChange}
-              />
+            {!hasCode ? (
+              <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
+                <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
+                <p className="text-gray-500 mb-6">
+                  Send a message to the AI assistant to start generating your email template.
+                  The AI will create an email layout based on your requirements.
+                </p>
+                {isLoading && (
+                  <div className="space-y-3 mt-6">
+                    <p className="text-sm text-gray-500">Generating email template...</p>
+                    <Progress value={progress} className="h-2" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <h2 className="text-lg font-medium mb-4">Email Preview</h2>
+                {emailTemplate && (
+                  <EmailPreview
+                    template={emailTemplate}
+                    onAcceptChange={handleAcceptChange}
+                    onRejectChange={handleRejectChange}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
