@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -10,6 +10,7 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,7 +18,8 @@ const Signup = () => {
     
     try {
       await signUp(email, password, email);
-      // Redirect is handled by the router
+      // Navigate to the editor page after successful signup
+      navigate('/editor');
     } catch (error) {
       console.error("Signup error:", error);
     } finally {
