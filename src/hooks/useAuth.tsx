@@ -60,11 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(email: string, password: string, username: string) {
     try {
+      // Since we're now using the email as the username, we don't need to pass a separate username
       const { error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
-          data: { username },
+          data: { username: email }, // Use email as username
           emailRedirectTo: window.location.origin,
         }
       });
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // We'll manually create the user_info entry after sign up
         // This is a workaround until we fix the DB trigger
         await supabase.from('user_info').insert({
-          username: username,
+          username: email, // Use email as username
           password: null // Password is handled by Supabase Auth
         });
       } catch (infoError) {

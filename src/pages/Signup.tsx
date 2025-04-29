@@ -6,7 +6,6 @@ import { Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const Signup = () => {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,7 +16,7 @@ const Signup = () => {
     setLoading(true);
     
     try {
-      await signUp(email, password, name);
+      await signUp(email, password, email);
       // Redirect is handled by the router
     } catch (error) {
       console.error("Signup error:", error);
@@ -47,25 +46,6 @@ const Signup = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <div className="mt-1">
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
