@@ -8,24 +8,24 @@ import { ChatInterface } from '@/components/ChatInterface';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
 import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '@/lib/uuid';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
-  id: uuidv4(),
+  id: generateId(),
   name: 'New Email',
   sections: [
     {
-      id: uuidv4(),
+      id: generateId(),
       elements: [
         {
-          id: uuidv4(),
+          id: generateId(),
           type: 'header',
           content: 'Welcome to your new email',
           styles: { fontSize: '24px', fontWeight: 'bold', color: '#333' },
         },
         {
-          id: uuidv4(),
+          id: generateId(),
           type: 'text',
           content: 'This is a starter template. Use the AI to help you create amazing emails.',
           styles: { fontSize: '16px', color: '#555' },
@@ -46,7 +46,7 @@ const Editor = () => {
   
   const [projectName, setProjectName] = useState('Untitled Project');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [emailTemplate, setEmailTemplate] = useState<EmailTemplate>(emptyTemplate);
+  const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,27 +64,31 @@ const Editor = () => {
           const projectData = await getProject(projectId);
           
           setProjectName(projectData.project.name);
-          setEmailTemplate(projectData.emailTemplate || emptyTemplate);
           
           // Convert chat messages to our format
-          const formattedMessages = projectData.chatMessages.map((msg: any) => ({
-            id: msg.id,
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.created_at),
-          }));
+          const formattedMessages = projectData.chatMessages || [];
           
           setChatMessages(formattedMessages);
           
-          // Apply pending changes to the template
-          if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
-            const updatedTemplate = applyPendingChangesToTemplate(
-              projectData.emailTemplate || emptyTemplate,
-              projectData.pendingChanges
-            );
-            setEmailTemplate(updatedTemplate);
-            setPendingChanges(projectData.pendingChanges);
+          if (projectData.emailContent) {
+            // Apply pending changes to the template if both email content and pending changes exist
+            if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
+              const updatedTemplate = applyPendingChangesToTemplate(
+                projectData.emailContent,
+                projectData.pendingChanges
+              );
+              setEmailTemplate(updatedTemplate);
+            } else {
+              setEmailTemplate(projectData.emailContent);
+            }
+            setPendingChanges(projectData.pendingChanges || []);
+          } else {
+            // If no email content exists, use empty template
+            setEmailTemplate(emptyTemplate);
           }
+        } else {
+          // If no project ID, use empty template
+          setEmailTemplate(emptyTemplate);
         }
       } catch (error) {
         console.error('Error loading project:', error);
@@ -167,7 +171,7 @@ const Editor = () => {
       setIsLoading(true);
       
       // Add user message to chat
-      const userMessageId = uuidv4();
+      const userMessageId = generateId();
       const userMessage: ChatMessage = {
         id: userMessageId,
         role: 'user',
@@ -183,7 +187,7 @@ const Editor = () => {
       // TODO: Call AI service for response
       // For now, we'll simulate an AI response
       setTimeout(async () => {
-        const aiMessageId = uuidv4();
+        const aiMessageId = generateId();
         const aiMessage: ChatMessage = {
           id: aiMessageId,
           role: 'assistant',
@@ -211,7 +215,7 @@ const Editor = () => {
 
   // Handle accepting a pending change
   const handleAcceptChange = async (elementId: string) => {
-    if (!projectId) return;
+    if (!projectId || !emailTemplate) return;
     
     try {
       const change = pendingChanges.find((c) => c.elementId === elementId);
@@ -262,7 +266,7 @@ const Editor = () => {
 
   // Handle rejecting a pending change
   const handleRejectChange = async (elementId: string) => {
-    if (!projectId) return;
+    if (!projectId || !emailTemplate) return;
     
     try {
       const change = pendingChanges.find((c) => c.elementId === elementId);
@@ -327,6 +331,21 @@ const Editor = () => {
     );
   }
 
+  // If project exists but has no email content yet, show loading
+  if (projectId && !emailTemplate) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="w-64 h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-emailore-purple animate-pulse"></div>
+          </div>
+          <p className="text-gray-600 mt-4">Preparing your email editor...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Otherwise show the full editor interface
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Top navigation bar */}
@@ -377,11 +396,13 @@ const Editor = () => {
         <div className="flex-1 p-6 overflow-auto">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-lg font-medium mb-4">Email Preview</h2>
-            <EmailPreview
-              template={emailTemplate}
-              onAcceptChange={handleAcceptChange}
-              onRejectChange={handleRejectChange}
-            />
+            {emailTemplate && (
+              <EmailPreview
+                template={emailTemplate}
+                onAcceptChange={handleAcceptChange}
+                onRejectChange={handleRejectChange}
+              />
+            )}
           </div>
         </div>
         

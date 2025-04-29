@@ -6,10 +6,15 @@ import { useToast } from '@/hooks/use-toast';
 // Create a new project
 export async function createProject(name: string, initialContent?: EmailTemplate) {
   try {
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
         name,
+        user_id: user.id,
       })
       .select()
       .single();
@@ -23,7 +28,7 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         .insert({
           project_id: project.id,
           version_number: 1,
-          content: initialContent,
+          content: initialContent as any, // Cast to any to resolve type issue
         });
 
       if (versionError) throw versionError;
@@ -45,7 +50,16 @@ export async function getUserProjects() {
       .order('last_edited_at', { ascending: false });
 
     if (error) throw error;
-    return data as Project[];
+    
+    // Convert from database schema to our app schema
+    return (data || []).map(project => ({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      lastEditedAt: new Date(project.last_edited_at),
+      createdAt: new Date(project.created_at),
+      isArchived: project.is_archived
+    })) as Project[];
   } catch (error) {
     console.error('Error fetching projects:', error);
     throw error;
@@ -94,11 +108,30 @@ export async function getProject(projectId: string) {
 
     if (chatMessagesError) throw chatMessagesError;
 
+    // Convert to our app schema types
+    const emailContent = latestVersion?.content as unknown as EmailTemplate;
+    
+    const formattedPendingChanges = (pendingChanges || []).map(change => ({
+      id: change.id,
+      elementId: change.element_id,
+      changeType: change.change_type as 'add' | 'edit' | 'delete',
+      oldContent: change.old_content,
+      newContent: change.new_content,
+      status: change.status as 'pending' | 'accepted' | 'rejected'
+    })) as PendingChange[];
+    
+    const formattedChatMessages = (chatMessages || []).map(msg => ({
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+      timestamp: new Date(msg.created_at)
+    })) as ChatMessage[];
+
     return {
       project,
-      emailContent: latestVersion?.content as EmailTemplate,
-      pendingChanges: pendingChanges as PendingChange[],
-      chatMessages: chatMessages as ChatMessage[],
+      emailContent,
+      pendingChanges: formattedPendingChanges,
+      chatMessages: formattedChatMessages,
     };
   } catch (error) {
     console.error('Error fetching project:', error);
@@ -182,7 +215,7 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
       .insert({
         project_id: projectId,
         version_number: nextVersionNumber,
-        content: updatedEmailContent,
+        content: updatedEmailContent as any, // Cast to any to resolve type issue
       });
 
     if (saveVersionError) throw saveVersionError;

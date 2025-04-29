@@ -10,11 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { 
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem
+} from '@/components/ui/dropdown-menu';
 import { Mail, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { getUserProjects, createProject } from '@/services/projectService';
 import { Project } from '@/types/editor';
 import { useToast } from '@/hooks/use-toast';
-import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@/components/ui/dropdown-menu';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -102,20 +107,20 @@ const Dashboard = () => {
             <Card key={project.id} className="flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-lg font-medium">{project.name}</CardTitle>
-                <Dropdown>
-                  <DropdownTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-8 w-8 p-0">
                       <span className="sr-only">Open menu</span>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
-                  </DropdownTrigger>
-                  <DropdownMenu align="end">
-                    <DropdownItem className="text-red-600">
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem className="text-red-600">
                       <Trash2 className="mr-2 h-4 w-4" />
                       <span>Delete</span>
-                    </DropdownItem>
-                  </DropdownMenu>
-                </Dropdown>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </CardHeader>
               <CardContent className="flex-grow">
                 <p className="text-sm text-gray-500">
