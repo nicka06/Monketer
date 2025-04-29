@@ -37,7 +37,7 @@ const TestimonialsSection = () => {
               className="flex flex-col justify-between bg-white rounded-2xl shadow-sm p-6 ring-1 ring-gray-200 hover:shadow-md transition-shadow duration-300"
             >
               <blockquote className="text-gray-700">
-                <p className="text-lg leading-relaxed before:content-['\"\'] after:content-['\"\'] before:text-emailore-purple before:text-xl after:text-emailore-purple after:text-xl">
+                <p className="text-lg leading-relaxed before:content-[open-quote] after:content-[close-quote] before:text-emailore-purple before:text-xl after:text-emailore-purple after:text-xl">
                   {testimonial.content}
                 </p>
               </blockquote>
