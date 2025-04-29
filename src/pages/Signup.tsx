@@ -3,16 +3,27 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Mail } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const Signup = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { signUp } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Signup functionality will be implemented later
-    console.log("Signup attempted with:", { name, email, password });
+    setLoading(true);
+    
+    try {
+      await signUp(email, password, name);
+      // Redirect is handled by the router
+    } catch (error) {
+      console.error("Signup error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,7 +49,7 @@ const Signup = () => {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full name
+                Username
               </label>
               <div className="mt-1">
                 <input
@@ -50,6 +61,7 @@ const Signup = () => {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -68,6 +80,7 @@ const Signup = () => {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -86,6 +99,7 @@ const Signup = () => {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -114,8 +128,9 @@ const Signup = () => {
               <Button 
                 type="submit"
                 className="w-full bg-emailore-purple hover:bg-emailore-purple-dark text-white"
+                disabled={loading}
               >
-                Sign up
+                {loading ? 'Creating account...' : 'Sign up'}
               </Button>
             </div>
           </form>

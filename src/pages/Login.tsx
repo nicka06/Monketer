@@ -3,15 +3,26 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Mail } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { signIn } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Login functionality will be implemented later
-    console.log("Login attempted with:", { email, password });
+    setLoading(true);
+    
+    try {
+      await signIn(email, password);
+      // Redirect is handled by the router
+    } catch (error) {
+      console.error("Login error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,6 +60,7 @@ const Login = () => {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -67,6 +79,7 @@ const Login = () => {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -95,8 +108,9 @@ const Login = () => {
               <Button 
                 type="submit"
                 className="w-full bg-emailore-purple hover:bg-emailore-purple-dark text-white"
+                disabled={loading}
               >
-                Sign in
+                {loading ? 'Signing in...' : 'Sign in'}
               </Button>
             </div>
           </form>
