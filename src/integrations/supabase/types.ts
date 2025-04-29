@@ -9,6 +9,144 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          project_id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          project_id: string
+          role: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          project_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_versions: {
+        Row: {
+          content: Json
+          created_at: string | null
+          id: string
+          is_published: boolean | null
+          project_id: string
+          version_number: number
+        }
+        Insert: {
+          content: Json
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          project_id: string
+          version_number: number
+        }
+        Update: {
+          content?: Json
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          project_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_changes: {
+        Row: {
+          change_type: string
+          created_at: string | null
+          element_id: string
+          id: string
+          new_content: Json | null
+          old_content: Json | null
+          project_id: string
+          status: string
+        }
+        Insert: {
+          change_type: string
+          created_at?: string | null
+          element_id: string
+          id?: string
+          new_content?: Json | null
+          old_content?: Json | null
+          project_id: string
+          status?: string
+        }
+        Update: {
+          change_type?: string
+          created_at?: string | null
+          element_id?: string
+          id?: string
+          new_content?: Json | null
+          old_content?: Json | null
+          project_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_changes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_archived: boolean | null
+          last_edited_at: string | null
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean | null
+          last_edited_at?: string | null
+          name?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean | null
+          last_edited_at?: string | null
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_info: {
         Row: {
           created_at: string

@@ -10,7 +10,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
-// import Dashboard from "./pages/Dashboard"; // Temporarily disabled
+import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
 
 const queryClient = new QueryClient();
@@ -39,16 +39,15 @@ const AppRoutes = () => {
   
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/editor" /> : <Index />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Index />} />
       <Route 
         path="/login" 
-        element={user ? <Navigate to="/editor" /> : <Login />} 
+        element={user ? <Navigate to="/dashboard" /> : <Login />} 
       />
       <Route 
         path="/signup" 
-        element={user ? <Navigate to="/editor" /> : <Signup />} 
+        element={user ? <Navigate to="/dashboard" /> : <Signup />} 
       />
-      {/* Dashboard route temporarily disabled
       <Route 
         path="/dashboard" 
         element={
@@ -56,9 +55,17 @@ const AppRoutes = () => {
             <Dashboard />
           </ProtectedRoute>
         } 
-      /> */}
+      />
       <Route 
         path="/editor" 
+        element={
+          <ProtectedRoute>
+            <Editor />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/editor/:projectId" 
         element={
           <ProtectedRoute>
             <Editor />

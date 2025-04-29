@@ -1,0 +1,219 @@
+
+import { supabase } from '@/integrations/supabase/client';
+import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
+import { useToast } from '@/hooks/use-toast';
+
+// Create a new project
+export async function createProject(name: string, initialContent?: EmailTemplate) {
+  try {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .insert({
+        name,
+      })
+      .select()
+      .single();
+
+    if (projectError) throw projectError;
+
+    // If initial content is provided, create first version
+    if (initialContent) {
+      const { error: versionError } = await supabase
+        .from('email_versions')
+        .insert({
+          project_id: project.id,
+          version_number: 1,
+          content: initialContent,
+        });
+
+      if (versionError) throw versionError;
+    }
+
+    return project;
+  } catch (error) {
+    console.error('Error creating project:', error);
+    throw error;
+  }
+}
+
+// Get all projects for current user
+export async function getUserProjects() {
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('last_edited_at', { ascending: false });
+
+    if (error) throw error;
+    return data as Project[];
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    throw error;
+  }
+}
+
+// Get a specific project and its latest version
+export async function getProject(projectId: string) {
+  try {
+    // Get project details
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError) throw projectError;
+
+    // Get latest email version
+    const { data: versions, error: versionError } = await supabase
+      .from('email_versions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('version_number', { ascending: false })
+      .limit(1);
+
+    if (versionError) throw versionError;
+
+    const latestVersion = versions && versions.length > 0 ? versions[0] : null;
+
+    // Get pending changes
+    const { data: pendingChanges, error: pendingChangesError } = await supabase
+      .from('pending_changes')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('status', 'pending');
+
+    if (pendingChangesError) throw pendingChangesError;
+
+    // Get chat history
+    const { data: chatMessages, error: chatMessagesError } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+
+    if (chatMessagesError) throw chatMessagesError;
+
+    return {
+      project,
+      emailContent: latestVersion?.content as EmailTemplate,
+      pendingChanges: pendingChanges as PendingChange[],
+      chatMessages: chatMessages as ChatMessage[],
+    };
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    throw error;
+  }
+}
+
+// Save chat message
+export async function saveChatMessage(projectId: string, role: 'user' | 'assistant', content: string) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        project_id: projectId,
+        role,
+        content,
+      })
+      .select();
+
+    if (error) throw error;
+    return data[0];
+  } catch (error) {
+    console.error('Error saving chat message:', error);
+    throw error;
+  }
+}
+
+// Save pending change
+export async function savePendingChange(
+  projectId: string,
+  elementId: string,
+  changeType: 'add' | 'edit' | 'delete',
+  oldContent?: any,
+  newContent?: any
+) {
+  try {
+    const { data, error } = await supabase
+      .from('pending_changes')
+      .insert({
+        project_id: projectId,
+        element_id: elementId,
+        change_type: changeType,
+        old_content: oldContent || null,
+        new_content: newContent || null,
+      })
+      .select();
+
+    if (error) throw error;
+    return data[0];
+  } catch (error) {
+    console.error('Error saving pending change:', error);
+    throw error;
+  }
+}
+
+// Accept a pending change
+export async function acceptPendingChange(changeId: string, projectId: string, updatedEmailContent: EmailTemplate) {
+  try {
+    // Mark the change as accepted
+    const { error: changeError } = await supabase
+      .from('pending_changes')
+      .update({ status: 'accepted' })
+      .eq('id', changeId);
+
+    if (changeError) throw changeError;
+
+    // Create a new version with the updated content
+    const { data: versions, error: versionCheckError } = await supabase
+      .from('email_versions')
+      .select('version_number')
+      .eq('project_id', projectId)
+      .order('version_number', { ascending: false })
+      .limit(1);
+
+    if (versionCheckError) throw versionCheckError;
+
+    const nextVersionNumber = versions && versions.length > 0 ? versions[0].version_number + 1 : 1;
+
+    const { error: saveVersionError } = await supabase
+      .from('email_versions')
+      .insert({
+        project_id: projectId,
+        version_number: nextVersionNumber,
+        content: updatedEmailContent,
+      });
+
+    if (saveVersionError) throw saveVersionError;
+
+    // Update the project last_edited_at timestamp
+    const { error: projectUpdateError } = await supabase
+      .from('projects')
+      .update({ last_edited_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    if (projectUpdateError) throw projectUpdateError;
+
+    return true;
+  } catch (error) {
+    console.error('Error accepting pending change:', error);
+    throw error;
+  }
+}
+
+// Reject a pending change
+export async function rejectPendingChange(changeId: string) {
+  try {
+    const { error } = await supabase
+      .from('pending_changes')
+      .update({ status: 'rejected' })
+      .eq('id', changeId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error rejecting pending change:', error);
+    throw error;
+  }
+}

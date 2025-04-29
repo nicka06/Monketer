@@ -1,93 +1,136 @@
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import Navbar from '@/components/Navbar';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-
-interface UserInfo {
-  id: number;
-  username: string;
-  created_at: string;
-}
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Mail, Plus, Trash2, MoreVertical } from 'lucide-react';
+import { getUserProjects, createProject } from '@/services/projectService';
+import { Project } from '@/types/editor';
+import { useToast } from '@/hooks/use-toast';
+import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@/components/ui/dropdown-menu';
 
 const Dashboard = () => {
-  const { user, signOut } = useAuth();
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
-    async function fetchUserInfo() {
-      try {
-        if (!user) return;
-        
-        const { data, error } = await supabase
-          .from('user_info')
-          .select('*')
-          .limit(1);
-        
-        if (error) {
-          console.error('Error fetching user info:', error);
-        } else if (data && data.length > 0) {
-          setUserInfo(data[0]);
-        }
-      } catch (error) {
-        console.error('Error fetching user info:', error);
-      } finally {
-        setLoading(false);
-      }
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      const data = await getUserProjects();
+      setProjects(data);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load projects',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
-    
-    fetchUserInfo();
-  }, [user]);
+  };
+
+  const handleCreateProject = async () => {
+    try {
+      const newProject = await createProject('Untitled Project');
+      toast({
+        title: 'Success',
+        description: 'New project created',
+      });
+      navigate(`/editor/${newProject.id}`);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create project',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="bg-white shadow-sm rounded-lg p-6 md:p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <Button
-              onClick={() => signOut()}
-              variant="outline"
-            >
-              Sign Out
-            </Button>
-          </div>
-          
-          <div className="bg-gray-50 rounded-md p-4 mb-8">
-            <h2 className="text-lg font-medium mb-4">Your Account</h2>
-            {loading ? (
-              <div className="text-center py-4">Loading account information...</div>
-            ) : userInfo ? (
-              <div className="space-y-3">
-                <p><span className="font-medium">Username:</span> {userInfo.username}</p>
-                <p><span className="font-medium">Email:</span> {user?.email}</p>
-                <p><span className="font-medium">Member since:</span> {new Date(userInfo.created_at).toLocaleDateString()}</p>
-              </div>
-            ) : (
-              <div className="text-amber-600 py-4">
-                No account information found. This could be due to a configuration issue.
-              </div>
-            )}
-          </div>
-          
-          <div className="border-t border-gray-200 pt-6">
-            <h2 className="text-lg font-medium mb-4">Welcome to emailore!</h2>
-            <p className="text-gray-600 mb-6">
-              This is your personal dashboard. Here you can manage your account and access your email content.
-            </p>
-            
-            <Button asChild className="bg-emailore-purple hover:bg-emailore-purple-dark transition-colors">
-              <Link to="/editor">
-                Go to Email Editor
-              </Link>
+    <div className="container mx-auto py-10 px-4">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">My Email Projects</h1>
+        <Button onClick={handleCreateProject} className="bg-emailore-purple hover:bg-emailore-purple-dark">
+          <Plus className="mr-2 h-4 w-4" />
+          New Project
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emailore-purple"></div>
+        </div>
+      ) : projects.length === 0 ? (
+        <div className="text-center py-20 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <Mail className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900">No projects yet</h3>
+          <p className="mt-1 text-sm text-gray-500">Get started by creating a new email project.</p>
+          <div className="mt-6">
+            <Button onClick={handleCreateProject} className="bg-emailore-purple hover:bg-emailore-purple-dark">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Project
             </Button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {projects.map((project) => (
+            <Card key={project.id} className="flex flex-col">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-medium">{project.name}</CardTitle>
+                <Dropdown>
+                  <DropdownTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu align="end">
+                    <DropdownItem className="text-red-600">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span>Delete</span>
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <p className="text-sm text-gray-500">
+                  Last edited {formatDate(project.lastEditedAt.toString())}
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button asChild className="w-full bg-emailore-purple hover:bg-emailore-purple-dark">
+                  <Link to={`/editor/${project.id}`}>Open Project</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
