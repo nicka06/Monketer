@@ -43,15 +43,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   // Determine if a message is from the user or assistant
-  // For now, we'll assume even indices are from assistant, odd indices are from user
-  // In a real app, you'd have a more robust check or store the role in the message
-  const isUserMessage = (index: number, message: ChatMessage) => {
+  const isUserMessage = (message: ChatMessage) => {
     // If there's a role property, use it
     if (message.role) {
       return message.role === 'user';
     }
     // Otherwise, use a simple heuristic - odd indices are user messages
-    return index % 2 !== 0;
+    return messages.indexOf(message) % 2 !== 0;
   };
 
   return (
@@ -62,26 +60,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div
               key={message.id}
               className={`flex ${
-                isUserMessage(index, message) ? 'justify-end' : 'justify-start'
+                isUserMessage(message) ? 'justify-end' : 'justify-start'
               }`}
             >
               <div
                 className={`max-w-[80%] p-3 rounded-lg ${
-                  isUserMessage(index, message)
-                    ? 'bg-emailore-purple text-white'
+                  isUserMessage(message)
+                    ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Avatar className="h-6 w-6">
-                    {isUserMessage(index, message) ? 'You' : 'AI'}
+                    {isUserMessage(message) ? 'You' : 'AI'}
                   </Avatar>
                   <span className="text-xs opacity-70">
-                    {isUserMessage(index, message) ? 'You' : 'Assistant'}
+                    {isUserMessage(message) ? 'You' : 'Assistant'}
                   </span>
                 </div>
                 <div className="text-sm whitespace-pre-wrap">
@@ -99,7 +97,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div className="max-w-[80%] p-3 rounded-lg bg-gray-100">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-6 w-6">AI</Avatar>
-                  <Loader2 className="h-4 w-4 animate-spin text-emailore-purple" />
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   <span className="text-xs text-gray-500">Thinking...</span>
                 </div>
               </div>
@@ -121,7 +119,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <Button
             onClick={handleSendMessage}
             disabled={isLoading || !input.trim()}
-            className="bg-emailore-purple hover:bg-emailore-purple-dark h-10"
+            className="h-10"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

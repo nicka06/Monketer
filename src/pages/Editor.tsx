@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -299,6 +300,7 @@ const Editor = () => {
         id: userMessageId,
         content: message,
         timestamp: new Date(),
+        role: 'user'
       };
       
       setChatMessages((prev) => [...prev, userMessage]);
@@ -306,33 +308,83 @@ const Editor = () => {
       // Save user message to the database
       await saveChatMessage(targetProjectId!, message);
       
-      // TODO: Call AI service for response
-      // For now, we'll simulate an AI response
-      setTimeout(async () => {
+      try {
+        // Get the current template or use empty template if none exists
+        const currentTemplateToUse = emailTemplate || emptyTemplate;
+        
+        // Format chat history for context
+        const chatHistoryForAI = chatMessages.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role || (chatMessages.indexOf(msg) % 2 === 0 ? 'user' : 'assistant')
+        }));
+        
+        // Call our OpenAI Edge Function
+        const response = await supabase.functions.invoke('generate-email-changes', {
+          body: {
+            prompt: message,
+            currentTemplate: currentTemplateToUse,
+            chatHistory: chatHistoryForAI,
+          }
+        });
+        
+        if (response.error) {
+          throw new Error(response.error.message || 'Error generating email changes');
+        }
+        
+        const { explanation, updatedTemplate } = response.data;
+        
+        // Save assistant message to the database
         const aiMessageId = generateId();
         const aiMessage: ChatMessage = {
           id: aiMessageId,
-          content: 'This is a placeholder response. In the full implementation, this would be a response from the OpenAI API.',
+          content: explanation,
           timestamp: new Date(),
+          role: 'assistant'
         };
         
         setChatMessages((prev) => [...prev, aiMessage]);
+        await saveChatMessage(targetProjectId!, explanation);
         
-        // Save assistant message to the database
-        await saveChatMessage(targetProjectId!, aiMessage.content);
+        // Calculate differences and save as pending changes
+        const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
         
-        // Simulate email code being generated after first message
-        if (!hasCode) {
-          setEmailTemplate(emptyTemplate);
-          setHasCode(true);
-          
-          // Here you would also save the semantic email structure and HTML
-          // This is simplified for the demo
-          // In a real implementation, this would come from the AI response
+        // Save pending changes to database
+        for (const change of newPendingChanges) {
+          await savePendingChange(
+            targetProjectId!,
+            change.elementId,
+            change.changeType,
+            change.oldContent,
+            change.newContent
+          );
         }
         
-        setIsLoading(false);
-      }, 2000);
+        // Update the email template with pending changes
+        setEmailTemplate(updatedTemplate);
+        setPendingChanges((prev) => [...prev, ...newPendingChanges]);
+        setHasCode(true);
+        
+      } catch (error) {
+        console.error('Error processing with AI:', error);
+        toast({
+          title: 'AI Processing Error',
+          description: error.message || 'Failed to process request with AI',
+          variant: 'destructive',
+        });
+        
+        // Add a system message about the error
+        setChatMessages((prev) => [
+          ...prev, 
+          {
+            id: generateId(),
+            content: `Error: ${error.message || 'Failed to process request with AI'}. Please try again.`,
+            timestamp: new Date(),
+            role: 'assistant'
+          }
+        ]);
+      }
+      
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -340,8 +392,64 @@ const Editor = () => {
         description: 'Failed to send message',
         variant: 'destructive',
       });
+    } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper function to identify differences between templates and generate pending changes
+  const generatePendingChanges = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate): PendingChange[] => {
+    const changes: PendingChange[] = [];
+    
+    // Process each section in the new template
+    newTemplate.sections.forEach(newSection => {
+      // For each element in this section
+      newSection.elements.forEach(element => {
+        // If the element has pending flag, create a pending change
+        if (element.pending) {
+          // Find the corresponding element in the old template (if it exists)
+          let oldElement: EmailElement | undefined;
+          let oldSectionId: string | undefined;
+          
+          oldTemplate.sections.forEach(oldSection => {
+            const foundElement = oldSection.elements.find(e => e.id === element.id);
+            if (foundElement) {
+              oldElement = foundElement;
+              oldSectionId = oldSection.id;
+            }
+          });
+          
+          // Create the pending change object
+          const change: PendingChange = {
+            id: generateId(),
+            elementId: element.id,
+            changeType: element.pendingType || 'edit',
+            status: 'pending'
+          };
+          
+          // Add old and new content based on change type
+          if (element.pendingType === 'add') {
+            change.newContent = {
+              element: { ...element },
+              sectionId: newSection.id
+            };
+          } else if (element.pendingType === 'edit') {
+            if (oldElement) {
+              change.oldContent = { ...oldElement };
+              change.newContent = { ...element };
+            }
+          } else if (element.pendingType === 'delete') {
+            if (oldElement) {
+              change.oldContent = { ...oldElement };
+            }
+          }
+          
+          changes.push(change);
+        }
+      });
+    });
+    
+    return changes;
   };
 
   // Handle accepting a pending change

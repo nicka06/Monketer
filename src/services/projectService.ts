@@ -1,6 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
-import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
+import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
 // Create a new project
 export async function createProject(name: string, initialContent?: EmailTemplate) {
@@ -194,32 +193,26 @@ export async function getProjectByNameAndUsername(projectName: string, username:
 
 // Helper function to convert email template to HTML
 function convertTemplateToHtml(template: EmailTemplate): string {
-  // This is a simplified version - in a real app, this would be more sophisticated
+  // This is an enhanced version with better HTML generation
   let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${template.name}</title></head><body style="${styleObjectToString(template.styles)}">`;
   
   // Process each section
   template.sections.forEach(section => {
+    // Skip sections marked for deletion
+    if (section.pending && section.pendingType === 'delete') {
+      return;
+    }
+    
     html += `<div style="${styleObjectToString(section.styles)}">`;
     
     // Process each element in the section
     section.elements.forEach(element => {
-      switch (element.type) {
-        case 'header':
-          html += `<h2 style="${styleObjectToString(element.styles)}">${element.content}</h2>`;
-          break;
-        case 'text':
-          html += `<p style="${styleObjectToString(element.styles)}">${element.content}</p>`;
-          break;
-        case 'button':
-          html += `<button style="${styleObjectToString(element.styles)}">${element.content}</button>`;
-          break;
-        case 'image':
-          html += `<img src="${element.content}" alt="Email image" style="${styleObjectToString(element.styles)}" />`;
-          break;
-        case 'divider':
-          html += `<hr style="${styleObjectToString(element.styles)}" />`;
-          break;
+      // Skip elements marked for deletion
+      if (element.pending && element.pendingType === 'delete') {
+        return;
       }
+      
+      html += renderElementToHtml(element);
     });
     
     html += `</div>`;
@@ -229,10 +222,56 @@ function convertTemplateToHtml(template: EmailTemplate): string {
   return html;
 }
 
+// Helper function to render a single element to HTML
+function renderElementToHtml(element: EmailElement): string {
+  const elementStyle = styleObjectToString(element.styles);
+  
+  switch (element.type) {
+    case 'header':
+      return `<h2 style="${elementStyle}">${element.content}</h2>`;
+      
+    case 'text':
+      return `<p style="${elementStyle}">${element.content}</p>`;
+      
+    case 'button':
+      // Extract href from content if it contains a URL
+      let buttonContent = element.content;
+      let buttonHref = '#';
+      
+      // Look for URLs in the content or styles
+      if (element.styles.href) {
+        buttonHref = element.styles.href;
+      } else if (element.content.includes('http')) {
+        // Simple URL extraction (should be enhanced for production)
+        const urlMatch = element.content.match(/(https?:\/\/[^\s]+)/);
+        if (urlMatch) {
+          buttonHref = urlMatch[0];
+          buttonContent = element.content.replace(urlMatch[0], '').trim();
+        }
+      }
+      
+      return `<a href="${buttonHref}" style="display:inline-block; text-decoration:none; ${elementStyle}">${buttonContent}</a>`;
+      
+    case 'image':
+      return `<img src="${element.content}" alt="Email image" style="${elementStyle}" />`;
+      
+    case 'divider':
+      return `<hr style="${elementStyle}" />`;
+      
+    default:
+      return `<div style="${elementStyle}">${element.content}</div>`;
+  }
+}
+
 // Helper function to convert style object to inline CSS string
 function styleObjectToString(styles: Record<string, string>): string {
   return Object.entries(styles)
-    .map(([key, value]) => `${key}: ${value}`)
+    .filter(([key]) => key !== 'href') // Filter out special properties like href
+    .map(([key, value]) => {
+      // Convert camelCase to kebab-case for CSS properties
+      const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      return `${cssKey}: ${value}`;
+    })
     .join('; ');
 }
 
@@ -333,13 +372,14 @@ export async function getProject(projectId: string) {
 }
 
 // Save chat message
-export async function saveChatMessage(projectId: string, content: string) {
+export async function saveChatMessage(projectId: string, content: string, role: 'user' | 'assistant' = 'user') {
   try {
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         project_id: projectId,
         content,
+        role
       })
       .select();
 
@@ -448,4 +488,9 @@ export async function rejectPendingChange(changeId: string) {
     console.error('Error rejecting pending change:', error);
     throw error;
   }
+}
+
+// Export the email as HTML
+export async function exportEmailAsHtml(template: EmailTemplate): Promise<string> {
+  return convertTemplateToHtml(template);
 }

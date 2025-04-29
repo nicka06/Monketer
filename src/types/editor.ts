@@ -39,7 +39,7 @@ export interface ChatMessage {
   id: string;
   content: string;
   timestamp: Date;
-  role?: 'user' | 'assistant'; // Adding role as optional to handle existing code
+  role?: 'user' | 'assistant';
 }
 
 export interface Project {
