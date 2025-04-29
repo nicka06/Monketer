@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Plus, FileText } from 'lucide-react';
-import { getUserProjects, createProject } from '@/services/projectService';
+import { getUserProjects } from '@/services/projectService';
 import { Project } from '@/types/editor';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,22 +43,9 @@ const Dashboard = () => {
     }
   };
 
-  const handleCreateProject = async () => {
-    try {
-      const newProject = await createProject('Untitled Project');
-      toast({
-        title: 'Success',
-        description: 'New project created',
-      });
-      navigate(`/editor/${newProject.id}`);
-    } catch (error) {
-      console.error('Error creating project:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create project',
-        variant: 'destructive',
-      });
-    }
+  const handleCreateProject = () => {
+    // Simply navigate to the editor without creating a project
+    navigate('/editor');
   };
 
   const formatDate = (dateString: string) => {

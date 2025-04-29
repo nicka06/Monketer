@@ -190,7 +190,6 @@ export async function getProject(projectId: string) {
     
     const formattedChatMessages = (chatMessages || []).map(msg => ({
       id: msg.id,
-      role: msg.role as 'user' | 'assistant',
       content: msg.content,
       timestamp: new Date(msg.created_at)
     })) as ChatMessage[];

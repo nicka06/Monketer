@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -46,7 +45,7 @@ const Editor = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  const [projectName, setProjectName] = useState('Untitled Project');
+  const [projectName, setProjectName] = useState('Untitled Document 1');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -54,7 +53,6 @@ const Editor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [newProject, setNewProject] = useState<Project | null>(null);
   const [hasCode, setHasCode] = useState(false);
   
   // Load project data if projectId exists
@@ -199,7 +197,6 @@ const Editor = () => {
       if (!targetProjectId) {
         // Create a new project since this is the first message
         const newProject = await createProject(projectName);
-        setNewProject(newProject);
         targetProjectId = newProject.id;
         
         // Update URL to include the project ID
@@ -210,7 +207,6 @@ const Editor = () => {
       const userMessageId = generateId();
       const userMessage: ChatMessage = {
         id: userMessageId,
-        role: 'user',
         content: message,
         timestamp: new Date(),
       };
@@ -226,7 +222,6 @@ const Editor = () => {
         const aiMessageId = generateId();
         const aiMessage: ChatMessage = {
           id: aiMessageId,
-          role: 'assistant',
           content: 'This is a placeholder response. In the full implementation, this would be a response from the OpenAI API.',
           timestamp: new Date(),
         };
