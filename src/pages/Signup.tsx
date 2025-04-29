@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -11,6 +12,7 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +23,18 @@ const Signup = () => {
       console.log("Signup successful, navigating to /editor");
       // Navigate to the editor page after successful signup
       navigate('/editor');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Signup error:", error);
+      
+      // Provide a more specific message for rate limiting errors
+      if (error.status === 429 || (error.message && error.message.includes("after 7 seconds"))) {
+        toast({
+          title: "Too many requests",
+          description: "Please wait a few seconds before trying again",
+          variant: "destructive",
+        });
+      }
+      // The general error toast is already shown in the useAuth hook
     } finally {
       setLoading(false);
     }

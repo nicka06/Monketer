@@ -74,6 +74,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (authError) {
         console.error("Auth error during signup:", authError);
+        
+        // Handle rate limiting specifically
+        if (authError.status === 429 || authError.message.includes("after 7 seconds")) {
+          toast({
+            title: "Too many signup attempts",
+            description: "Please wait a few seconds before trying again",
+            variant: "destructive",
+          });
+        } else {
+          // General error toast for other errors
+          toast({
+            title: "Sign Up Failed",
+            description: authError.message || "An unexpected error occurred",
+            variant: "destructive",
+          });
+        }
+        
         throw authError;
       }
       
@@ -102,11 +119,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } catch (error: any) {
       console.error("Signup process failed:", error);
-      toast({
-        title: "Sign Up Failed",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
+      
+      // The specific error toast is already handled above for rate limiting
+      // This catch is for any other unexpected errors not caught above
+      if (!error.status || error.status !== 429) {
+        toast({
+          title: "Sign Up Failed",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        });
+      }
+      
       throw error;
     }
   }
