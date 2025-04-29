@@ -15,6 +15,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Function to create a simple hash of the password
+// Note: This is not for security but just to avoid storing plaintext passwords
+// For production, you would use a proper password hashing library
+const simpleHash = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString(16);
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -98,11 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Then explicitly create the user_info entry
       if (authData?.user) {
+        // Create a simple hash of the password to store
+        const hashedPassword = simpleHash(password);
+        
         const { error: infoError } = await supabase
           .from('user_info')
           .insert({
             username: email,
-            password: null // Password is handled by Supabase Auth
+            password: hashedPassword // Store hashed password instead of null
           });
         
         if (infoError) {
