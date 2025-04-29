@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
 
@@ -102,7 +103,7 @@ export async function getUsernameFromId(userId: string): Promise<string> {
     const { data: userInfo, error } = await supabase
       .from('user_info')
       .select('username')
-      .eq('id', userId)
+      .eq('id', parseInt(userId, 10))  // Convert string to number
       .single();
     
     if (error) {
@@ -130,18 +131,21 @@ export async function getProjectByNameAndUsername(projectName: string, username:
     if (userError) {
       // If not found in user_info, try to find the user in auth.users by email
       // This assumes username might be an email
-      const { data: authUser, error: authError } = await supabase.auth.admin.listUsers({
-        filter: {
-          email: username
-        }
-      });
+      const { data: users, error: authError } = await supabase.auth.admin.listUsers();
       
-      if (authError || !authUser || authUser.users.length === 0) {
+      if (authError || !users) {
+        throw new Error('User not found');
+      }
+      
+      // Find the user with the matching email
+      const matchedUser = users.users.find(user => user.email === username);
+      
+      if (!matchedUser) {
         throw new Error('User not found');
       }
       
       // Use the UUID from auth.users
-      const userId = authUser.users[0].id;
+      const userId = matchedUser.id;
       
       // Find the project by name and user ID
       const { data: projects, error: projectError } = await supabase
