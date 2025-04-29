@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 
 interface UserInfo {
   id: number;
@@ -75,9 +76,15 @@ const Dashboard = () => {
           
           <div className="border-t border-gray-200 pt-6">
             <h2 className="text-lg font-medium mb-4">Welcome to emailore!</h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-6">
               This is your personal dashboard. Here you can manage your account and access your email content.
             </p>
+            
+            <Button asChild className="bg-emailore-purple hover:bg-emailore-purple-dark transition-colors">
+              <Link to="/editor">
+                Go to Email Editor
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

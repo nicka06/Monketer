@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +10,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
+import Editor from "./pages/Editor";
 
 const queryClient = new QueryClient();
 
@@ -34,20 +34,28 @@ const AppRoutes = () => {
   
   return (
     <Routes>
-      <Route path="/" element={<Index />} />
+      <Route path="/" element={user ? <Navigate to="/editor" /> : <Index />} />
       <Route 
         path="/login" 
-        element={user ? <Navigate to="/dashboard" /> : <Login />} 
+        element={user ? <Navigate to="/editor" /> : <Login />} 
       />
       <Route 
         path="/signup" 
-        element={user ? <Navigate to="/dashboard" /> : <Signup />} 
+        element={user ? <Navigate to="/editor" /> : <Signup />} 
       />
       <Route 
         path="/dashboard" 
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/editor" 
+        element={
+          <ProtectedRoute>
+            <Editor />
           </ProtectedRoute>
         } 
       />
