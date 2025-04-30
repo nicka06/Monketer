@@ -1,16 +1,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Try to get values from environment, with fallbacks
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nvlkyadiqucpjjgnhujm.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52bGt5YWRpcXVjcGpqZ25odWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5MDAwNTcsImV4cCI6MjA2MTQ3NjA1N30.LJVCnNj46h9ogGY0g1OYSfJevBgulcTtUvEqs2fdZTw';
 
-if (!supabaseUrl) {
-  throw new Error('VITE_SUPABASE_URL is not defined in the environment variables.');
-}
-
-if (!supabaseKey) {
-  throw new Error('VITE_SUPABASE_ANON_KEY is not defined in the environment variables.');
-}
+console.log('Supabase configuration:', {
+  url: supabaseUrl,
+  keyAvailable: !!supabaseKey
+});
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
