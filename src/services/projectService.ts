@@ -209,7 +209,7 @@ export async function getProjectByNameAndUsername(projectName: string, username:
 // Helper function to convert email template to HTML
 function convertTemplateToHtml(template: EmailTemplate): string {
   // This is an enhanced version with better HTML generation
-  let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${template.name}</title></head><body style="${styleObjectToString(template.styles)}">`;
+  let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${template.name}</title></head><body style="${styleObjectToString(template.styles || {})}">`;
   
   // Process each section
   template.sections.forEach(section => {
@@ -218,7 +218,7 @@ function convertTemplateToHtml(template: EmailTemplate): string {
       return;
     }
     
-    html += `<div style="${styleObjectToString(section.styles)}">`;
+    html += `<div style="${styleObjectToString(section.styles || {})}">`;
     
     // Process each element in the section
     section.elements.forEach(element => {
@@ -239,7 +239,7 @@ function convertTemplateToHtml(template: EmailTemplate): string {
 
 // Helper function to render a single element to HTML
 function renderElementToHtml(element: EmailElement): string {
-  const elementStyle = styleObjectToString(element.styles);
+  const elementStyle = styleObjectToString(element.styles || {});
   
   switch (element.type) {
     case 'header':
@@ -254,7 +254,7 @@ function renderElementToHtml(element: EmailElement): string {
       let buttonHref = '#';
       
       // Look for URLs in the content or styles
-      if (element.styles.href) {
+      if (element.styles && element.styles.href) {
         buttonHref = element.styles.href;
       } else if (element.content.includes('http')) {
         // Simple URL extraction (should be enhanced for production)
@@ -280,6 +280,11 @@ function renderElementToHtml(element: EmailElement): string {
 
 // Helper function to convert style object to inline CSS string
 function styleObjectToString(styles: Record<string, string>): string {
+  // Ensure styles is an object before calling Object.entries
+  if (!styles || typeof styles !== 'object') {
+    return '';
+  }
+  
   return Object.entries(styles)
     .filter(([key]) => key !== 'href') // Filter out special properties like href
     .map(([key, value]) => {

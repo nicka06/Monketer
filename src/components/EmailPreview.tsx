@@ -25,8 +25,9 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
         : 'border-l-4 border-yellow-500 pl-2 bg-yellow-50 p-2'
       : '';
     
+    // Ensure styles is never null or undefined
     const elementStyle = {
-      ...element.styles,
+      ...(element.styles || {}),
       position: 'relative' as const,
     };
 
@@ -89,7 +90,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
           >
             <button
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              style={element.styles}
+              style={element.styles || {}} // Ensure styles is never null or undefined
             >
               {element.content}
             </button>
@@ -103,7 +104,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             className={`group ${pendingClass} relative mb-4`}
             style={elementStyle}
           >
-            <img src={element.content} alt="Email content" style={element.styles} />
+            <img src={element.content} alt="Email content" style={element.styles || {}} /> {/* Ensure styles is never null or undefined */}
             {renderPendingControls()}
           </div>
         );
@@ -114,7 +115,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             className={`group ${pendingClass} relative mb-4`}
             style={elementStyle}
           >
-            <hr style={element.styles} />
+            <hr style={element.styles || {}} /> {/* Ensure styles is never null or undefined */}
             {renderPendingControls()}
           </div>
         );
@@ -137,7 +138,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
       <div
         key={section.id}
         className={`p-4 mb-4 ${pendingClass}`}
-        style={section.styles}
+        style={section.styles || {}} // Ensure styles is never null or undefined
       >
         {section.elements.map((element) => renderElement(element))}
       </div>
@@ -146,7 +147,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
 
   return (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
-      <div className="p-6" style={template.styles}>
+      <div className="p-6" style={template.styles || {}}> {/* Ensure styles is never null or undefined */}
         {template.sections.map((section) => renderSection(section))}
       </div>
     </div>
