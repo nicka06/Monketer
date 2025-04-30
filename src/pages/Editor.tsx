@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings, Mail } from 'lucide-react';
+import { ArrowLeft, Settings, Mail, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
@@ -23,6 +23,7 @@ import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
 import { supabase, cleanUuid } from '@/integrations/supabase/client';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -71,6 +72,9 @@ const Editor = () => {
   const [hasCode, setHasCode] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [initialInputValue, setInitialInputValue] = useState<string | null>(null); // New state for initial input
+  
+  // Add state for preview controls
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light');
   
   // Load username for current user
   useEffect(() => {
@@ -1088,9 +1092,27 @@ const Editor = () => {
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="overflow-auto"
+            className="overflow-auto bg-gray-100"
           >
-            <div className="max-w-3xl mx-auto p-6 h-full overflow-y-auto">
+            {/* Add Preview Controls Container */}
+            <div className="sticky top-0 z-10 bg-gray-100 py-2 px-4 border-b border-gray-200 flex justify-center space-x-4">
+              <ToggleGroup 
+                type="single" 
+                value={previewMode} 
+                onValueChange={(value: 'light' | 'dark') => { if (value) setPreviewMode(value); }}
+                aria-label="Light/Dark Mode Toggle"
+              >
+                <ToggleGroupItem value="light" aria-label="Light mode">
+                  <Sun className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="dark" aria-label="Dark mode">
+                  <Moon className="h-4 w-4" />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            
+            {/* Preview Content Area */}
+            <div className="max-w-5xl mx-auto p-6 h-full overflow-y-auto">
               {!hasCode ? (
                 <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
                   <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
@@ -1107,12 +1129,12 @@ const Editor = () => {
                 </div>
               ) : (
                 <>
-                  <h2 className="text-lg font-medium mb-4">Email Preview</h2>
                   {emailTemplate && (
                     <EmailPreview
                       template={emailTemplate}
                       onAcceptChange={handleAcceptChange}
                       onRejectChange={handleRejectChange}
+                      previewMode={previewMode}
                     />
                   )}
                 </>
