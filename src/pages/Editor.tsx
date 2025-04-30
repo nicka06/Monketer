@@ -22,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
 import { supabase, cleanUuid } from '@/integrations/supabase/client';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -1028,48 +1029,64 @@ const Editor = () => {
         </div>
       </header>
 
-      {/* Main content with fixed chat on right */}
-      <div className="flex-1 flex relative">
-        {/* Email preview panel - takes available space minus chat width */}
-        <main className="w-full pr-96 overflow-auto">
-          <div className="max-w-3xl mx-auto p-6">
-            {!hasCode ? (
-              <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
-                <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
-                <p className="text-gray-500 mb-6">
-                  Send a message to the AI assistant to start generating your email template.
-                  The AI will create an email layout based on your requirements.
-                </p>
-                {isLoading && (
-                  <div className="space-y-3 mt-6">
-                    <p className="text-sm text-gray-500">Generating email template...</p>
-                    <Progress value={progress} className="h-2" />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <h2 className="text-lg font-medium mb-4">Email Preview</h2>
-                {emailTemplate && (
-                  <EmailPreview
-                    template={emailTemplate}
-                    onAcceptChange={handleAcceptChange}
-                    onRejectChange={handleRejectChange}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </main>
-        
-        {/* Chat interface panel - fixed width, fixed to right */}
-        <aside className="w-96 h-[calc(100vh-4rem)] fixed top-16 right-0 border-l border-gray-200 bg-gray-50 overflow-hidden flex flex-col">
-          <ChatInterface
-            messages={chatMessages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-          />
-        </aside>
+      {/* Main content with resizable panels */}
+      <div className="flex-1 flex h-[calc(100vh-4rem)]">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="w-full"
+        >
+          {/* Email preview panel */}
+          <ResizablePanel 
+            defaultSize={75}
+            minSize={40}
+            className="overflow-auto"
+          >
+            <div className="max-w-3xl mx-auto p-6">
+              {!hasCode ? (
+                <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
+                  <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
+                  <p className="text-gray-500 mb-6">
+                    Send a message to the AI assistant to start generating your email template.
+                    The AI will create an email layout based on your requirements.
+                  </p>
+                  {isLoading && (
+                    <div className="space-y-3 mt-6">
+                      <p className="text-sm text-gray-500">Generating email template...</p>
+                      <Progress value={progress} className="h-2" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-lg font-medium mb-4">Email Preview</h2>
+                  {emailTemplate && (
+                    <EmailPreview
+                      template={emailTemplate}
+                      onAcceptChange={handleAcceptChange}
+                      onRejectChange={handleRejectChange}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </ResizablePanel>
+          
+          {/* Resizable handle */}
+          <ResizableHandle withHandle />
+          
+          {/* Chat interface panel */}
+          <ResizablePanel 
+            defaultSize={25} 
+            minSize={20}
+            className="border-l border-gray-200 bg-gray-50"
+          >
+            <ChatInterface
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     </div>
   );
