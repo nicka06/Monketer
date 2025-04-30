@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { EmailTemplate, EmailSection, EmailElement } from '@/types/editor';
 import { Button } from './ui/button';
@@ -203,33 +204,6 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
       <div className="p-6" style={template.styles || {}}>
         {template.sections.map((section) => renderSection(section))}
-      </div>
-      
-      {/* Debug information panel */}
-      <div className="bg-gray-100 p-3 border-t border-gray-200">
-        <details>
-          <summary className="text-sm font-medium cursor-pointer">Debug Information</summary>
-          <div className="mt-2 text-xs">
-            <p>Template ID: {template.id}</p>
-            <p>Sections: {template.sections.length}</p>
-            {template.sections.map((section, idx) => (
-              <div key={section.id} className="ml-2 mt-1">
-                <p>Section {idx + 1}: {section.id} - {section.elements.length} elements</p>
-                <ul className="ml-4 list-disc">
-                  {section.elements.map(element => (
-                    <li key={element.id} className={element.pending ? "font-semibold" : ""}>
-                      {element.type}: {element.id.substring(0, 8)}... 
-                      {element.pending && ` (${element.pendingType})`}
-                      {element.type === 'button' && element.styles?.backgroundColor && 
-                        ` - Color: ${element.styles.backgroundColor}`
-                      }
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </details>
       </div>
     </div>
   );

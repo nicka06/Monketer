@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types/editor';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, ChevronUp } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
 
@@ -19,14 +19,23 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   isLoading,
 }) => {
   const [input, setInput] = useState('');
+  const [displayCount, setDisplayCount] = useState(5);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Scroll to bottom when new messages arrive
+  const visibleMessages = messages.slice(-displayCount);
+  const hasMoreMessages = messages.length > displayCount;
+  
+  // Scroll to bottom when new messages arrive or when load more is clicked
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [visibleMessages]);
+
+  const handleLoadMore = () => {
+    setDisplayCount(prevCount => Math.min(prevCount + 5, messages.length));
+  };
 
   const handleSendMessage = async () => {
     if (input.trim() && !isLoading) {
@@ -57,7 +66,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
-          {messages.map((message) => (
+          {hasMoreMessages && (
+            <div className="flex justify-center mb-4">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleLoadMore}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800"
+              >
+                <ChevronUp className="h-4 w-4" />
+                Load more messages
+              </Button>
+            </div>
+          )}
+          
+          {visibleMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${
@@ -100,6 +123,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </div>
             </div>
           )}
+          
+          {/* Invisible element to scroll to */}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
       
