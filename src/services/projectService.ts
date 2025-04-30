@@ -1,4 +1,5 @@
-import { supabase, handleSupabaseError } from '@/integrations/supabase/client';
+
+import { supabase, handleSupabaseError, toJson } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
 // Create a new project
@@ -51,7 +52,7 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         .insert({
           project_id: project.id,
           version_number: 1,
-          content: initialContent as any, // Cast to any to resolve type issue
+          content: toJson(initialContent), // Use toJson helper to safely convert EmailTemplate to Json
         });
 
       if (versionError) throw versionError;
@@ -64,7 +65,7 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         .from('projects')
         .update({
           current_html: htmlOutput,
-          semantic_email: initialContent as any,
+          semantic_email: toJson(initialContent), // Use toJson helper 
           last_edited_at: new Date().toISOString()
         })
         .eq('id', project.id);
@@ -103,7 +104,7 @@ export async function updateProjectWithEmailChanges(
       .update({ 
         last_edited_at: new Date().toISOString(),
         current_html: htmlOutput,
-        semantic_email: updatedEmailTemplate
+        semantic_email: toJson(updatedEmailTemplate) // Use toJson helper
       })
       .eq('id', projectId)
       .select();
@@ -447,8 +448,8 @@ export async function savePendingChange(
         project_id: projectId,
         element_id: elementId,
         change_type: changeType,
-        old_content: oldContent || null,
-        new_content: newContent || null,
+        old_content: oldContent ? toJson(oldContent) : null, // Use toJson helper
+        new_content: newContent ? toJson(newContent) : null, // Use toJson helper
       })
       .select();
 
@@ -491,7 +492,7 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
       .insert({
         project_id: projectId,
         version_number: nextVersionNumber,
-        content: updatedEmailContent as any, // Cast to any to resolve type issue
+        content: toJson(updatedEmailContent), // Use toJson helper
       });
 
     if (saveVersionError) throw saveVersionError;

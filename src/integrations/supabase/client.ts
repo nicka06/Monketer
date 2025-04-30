@@ -60,3 +60,11 @@ export const handleSupabaseError = (error: any) => {
   
   return error;
 };
+
+// Helper type for safely converting complex types to Json
+export type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
+
+// Helper function to safely convert any object to Supabase-compatible Json type
+export function toJson<T>(data: T): JsonValue {
+  return JSON.parse(JSON.stringify(data));
+}
