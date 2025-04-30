@@ -415,6 +415,9 @@ const Editor = () => {
           updatedTemplate.id = cleanUuid(updatedTemplate.id);
         }
         
+        // IMPORTANT NEW STEP: Make sure any changes are properly marked as pending
+        ensureChangesAreMarkedAsPending(currentTemplateToUse, updatedTemplate);
+        
         // Generate pending changes by comparing the old and new templates
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
         
@@ -718,9 +721,14 @@ const Editor = () => {
       return true;
     }
     
-    // Check if backgroundColor has changed (with special attention)
+    // Check if backgroundColor has changed (with special attention and case insensitivity)
     console.log(`Background color comparison: old=${oldStyles.backgroundColor}, new=${newStyles.backgroundColor}`);
-    if (oldStyles.backgroundColor !== newStyles.backgroundColor) {
+    
+    // Case-insensitive color comparison
+    const oldBgColor = oldStyles.backgroundColor ? oldStyles.backgroundColor.toLowerCase() : undefined;
+    const newBgColor = newStyles.backgroundColor ? newStyles.backgroundColor.toLowerCase() : undefined;
+    
+    if (oldBgColor !== newBgColor) {
       console.log(`Background color changed from ${oldStyles.backgroundColor} to ${newStyles.backgroundColor}`);
       return true;
     }
@@ -734,10 +742,20 @@ const Editor = () => {
       return true;
     }
     
-    // Check each style property
+    // Check each style property (case-insensitive for colors)
     for (const key of oldKeys) {
       console.log(`Comparing style property ${key}: old=${oldStyles[key]}, new=${newStyles[key]}`);
-      if (oldStyles[key] !== newStyles[key]) {
+      
+      // For color values, do case-insensitive comparison
+      if (key.toLowerCase().includes('color')) {
+        const oldColor = oldStyles[key]?.toLowerCase();
+        const newColor = newStyles[key]?.toLowerCase();
+        
+        if (oldColor !== newColor) {
+          console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'} (case-insensitive comparison)`);
+          return true;
+        }
+      } else if (oldStyles[key] !== newStyles[key]) {
         console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'}`);
         return true;
       }

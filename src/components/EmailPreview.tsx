@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { EmailTemplate, EmailSection, EmailElement } from '@/types/editor';
 import { Button } from './ui/button';
