@@ -36,6 +36,8 @@ const Dashboard = () => {
           // Use email as fallback if available
           if (user.email) {
             setUsername(user.email);
+          } else {
+            setUsername('user');
           }
         });
     }

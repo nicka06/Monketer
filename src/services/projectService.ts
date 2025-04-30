@@ -89,9 +89,6 @@ export async function createProject(name: string, initialContent?: EmailTemplate
 // Helper function to get username from user ID
 export async function getUsernameFromId(userId: string): Promise<string> {
   try {
-    // FIXING: Avoid using admin.getUserById which requires admin privileges
-    // FIXING: Avoid trying to convert UUID string to number which results in NaN
-    
     // Try to get email from auth.user metadata first
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -100,19 +97,10 @@ export async function getUsernameFromId(userId: string): Promise<string> {
       return user.email || 'user';
     }
     
-    // Alternative: Query user_info table directly using the UUID string
-    const { data: userInfo, error } = await supabase
-      .from('user_info')
-      .select('username')
-      .eq('id', userId)  // Use the UUID directly, don't try to parse it
-      .single();
-    
-    if (error) {
-      console.error('Error fetching username:', error);
-      return 'user'; // Fallback username
-    }
-    
-    return userInfo?.username || 'user';
+    // Don't try to query user_info with the UUID string directly
+    // since the user_info table has a numeric id column
+    // Just return a fallback username
+    return 'user';
   } catch (error) {
     console.error('Error in getUsernameFromId:', error);
     return 'user'; // Fallback username
@@ -122,8 +110,6 @@ export async function getUsernameFromId(userId: string): Promise<string> {
 // Helper function to get project by name and username
 export async function getProjectByNameAndUsername(projectName: string, username: string) {
   try {
-    // FIXING: Avoid using auth.admin.listUsers which requires admin privileges
-    
     // Try to find the user by email (username) directly from authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
