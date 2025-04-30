@@ -568,17 +568,21 @@ const Editor = () => {
         } 
         // Detect style changes even if not explicitly marked as pending
         else if (oldElement) {
-          // Compare styles to detect style-only changes
-          const oldStylesStr = JSON.stringify(oldElement.styles || {});
-          const newStylesStr = JSON.stringify(newElement.styles || {});
-          
-          const hasStyleChanges = oldStylesStr !== newStylesStr;
+          // Improved style comparison logic
+          const hasStyleChanges = detectStyleChanges(oldElement.styles || {}, newElement.styles || {});
           const hasContentChanges = oldElement.content !== newElement.content;
           
           if (hasStyleChanges || hasContentChanges) {
             console.log(`Detected style or content changes for element ${newElement.id}`);
-            console.log("Old styles:", oldStylesStr);
-            console.log("New styles:", newStylesStr);
+            console.log("Old styles:", JSON.stringify(oldElement.styles));
+            console.log("New styles:", JSON.stringify(newElement.styles));
+            
+            // Create a new element with pending flags
+            const pendingElement = {
+              ...newElement,
+              pending: true,
+              pendingType: 'edit'
+            };
             
             const change: PendingChange = {
               id: generateId(),
@@ -586,8 +590,10 @@ const Editor = () => {
               changeType: 'edit',
               status: 'pending',
               oldContent: { ...oldElement },
-              newContent: { ...newElement }
+              newContent: pendingElement
             };
+            
+            console.log("Created style change:", change);
             changes.push(change);
             
             // Mark the element as pending in the template
@@ -627,8 +633,50 @@ const Editor = () => {
         }
       });
     });
+
+    // Log the changes for debugging
+    console.log("Generated pending changes:", changes);
     
     return changes;
+  };
+
+  // Helper function to detect style changes with deep comparison
+  const detectStyleChanges = (oldStyles: Record<string, string>, newStyles: Record<string, string>): boolean => {
+    // Deep comparison of style objects
+    if (!oldStyles && !newStyles) return false;
+    if (!oldStyles || !newStyles) return true;
+    
+    // Check if backgroundColor has changed (with special attention)
+    if (oldStyles.backgroundColor !== newStyles.backgroundColor) {
+      console.log(`Background color changed from ${oldStyles.backgroundColor} to ${newStyles.backgroundColor}`);
+      return true;
+    }
+    
+    const oldKeys = Object.keys(oldStyles);
+    const newKeys = Object.keys(newStyles);
+    
+    // Different number of style properties
+    if (oldKeys.length !== newKeys.length) {
+      return true;
+    }
+    
+    // Check each style property
+    for (const key of oldKeys) {
+      if (oldStyles[key] !== newStyles[key]) {
+        console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'}`);
+        return true;
+      }
+    }
+    
+    // Check for new properties not in old styles
+    for (const key of newKeys) {
+      if (!oldStyles.hasOwnProperty(key)) {
+        console.log(`New style property added: ${key} = ${newStyles[key]}`);
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   // Handle accepting a pending change

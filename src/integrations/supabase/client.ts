@@ -72,7 +72,7 @@ export function toJson<T>(data: T): JsonValue {
   const cleaned = JSON.parse(JSON.stringify(data));
   if (cleaned && typeof cleaned === 'object' && cleaned.id && typeof cleaned.id === 'string') {
     // Fix malformed UUIDs (remove spaces and trailing numbers)
-    cleaned.id = cleaned.id.trim().split(' ')[0];
+    cleaned.id = cleanUuid(cleaned.id);
   }
   return cleaned;
 }
