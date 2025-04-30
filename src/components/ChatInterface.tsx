@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types/editor';
 import { Button } from './ui/button';
@@ -11,17 +10,25 @@ interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => Promise<void>;
   isLoading: boolean;
+  initialInputValue?: string;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSendMessage,
   isLoading,
+  initialInputValue,
 }) => {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInputValue || '');
   const [displayCount, setDisplayCount] = useState(5);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
+  useEffect(() => {
+    if (initialInputValue) {
+      setInput(initialInputValue);
+    }
+  }, [initialInputValue]);
+
   const visibleMessages = messages.slice(-displayCount);
   const hasMoreMessages = messages.length > displayCount;
   

@@ -70,6 +70,7 @@ const Editor = () => {
   const [progress, setProgress] = useState(0);
   const [hasCode, setHasCode] = useState(false);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [initialInputValue, setInitialInputValue] = useState<string | null>(null); // New state for initial input
   
   // Load username for current user
   useEffect(() => {
@@ -113,10 +114,22 @@ const Editor = () => {
         else {
           setProjectTitle('Untitled Document 1');
           setEmailTemplate(null);
-          setChatMessages([]);
+          setChatMessages([]); // Always start with empty chat messages
           setPendingChanges([]);
           setHasCode(false);
           setActualProjectId(null);
+
+          // Check localStorage for saved content and set as initial input value
+          const savedContent = localStorage.getItem('savedEmailContent');
+          if (savedContent) {
+            console.log("Found saved content in localStorage:", savedContent);
+            setInitialInputValue(savedContent); // Set the initial input value state
+            localStorage.removeItem('savedEmailContent'); // Clear immediately after reading
+            console.log("Cleared savedEmailContent from localStorage");
+          } else {
+            setInitialInputValue(null); // Ensure it's null if nothing found
+          }
+
           setIsLoadingProject(false);
         }
       } catch (error) {
@@ -1085,6 +1098,7 @@ const Editor = () => {
                 messages={chatMessages}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
+                initialInputValue={initialInputValue || ''} // Pass down the initial value
               />
             </div>
           </ResizablePanel>

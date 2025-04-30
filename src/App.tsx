@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,13 +18,6 @@ const queryClient = new QueryClient();
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
   
-  useEffect(() => {
-    // If user is authenticated, clear the saved email content from localStorage
-    if (user) {
-      localStorage.removeItem('savedEmailContent');
-    }
-  }, [user]);
-  
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   
   if (!user) {
@@ -37,18 +29,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Redirect to dashboard if authenticated and clear savedEmailContent
+// Redirect to editor if authenticated
 const RedirectIfAuthenticated = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   
-  useEffect(() => {
-    if (user) {
-      localStorage.removeItem('savedEmailContent');
-    }
-  }, [user]);
-  
   if (user) {
-    return <Navigate to="/dashboard" />;
+    // Redirect to editor instead of dashboard
+    return <Navigate to="/editor" />;
   }
   
   return <>{children}</>;
@@ -68,7 +55,8 @@ const AppRoutes = () => {
         path="/" 
         element={
           user ? (
-            <Navigate to="/dashboard" />
+            // Redirect to editor instead of dashboard
+            <Navigate to="/editor" />
           ) : (
             <RedirectIfAuthenticated>
               <Index />
