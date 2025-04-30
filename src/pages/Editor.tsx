@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
@@ -505,6 +505,38 @@ const Editor = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to navigate to the send page
+  const handleNavigateToSendPage = async () => {
+    if (!emailTemplate) {
+      toast({
+        title: "Cannot Send",
+        description: "Please generate an email template first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Generate the HTML from the current template state
+      const currentHtml = await exportEmailAsHtml(emailTemplate);
+      
+      // Store the HTML in sessionStorage
+      sessionStorage.setItem('emailHtmlToSend', currentHtml);
+      console.log("Stored current email HTML in sessionStorage.");
+
+      // Navigate to the send page
+      navigate('/send-email');
+
+    } catch (error) {
+      console.error("Error preparing email for sending:", error);
+      toast({
+        title: "Error",
+        description: "Could not prepare email content for sending.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1033,7 +1065,11 @@ const Editor = () => {
             )}
           </div>
           
-          <div className="flex items-center">
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={handleNavigateToSendPage} disabled={!hasCode || isLoadingProject}>
+              <Mail className="mr-2 h-4 w-4" />
+              Send Preview
+            </Button>
             <Button variant="ghost" size="icon">
               <Settings className="h-5 w-5" />
               <span className="sr-only">Settings</span>

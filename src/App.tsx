@@ -11,6 +11,7 @@ import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
+import SendEmailPage from "./pages/SendEmailPage";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +112,14 @@ const AppRoutes = () => {
             <Editor />
           </ProtectedRoute>
         } 
+      />
+      <Route
+        path="/send-email"
+        element={
+          <ProtectedRoute>
+            <SendEmailPage />
+          </ProtectedRoute>
+        }
       />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
