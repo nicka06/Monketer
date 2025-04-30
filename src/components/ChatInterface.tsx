@@ -43,22 +43,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
-  // Determine if a message is from the user or assistant
+  // Determine if a message is from the user
   const isUserMessage = (message: ChatMessage) => {
-    // Always respect the explicit role property if present
-    if (message.role) {
-      return message.role === 'user';
-    }
-    
-    // Fall back to message ID pattern if available (assuming user messages have even IDs)
-    if (message.id) {
-      const idNum = parseInt(message.id.replace(/\D/g, ''));
-      return idNum % 2 === 0;
-    }
-    
-    // Last resort fallback - use position in the array
-    // This is less reliable but maintains backward compatibility
-    return messages.indexOf(message) % 2 === 0;
+    // Always use the explicit role property if present
+    return message.role === 'user';
   };
 
   return (

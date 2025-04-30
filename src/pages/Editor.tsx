@@ -303,7 +303,7 @@ const Editor = () => {
         }
       }
       
-      // Add user message to chat
+      // Add user message to chat with explicit 'user' role
       const userMessageId = generateId();
       const userMessage: ChatMessage = {
         id: userMessageId,
@@ -314,8 +314,8 @@ const Editor = () => {
       
       setChatMessages((prev) => [...prev, userMessage]);
       
-      // Save user message to the database
-      await saveChatMessage(targetProjectId!, message);
+      // Save user message to the database with explicit 'user' role
+      await saveChatMessage(targetProjectId!, message, 'user');
       
       try {
         // Get the current template or use empty template if none exists
@@ -349,7 +349,7 @@ const Editor = () => {
           throw new Error(error);
         }
         
-        // Save assistant message to the database
+        // Save assistant message to the database with explicit 'assistant' role
         const aiMessageId = generateId();
         const aiMessage: ChatMessage = {
           id: aiMessageId,
@@ -359,7 +359,7 @@ const Editor = () => {
         };
         
         setChatMessages((prev) => [...prev, aiMessage]);
-        await saveChatMessage(targetProjectId!, explanation);
+        await saveChatMessage(targetProjectId!, explanation, 'assistant');
         
         // Calculate differences and save as pending changes
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
@@ -405,7 +405,7 @@ const Editor = () => {
           variant: 'destructive',
         });
         
-        // Add a system message about the error
+        // Add a system message about the error with explicit 'assistant' role
         setChatMessages((prev) => [
           ...prev, 
           {
