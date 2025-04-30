@@ -159,9 +159,22 @@ const Editor = () => {
         setHasCode(true);
       } else if (projectData.project.semantic_email) {
         // If semantic_email exists in the project, use it
-        setEmailTemplate(projectData.project.semantic_email);
-        setPendingChanges(projectData.pendingChanges || []);
-        setHasCode(true);
+        // We need to properly cast the semantic_email to EmailTemplate
+        const semanticEmail = projectData.project.semantic_email as unknown as EmailTemplate;
+        
+        // Validate that it has the structure we expect
+        if (semanticEmail && 
+            semanticEmail.id && 
+            semanticEmail.sections && 
+            Array.isArray(semanticEmail.sections)) {
+          setEmailTemplate(semanticEmail);
+          setPendingChanges(projectData.pendingChanges || []);
+          setHasCode(true);
+        } else {
+          // If the structure is invalid, don't set the email template
+          setEmailTemplate(null);
+          setHasCode(false);
+        }
       } else {
         // If no email content exists yet but we have a project, show empty state
         setEmailTemplate(null);
