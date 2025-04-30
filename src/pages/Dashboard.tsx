@@ -27,8 +27,17 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadProjects();
+    // Only try to get username if user exists
     if (user?.id) {
-      getUsernameFromId(user.id).then(name => setUsername(name));
+      getUsernameFromId(user.id)
+        .then(name => setUsername(name))
+        .catch(err => {
+          console.error("Error getting username:", err);
+          // Use email as fallback if available
+          if (user.email) {
+            setUsername(user.email);
+          }
+        });
     }
   }, [user]);
 

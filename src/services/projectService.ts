@@ -89,20 +89,22 @@ export async function createProject(name: string, initialContent?: EmailTemplate
 // Helper function to get username from user ID
 export async function getUsernameFromId(userId: string): Promise<string> {
   try {
-    // First try to get user from auth.users
-    const { data: authUserData, error: authError } = await supabase.auth.admin.getUserById(userId);
+    // FIXING: Avoid using admin.getUserById which requires admin privileges
+    // FIXING: Avoid trying to convert UUID string to number which results in NaN
     
-    if (!authError && authUserData?.user) {
-      // Use email as fallback username if available
-      return authUserData.user.email || 'user';
+    // Try to get email from auth.user metadata first
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (!authError && user) {
+      // Use email as username if available
+      return user.email || 'user';
     }
     
-    // Otherwise fall back to querying the user_info table, but we need to handle the type difference
-    // The user_info table expects a number ID, not a UUID string
+    // Alternative: Query user_info table directly using the UUID string
     const { data: userInfo, error } = await supabase
       .from('user_info')
       .select('username')
-      .eq('id', parseInt(userId, 10))  // Convert string to number
+      .eq('id', userId)  // Use the UUID directly, don't try to parse it
       .single();
     
     if (error) {
@@ -120,39 +122,22 @@ export async function getUsernameFromId(userId: string): Promise<string> {
 // Helper function to get project by name and username
 export async function getProjectByNameAndUsername(projectName: string, username: string) {
   try {
-    // First try to find the user by username in user_info table
-    const { data: userInfo, error: userError } = await supabase
-      .from('user_info')
-      .select('id')
-      .eq('username', username)
-      .single();
-      
-    if (userError) {
-      // If not found in user_info, try to find the user in auth.users by email
-      // This assumes username might be an email
-      const { data: users, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError || !users) {
-        throw new Error('User not found');
-      }
-      
-      // Find the user with the matching email
-      // Explicitly type the user object to avoid TypeScript errors
-      type User = { id: string; email: string | null };
-      const matchedUser = users.users.find((user: User) => user.email === username);
-      
-      if (!matchedUser) {
-        throw new Error('User not found');
-      }
-      
-      // Use the UUID from auth.users
-      const userId = matchedUser.id;
-      
+    // FIXING: Avoid using auth.admin.listUsers which requires admin privileges
+    
+    // Try to find the user by email (username) directly from authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      throw new Error('Authentication error');
+    }
+    
+    // If current user's email matches the username, use the current user's ID
+    if (user && user.email === username) {
       // Find the project by name and user ID
       const { data: projects, error: projectError } = await supabase
         .from('projects')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .eq('name', projectName)
         .limit(1);
         
@@ -165,16 +150,22 @@ export async function getProjectByNameAndUsername(projectName: string, username:
       return projects[0];
     }
     
-    // If user found in user_info, proceed with that id
-    if (!userInfo) {
+    // Fallback: Try to find the user in user_info by username
+    const { data: userInfo, error: userError } = await supabase
+      .from('user_info')
+      .select('id')
+      .eq('username', username)
+      .single();
+      
+    if (userError || !userInfo) {
       throw new Error('User not found');
     }
     
-    // Find the project by name and user ID from user_info
+    // Find the project by name and user ID
     const { data: projects, error: projectError } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', userInfo.id.toString()) // Convert number to string if needed
+      .eq('user_id', userInfo.id.toString())
       .eq('name', projectName)
       .limit(1);
       
@@ -374,12 +365,13 @@ export async function getProject(projectId: string) {
 // Save chat message
 export async function saveChatMessage(projectId: string, content: string, role: 'user' | 'assistant' = 'user') {
   try {
+    // FIXING: Remove the 'role' field which doesn't exist in the chat_messages table schema
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         project_id: projectId,
-        content,
-        role
+        content
+        // Remove role field as it's not in the schema
       })
       .select();
 
