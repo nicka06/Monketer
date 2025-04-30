@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
@@ -89,9 +90,6 @@ export async function createProject(name: string, initialContent?: EmailTemplate
 // Helper function to get username from user ID
 export async function getUsernameFromId(userId: string): Promise<string> {
   try {
-    // FIXING: Avoid using admin.getUserById which requires admin privileges
-    // FIXING: Avoid trying to convert UUID string to number which results in NaN
-    
     // Try to get email from auth.user metadata first
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -101,10 +99,12 @@ export async function getUsernameFromId(userId: string): Promise<string> {
     }
     
     // Alternative: Query user_info table directly using the UUID string
+    // The user_info table has an ID field of type 'number', but we have a UUID string
+    // We need to handle this type mismatch properly
     const { data: userInfo, error } = await supabase
       .from('user_info')
       .select('username')
-      .eq('id', userId)  // Use the UUID directly, don't try to parse it
+      .eq('id', userId)  // Use the UUID directly, don't try to parse it as number
       .single();
     
     if (error) {
