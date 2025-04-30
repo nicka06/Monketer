@@ -15,7 +15,8 @@ import {
   getProjectByNameAndUsername, 
   getUsernameFromId,
   savePendingChange,
-  exportEmailAsHtml 
+  exportEmailAsHtml,
+  updateProjectWithEmailChanges 
 } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
@@ -367,14 +368,16 @@ const Editor = () => {
         // Update the email template with pending changes
         setEmailTemplate(updatedTemplate);
         
-        // Generate HTML from the updated template and save to database
-        // This ensures HTML is updated even for pending changes
+        // Generate HTML from the updated template
         const htmlOutput = await exportEmailAsHtml(updatedTemplate);
         
-        // Save both pending changes and update the HTML in the database
-        await Promise.all([
-          // Save pending changes to database
-          ...newPendingChanges.map(change => 
+        // IMPORTANT CHANGE: Immediately update the project with the changes
+        // This will make proposed changes visible to the user right away
+        await updateProjectWithEmailChanges(targetProjectId!, htmlOutput, updatedTemplate);
+        
+        // Save pending changes to database
+        await Promise.all(
+          newPendingChanges.map(change => 
             savePendingChange(
               targetProjectId!,
               change.elementId,
@@ -382,16 +385,8 @@ const Editor = () => {
               change.oldContent,
               change.newContent
             )
-          ),
-          // Update HTML in the database
-          supabase
-            .from('projects')
-            .update({ 
-              current_html: htmlOutput,
-              last_edited_at: new Date().toISOString()
-            })
-            .eq('id', targetProjectId)
-        ]);
+          )
+        );
         
         // Update local state with new pending changes
         setPendingChanges((prev) => [...prev, ...newPendingChanges]);
@@ -514,7 +509,7 @@ const Editor = () => {
         }
       }
       
-      // Save the accepted change
+      // Save the accepted change and update the template
       await acceptPendingChange(change.id, projectId, updatedTemplate);
       
       // Update local state
@@ -570,8 +565,14 @@ const Editor = () => {
         }
       }
       
-      // Save the rejected change status
+      // Reject the change in the database
       await rejectPendingChange(change.id);
+      
+      // Generate HTML from the restored template
+      const htmlOutput = await exportEmailAsHtml(updatedTemplate);
+      
+      // UPDATE: Also update the project with the restored template
+      await updateProjectWithEmailChanges(projectId, htmlOutput, updatedTemplate);
       
       // Update local state
       setEmailTemplate(updatedTemplate);

@@ -86,6 +86,31 @@ export async function createProject(name: string, initialContent?: EmailTemplate
   }
 }
 
+// New function to update project with email changes
+export async function updateProjectWithEmailChanges(
+  projectId: string,
+  htmlOutput: string,
+  updatedEmailTemplate: EmailTemplate
+) {
+  try {
+    // Update the project last_edited_at timestamp and HTML content
+    const { error } = await supabase
+      .from('projects')
+      .update({ 
+        last_edited_at: new Date().toISOString(),
+        current_html: htmlOutput,
+        semantic_email: updatedEmailTemplate as any
+      })
+      .eq('id', projectId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating project with email changes:', error);
+    throw error;
+  }
+}
+
 // Helper function to get username from user ID
 export async function getUsernameFromId(userId: string): Promise<string> {
   try {
@@ -446,18 +471,9 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
 
     if (saveVersionError) throw saveVersionError;
 
-    // Update the project last_edited_at timestamp and HTML content
-    const { error: projectUpdateError } = await supabase
-      .from('projects')
-      .update({ 
-        last_edited_at: new Date().toISOString(),
-        current_html: htmlOutput,
-        semantic_email: updatedEmailContent as any
-      })
-      .eq('id', projectId);
-
-    if (projectUpdateError) throw projectUpdateError;
-
+    // We don't need to update the project here anymore as the changes are
+    // already reflected when the pending change was created
+    
     return true;
   } catch (error) {
     console.error('Error accepting pending change:', error);
