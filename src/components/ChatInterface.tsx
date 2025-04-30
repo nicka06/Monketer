@@ -73,7 +73,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Avatar className="h-6 w-6">
-                    {isUserMessage(message) ? 'You' : 'AI'}
+                    {isUserMessage(message) ? 'U' : 'A'}
                   </Avatar>
                   <span className="text-xs opacity-70">
                     {isUserMessage(message) ? 'You' : 'Assistant'}
@@ -93,7 +93,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <div className="flex justify-start">
               <div className="max-w-[80%] p-3 rounded-lg bg-gray-100">
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">AI</Avatar>
+                  <Avatar className="h-6 w-6">A</Avatar>
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   <span className="text-xs text-gray-500">Thinking...</span>
                 </div>

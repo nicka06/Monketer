@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
@@ -347,7 +346,8 @@ export async function getProject(projectId: string) {
     const formattedChatMessages = (chatMessages || []).map(msg => ({
       id: msg.id,
       content: msg.content,
-      timestamp: new Date(msg.created_at)
+      timestamp: new Date(msg.created_at),
+      role: msg.role || 'assistant' // Set a default role if none exists for legacy messages
     })) as ChatMessage[];
 
     return {
@@ -365,13 +365,12 @@ export async function getProject(projectId: string) {
 // Save chat message
 export async function saveChatMessage(projectId: string, content: string, role: 'user' | 'assistant' = 'user') {
   try {
-    // FIXING: Remove the 'role' field which doesn't exist in the chat_messages table schema
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         project_id: projectId,
-        content
-        // Remove role field as it's not in the schema
+        content,
+        role
       })
       .select();
 
