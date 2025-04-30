@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -6,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
 import { ChatInterface } from '@/components/ChatInterface';
-import { Project, EmailTemplate, PendingChange, ChatMessage } from '@/types/editor';
+import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 import { getProject, saveChatMessage, acceptPendingChange, rejectPendingChange, createProject, getProjectByNameAndUsername, getUsernameFromId } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
