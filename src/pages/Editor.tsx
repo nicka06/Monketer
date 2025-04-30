@@ -1028,11 +1028,11 @@ const Editor = () => {
         </div>
       </header>
 
-      {/* Main content with split screen */}
-      <main className="flex-1 flex flex-col lg:flex-row">
-        {/* Email preview panel */}
-        <div className="flex-1 p-6 overflow-auto">
-          <div className="max-w-3xl mx-auto">
+      {/* Main content with fixed chat on right */}
+      <div className="flex-1 flex relative">
+        {/* Email preview panel - takes available space minus chat width */}
+        <main className="w-full pr-96 overflow-auto">
+          <div className="max-w-3xl mx-auto p-6">
             {!hasCode ? (
               <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
                 <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
@@ -1060,17 +1060,17 @@ const Editor = () => {
               </>
             )}
           </div>
-        </div>
+        </main>
         
-        {/* Chat interface panel */}
-        <div className="w-full lg:w-96 p-6 border-t lg:border-t-0 lg:border-l border-gray-200 bg-gray-50">
+        {/* Chat interface panel - fixed width, fixed to right */}
+        <aside className="w-96 h-[calc(100vh-4rem)] fixed top-16 right-0 border-l border-gray-200 bg-gray-50 overflow-hidden flex flex-col">
           <ChatInterface
             messages={chatMessages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
           />
-        </div>
-      </main>
+        </aside>
+      </div>
     </div>
   );
 };

@@ -59,7 +59,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-white">
+    <div className="flex flex-col h-full">
       <div className="p-3 border-b bg-gray-50">
         <h3 className="font-semibold text-sm">Email AI Assistant</h3>
       </div>
