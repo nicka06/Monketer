@@ -15,12 +15,39 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 // Improved toJson helper function that handles potentially malformed inputs
 export function toJson(obj: any): any {
   try {
-    // If obj is already stringified, this will throw an error
-    const stringified = JSON.stringify(obj);
-    return obj;
+    // If obj is already an object (not a string), just return it
+    if (typeof obj !== 'string') {
+      return obj;
+    }
+    
+    // If obj is a string, try to parse it after removing any comments
+    // This regex removes both single-line and multi-line comments
+    const jsonString = obj
+      .replace(/\/\/.*$/gm, '') // Remove single line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ''); // Remove multi-line comments
+      
+    return JSON.parse(jsonString);
   } catch (e) {
     console.error('Error in toJson helper:', e);
-    // Return empty object if stringification fails
+    
+    // Try to process JSON with comments by manual clean-up if regular parsing fails
+    if (typeof obj === 'string') {
+      try {
+        // More aggressive approach to handle JSON with comments
+        const cleanedJson = obj
+          .replace(/\/\/.*$/gm, '')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/,(\s*[\]}])/g, '$1'); // Remove trailing commas
+          
+        return JSON.parse(cleanedJson);
+      } catch (innerError) {
+        console.error('Failed second attempt to parse JSON:', innerError);
+        // If both attempts fail, try to return the original object
+        return obj;
+      }
+    }
+    
+    // Return empty object if all parsing fails
     return {};
   }
 }
