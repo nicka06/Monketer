@@ -17,17 +17,26 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Add a global error handler to help debug permission issues
+// Enhanced global error handler for Supabase
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('Supabase auth event:', event);
-  if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-    console.log('Auth session updated:', event);
+  if (event === 'SIGNED_OUT') {
+    console.log('User signed out, redirecting to login...');
+    // Redirect will happen through router guards
+  } else if (event === 'SIGNED_IN') {
+    console.log('User signed in successfully');
+  } else if (event === 'TOKEN_REFRESHED') {
+    console.log('Auth token refreshed successfully');
+  } else if (event === 'USER_UPDATED') {
+    console.log('User profile updated');
   }
 });
 
 // Helper for catching and logging Supabase errors
 export const handleSupabaseError = (error: any) => {
-  if (error?.code === '403') {
+  console.error('Supabase error:', error);
+  
+  if (error?.code === '403' || error?.code === '42501') {
     console.error('Permission denied error. This may be due to Row Level Security (RLS) policies.');
     // Check if user is still authenticated
     supabase.auth.getSession().then(({ data }) => {
@@ -35,8 +44,19 @@ export const handleSupabaseError = (error: any) => {
         console.error('User session not found. Please log in again.');
       } else {
         console.log('User is authenticated but lacks permission for this operation.');
+        // Automatically refresh token if authenticated but still getting permission errors
+        supabase.auth.refreshSession();
       }
     });
+  } else if (error?.code === '401') {
+    console.error('Authentication error. Token may have expired.');
+    // Try to refresh the token
+    supabase.auth.refreshSession();
+  } else if (error?.code === '23505') {
+    console.error('Unique constraint violation. This record already exists.');
+  } else if (error?.code === '23503') {
+    console.error('Foreign key constraint violation. Referenced record does not exist.');
   }
+  
   return error;
 };

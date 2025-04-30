@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -400,8 +399,14 @@ const Editor = () => {
         setChatMessages((prev) => [...prev, aiMessage]);
         await saveChatMessage(targetProjectId, explanation, 'assistant');
         
-        // Calculate differences and save as pending changes
+        // Important: Log the received updatedTemplate for debugging
+        console.log("Received updated template from OpenAI:", updatedTemplate);
+        
+        // Generate pending changes by comparing the old and new templates
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
+        
+        // Log the pending changes for debugging
+        console.log("Generated pending changes:", newPendingChanges);
         
         // Update the email template with pending changes
         setEmailTemplate(updatedTemplate);
@@ -409,27 +414,37 @@ const Editor = () => {
         // Generate HTML from the updated template
         const htmlOutput = await exportEmailAsHtml(updatedTemplate);
         
-        // IMPORTANT CHANGE: Ensure we always set hasCode to true when we have a template
+        // IMPORTANT: Ensure we always set hasCode to true when we have a template
         setHasCode(true);
         
-        // IMPORTANT CHANGE: Immediately update the project with the changes
+        // IMPORTANT: Immediately update the project with the changes
+        // This ensures the semantic_email field in the database is properly updated
         await updateProjectWithEmailChanges(targetProjectId, htmlOutput, updatedTemplate);
         
         // Save pending changes to database
-        await Promise.all(
-          newPendingChanges.map(change => 
-            savePendingChange(
-              targetProjectId,
-              change.elementId,
-              change.changeType,
-              change.oldContent,
-              change.newContent
+        if (newPendingChanges.length > 0) {
+          await Promise.all(
+            newPendingChanges.map(change => 
+              savePendingChange(
+                targetProjectId,
+                change.elementId,
+                change.changeType,
+                change.oldContent,
+                change.newContent
+              )
             )
-          )
-        );
+          );
+          
+          // Update local state with new pending changes
+          setPendingChanges((prev) => [...prev, ...newPendingChanges]);
+        } else {
+          console.log("No pending changes detected to save");
+        }
         
-        // Update local state with new pending changes
-        setPendingChanges((prev) => [...prev, ...newPendingChanges]);
+        toast({
+          title: 'Changes applied',
+          description: 'Email template updated successfully',
+        });
         
       } catch (error) {
         console.error('Error processing with AI:', error);
@@ -467,50 +482,81 @@ const Editor = () => {
   const generatePendingChanges = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate): PendingChange[] => {
     const changes: PendingChange[] = [];
     
-    // Process each section in the new template
+    // Compare each element in old and new templates to detect changes
     newTemplate.sections.forEach(newSection => {
-      // For each element in this section
-      newSection.elements.forEach(element => {
-        // If the element has pending flag, create a pending change
-        if (element.pending) {
-          // Find the corresponding element in the old template (if it exists)
-          let oldElement: EmailElement | undefined;
-          let oldSectionId: string | undefined;
-          
-          oldTemplate.sections.forEach(oldSection => {
-            const foundElement = oldSection.elements.find(e => e.id === element.id);
+      const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
+      
+      newSection.elements.forEach(newElement => {
+        // Try to find matching element in old template
+        let oldElement: EmailElement | undefined;
+        let oldSectionId: string | undefined;
+        
+        if (oldSection) {
+          oldElement = oldSection.elements.find(e => e.id === newElement.id);
+          if (oldElement) {
+            oldSectionId = oldSection.id;
+          }
+        }
+        
+        // If no matching element found in old section, look in all sections
+        if (!oldElement) {
+          oldTemplate.sections.forEach(s => {
+            const foundElement = s.elements.find(e => e.id === newElement.id);
             if (foundElement) {
               oldElement = foundElement;
-              oldSectionId = oldSection.id;
+              oldSectionId = s.id;
             }
           });
-          
-          // Create the pending change object
+        }
+        
+        // Detect changes (modified, added or deleted elements)
+        if (newElement.pending === true) {
+          // Element is explicitly marked as pending by the AI
           const change: PendingChange = {
             id: generateId(),
-            elementId: element.id,
-            changeType: element.pendingType || 'edit',
+            elementId: newElement.id,
+            changeType: newElement.pendingType || 'edit',
             status: 'pending'
           };
           
           // Add old and new content based on change type
-          if (element.pendingType === 'add') {
+          if (newElement.pendingType === 'add') {
             change.newContent = {
-              element: { ...element },
+              element: { ...newElement },
               sectionId: newSection.id
             };
-          } else if (element.pendingType === 'edit') {
+          } else if (newElement.pendingType === 'edit') {
             if (oldElement) {
               change.oldContent = { ...oldElement };
-              change.newContent = { ...element };
+              change.newContent = { ...newElement };
             }
-          } else if (element.pendingType === 'delete') {
+          } else if (newElement.pendingType === 'delete') {
             if (oldElement) {
               change.oldContent = { ...oldElement };
             }
           }
           
           changes.push(change);
+        } 
+        // Detect style changes even if not explicitly marked as pending
+        else if (oldElement) {
+          // Compare styles to detect style-only changes
+          const hasStyleChanges = JSON.stringify(oldElement.styles) !== JSON.stringify(newElement.styles);
+          if (hasStyleChanges) {
+            const change: PendingChange = {
+              id: generateId(),
+              elementId: newElement.id,
+              changeType: 'edit',
+              status: 'pending',
+              oldContent: { ...oldElement },
+              newContent: { ...newElement }
+            };
+            changes.push(change);
+            
+            // Mark the element as pending in the template
+            newElement.pending = true;
+            newElement.pendingType = 'edit';
+          }
         }
       });
     });

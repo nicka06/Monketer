@@ -93,17 +93,28 @@ export async function updateProjectWithEmailChanges(
   updatedEmailTemplate: EmailTemplate
 ) {
   try {
+    console.log("Updating project with email changes:", projectId);
+    console.log("HTML output:", htmlOutput.substring(0, 100) + "...");
+    console.log("Updated template:", JSON.stringify(updatedEmailTemplate).substring(0, 100) + "...");
+    
     // Update the project last_edited_at timestamp and HTML content
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('projects')
       .update({ 
         last_edited_at: new Date().toISOString(),
         current_html: htmlOutput,
-        semantic_email: updatedEmailTemplate as any
+        semantic_email: updatedEmailTemplate
       })
-      .eq('id', projectId);
+      .eq('id', projectId)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error updating project:", error);
+      handleSupabaseError(error);
+      throw error;
+    }
+    
+    console.log("Project updated successfully:", data);
     return true;
   } catch (error) {
     console.error('Error updating project with email changes:', error);
