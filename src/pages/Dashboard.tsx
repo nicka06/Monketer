@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +22,7 @@ const Dashboard = () => {
   const [username, setUsername] = useState<string>('');
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     loadProjects();
@@ -74,11 +73,10 @@ const Dashboard = () => {
 
   return (
     <div className="container mx-auto py-10 px-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">My Email Projects</h1>
-        <Button onClick={handleCreateProject}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
+      <div className="relative flex justify-center items-center mb-8">
+        <h1 className="text-3xl font-bold text-center">My Email Templates</h1>
+        <Button variant="outline" onClick={signOut} className="absolute top-0 right-0">
+          Sign Out
         </Button>
       </div>
 
@@ -113,14 +111,26 @@ const Dashboard = () => {
                 <TableCell className="font-medium">{project.name}</TableCell>
                 <TableCell>{formatDate(project.lastEditedAt.toString())}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="outline" asChild>
-                    <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
-                  </Button>
+                  {username ? (
+                    <Button variant="outline" asChild>
+                      <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" disabled>Open</Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+      )}
+      {!loading && projects.length > 0 && (
+        <div className="flex justify-center mt-8">
+          <Button onClick={handleCreateProject}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </div>
       )}
     </div>
   );
