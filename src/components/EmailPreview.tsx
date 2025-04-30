@@ -98,11 +98,6 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
               {element.content}
             </button>
             {renderPendingControls()}
-            {isPending && element.styles?.backgroundColor && (
-              <div className="mt-1 text-xs text-gray-600">
-                Button color: {element.styles.backgroundColor}
-              </div>
-            )}
           </div>
         );
       case 'image':

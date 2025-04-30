@@ -20,7 +20,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 }) => {
   const [input, setInput] = useState('');
   const [displayCount, setDisplayCount] = useState(5);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const visibleMessages = messages.slice(-displayCount);
@@ -64,7 +63,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <h3 className="font-semibold text-sm">Email AI Assistant</h3>
       </div>
       
-      <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-grow overflow-y-auto px-4 py-4">
         <div className="space-y-4">
           {hasMoreMessages && (
             <div className="flex justify-center mb-4">
@@ -129,7 +128,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
       </ScrollArea>
       
-      <div className="p-3 border-t">
+      <div className="p-3 border-t mt-auto">
         <div className="flex items-end gap-2">
           <Textarea
             value={input}

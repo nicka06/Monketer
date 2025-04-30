@@ -980,9 +980,9 @@ const Editor = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
       {/* Top navigation bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center">
             <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
@@ -1029,11 +1029,11 @@ const Editor = () => {
         </div>
       </header>
 
-      {/* Main content with resizable panels */}
-      <div className="flex-1 flex h-[calc(100vh-4rem)]">
+      {/* Main content with resizable panels - set to flex-grow to take remaining height */}
+      <div className="flex-grow flex overflow-hidden">
         <ResizablePanelGroup
           direction="horizontal"
-          className="w-full"
+          className="w-full h-full"
         >
           {/* Email preview panel */}
           <ResizablePanel 
@@ -1041,7 +1041,7 @@ const Editor = () => {
             minSize={40}
             className="overflow-auto"
           >
-            <div className="max-w-3xl mx-auto p-6">
+            <div className="max-w-3xl mx-auto p-6 h-full overflow-y-auto">
               {!hasCode ? (
                 <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
                   <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
@@ -1074,17 +1074,19 @@ const Editor = () => {
           {/* Resizable handle */}
           <ResizableHandle withHandle />
           
-          {/* Chat interface panel */}
+          {/* Chat interface panel - fixed height with internal scrolling */}
           <ResizablePanel 
             defaultSize={25} 
             minSize={20}
-            className="border-l border-gray-200 bg-gray-50"
+            className="border-l border-gray-200 bg-gray-50 h-full overflow-hidden"
           >
-            <ChatInterface
-              messages={chatMessages}
-              onSendMessage={handleSendMessage}
-              isLoading={isLoading}
-            />
+            <div className="h-full">
+              <ChatInterface
+                messages={chatMessages}
+                onSendMessage={handleSendMessage}
+                isLoading={isLoading}
+              />
+            </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
