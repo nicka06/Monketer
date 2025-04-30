@@ -19,10 +19,10 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const isPending = element.pending === true;
     const pendingClass = isPending
       ? element.pendingType === 'delete'
-        ? 'opacity-50 line-through'
+        ? 'opacity-50 line-through bg-red-50 p-2'
         : element.pendingType === 'add'
-        ? 'border-l-4 border-green-500 pl-2'
-        : 'border-l-4 border-yellow-500 pl-2'
+        ? 'border-l-4 border-green-500 pl-2 bg-green-50 p-2'
+        : 'border-l-4 border-yellow-500 pl-2 bg-yellow-50 p-2'
       : '';
     
     const elementStyle = {
@@ -34,7 +34,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
       if (!isPending) return null;
       
       return (
-        <div className="absolute right-0 top-0 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute right-2 top-2 flex space-x-1 bg-white bg-opacity-90 p-1 rounded shadow-sm">
           <Button
             variant="ghost"
             size="sm"
@@ -88,7 +88,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             style={elementStyle}
           >
             <button
-              className="px-4 py-2 bg-blue-500 text-white rounded"
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
               style={element.styles}
             >
               {element.content}
