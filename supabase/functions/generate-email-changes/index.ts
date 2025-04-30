@@ -11,6 +11,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to clean JSON string by removing comments and trailing commas
+function cleanJsonString(jsonStr: string): string {
+  return jsonStr
+    .replace(/\/\/.*$/gm, '') // Remove single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
+    .replace(/,(\s*[\]}])/g, '$1'); // Remove trailing commas
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -68,7 +76,11 @@ When adding or modifying elements, mark them with "pending: true" and "pendingTy
 - "edit": for modified elements
 - "delete": for elements to be removed
 
-DO NOT modify elements without marking them as pending.`;
+DO NOT modify elements without marking them as pending.
+
+IMPORTANT: DO NOT include any comments in the JSON. JSON does not support comments.
+For example, write: "backgroundColor": "#28a745"
+NOT: "backgroundColor": "#28a745", // Changed to green`;
 
     // Create messages array with system prompt, chat history, and current user prompt
     const messages = [
@@ -128,16 +140,23 @@ DO NOT modify elements without marking them as pending.`;
         // Look for JSON in the response
         const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
         if (jsonMatch && jsonMatch[1]) {
-          // Parse the JSON template
-          updatedTemplate = JSON.parse(jsonMatch[1]);
+          // Clean and parse the JSON template
+          const cleanedJson = cleanJsonString(jsonMatch[1]);
+          console.log("Cleaned JSON:", cleanedJson.substring(0, 200) + "...");
           
-          // Extract explanation (text before or after the JSON)
-          const parts = aiResponse.split(/```json\n[\s\S]*?\n```/);
-          explanation = parts.join(' ').trim();
+          try {
+            updatedTemplate = JSON.parse(cleanedJson);
+            
+            // Extract explanation (text before or after the JSON)
+            const parts = aiResponse.split(/```json\n[\s\S]*?\n```/);
+            explanation = parts.join(' ').trim();
+          } catch (jsonError) {
+            console.error("Error parsing cleaned JSON:", jsonError);
+            throw new Error(`Failed to parse JSON: ${jsonError.message}`);
+          }
         } else {
           // If no JSON block is found, use a simpler extraction method
           // This assumes the AI might return just an explanation without JSON
-          // In a real app, you'd want more robust parsing
           explanation = aiResponse;
           console.log("No JSON found in response, using explanation only");
         }
