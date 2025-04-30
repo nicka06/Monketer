@@ -141,6 +141,7 @@ const Editor = () => {
       
       setChatMessages(formattedMessages);
       
+      // Check if we have email content (either from standard content or semantic_email)
       if (projectData.emailContent) {
         // Apply pending changes to the template if both email content and pending changes exist
         if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
@@ -152,6 +153,13 @@ const Editor = () => {
         } else {
           setEmailTemplate(projectData.emailContent);
         }
+        setPendingChanges(projectData.pendingChanges || []);
+        
+        // IMPORTANT: Always set hasCode to true if we have email content
+        setHasCode(true);
+      } else if (projectData.project.semantic_email) {
+        // If semantic_email exists in the project, use it
+        setEmailTemplate(projectData.project.semantic_email);
         setPendingChanges(projectData.pendingChanges || []);
         setHasCode(true);
       } else {
@@ -371,8 +379,10 @@ const Editor = () => {
         // Generate HTML from the updated template
         const htmlOutput = await exportEmailAsHtml(updatedTemplate);
         
+        // IMPORTANT CHANGE: Ensure we always set hasCode to true when we have a template
+        setHasCode(true);
+        
         // IMPORTANT CHANGE: Immediately update the project with the changes
-        // This will make proposed changes visible to the user right away
         await updateProjectWithEmailChanges(targetProjectId!, htmlOutput, updatedTemplate);
         
         // Save pending changes to database
@@ -390,7 +400,6 @@ const Editor = () => {
         
         // Update local state with new pending changes
         setPendingChanges((prev) => [...prev, ...newPendingChanges]);
-        setHasCode(true);
         
       } catch (error) {
         console.error('Error processing with AI:', error);
@@ -516,6 +525,9 @@ const Editor = () => {
       setEmailTemplate(updatedTemplate);
       setPendingChanges(pendingChanges.filter((c) => c.id !== change.id));
       
+      // IMPORTANT: Ensure hasCode remains true
+      setHasCode(true);
+      
       toast({
         title: 'Change accepted',
         description: 'The change has been applied to your email',
@@ -577,6 +589,12 @@ const Editor = () => {
       // Update local state
       setEmailTemplate(updatedTemplate);
       setPendingChanges(pendingChanges.filter((c) => c.id !== change.id));
+      
+      // IMPORTANT: Ensure hasCode remains true if we still have a template with elements
+      const stillHasElements = updatedTemplate.sections.some(section => section.elements.length > 0);
+      if (stillHasElements) {
+        setHasCode(true);
+      }
       
       toast({
         title: 'Change rejected',
