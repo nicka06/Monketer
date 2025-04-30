@@ -2,3 +2,4 @@
 [functions]
 [functions.generate-email-changes]
 verify_jwt = true
+
