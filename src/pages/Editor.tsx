@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings, Mail, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Settings, Mail, Sun, Moon, Smartphone, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
@@ -23,7 +23,9 @@ import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
 import { supabase, cleanUuid } from '@/integrations/supabase/client';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -73,8 +75,11 @@ const Editor = () => {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [initialInputValue, setInitialInputValue] = useState<string | null>(null); // New state for initial input
   
-  // Add state for preview controls
+  // State for preview controls
   const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [isMobileView, setIsMobileView] = useState(false); // State for mobile switch
   
   // Load username for current user
   useEffect(() => {
@@ -1017,6 +1022,16 @@ const Editor = () => {
     }
   };
 
+  // Sync previewMode with isDarkMode
+  useEffect(() => {
+    setPreviewMode(isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  // Sync previewDevice with isMobileView
+  useEffect(() => {
+    setPreviewDevice(isMobileView ? 'mobile' : 'desktop');
+  }, [isMobileView]);
+
   if (isLoadingProject) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1092,27 +1107,42 @@ const Editor = () => {
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="overflow-auto bg-gray-100"
+            className="overflow-auto bg-neutral-100 dark:bg-neutral-950"
           >
-            {/* Add Preview Controls Container */}
-            <div className="sticky top-0 z-10 bg-gray-100 py-2 px-4 border-b border-gray-200 flex justify-center space-x-4">
-              <ToggleGroup 
-                type="single" 
-                value={previewMode} 
-                onValueChange={(value: 'light' | 'dark') => { if (value) setPreviewMode(value); }}
-                aria-label="Light/Dark Mode Toggle"
-              >
-                <ToggleGroupItem value="light" aria-label="Light mode">
-                  <Sun className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="dark" aria-label="Dark mode">
-                  <Moon className="h-4 w-4" />
-                </ToggleGroupItem>
-              </ToggleGroup>
+            {/* Update Preview Controls Container - Remove label, use justify-end */}
+            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-end items-center">
+              {/* Removed Preview Mode Label */}
+              
+              {/* Right-aligned controls wrapper */}
+              <div className="flex items-center space-x-6"> 
+                {/* Light/Dark Mode Switch */}
+                <div className="flex items-center space-x-2">
+                  <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
+                  <Switch
+                    id="dark-mode-switch"
+                    checked={isDarkMode}
+                    onCheckedChange={setIsDarkMode}
+                    aria-label="Toggle Dark Mode"
+                  />
+                  <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
+                </div>
+
+                {/* Desktop/Mobile Switch */}
+                <div className="flex items-center space-x-2">
+                  <Monitor className={cn("h-4 w-4", isMobileView ? "text-gray-500" : "text-primary")} />
+                  <Switch
+                    id="mobile-view-switch"
+                    checked={isMobileView}
+                    onCheckedChange={setIsMobileView}
+                    aria-label="Toggle Mobile View"
+                  />
+                  <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
+                </div>
+              </div>
             </div>
             
             {/* Preview Content Area */}
-            <div className="max-w-5xl mx-auto p-6 h-full overflow-y-auto">
+            <div className="p-6 h-full overflow-y-auto">
               {!hasCode ? (
                 <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
                   <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
@@ -1135,6 +1165,7 @@ const Editor = () => {
                       onAcceptChange={handleAcceptChange}
                       onRejectChange={handleRejectChange}
                       previewMode={previewMode}
+                      previewDevice={previewDevice}
                     />
                   )}
                 </>

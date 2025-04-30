@@ -9,6 +9,7 @@ interface EmailPreviewProps {
   onAcceptChange: (elementId: string) => void;
   onRejectChange: (elementId: string) => void;
   previewMode: 'light' | 'dark';
+  previewDevice: 'desktop' | 'mobile';
 }
 
 export const EmailPreview: React.FC<EmailPreviewProps> = ({
@@ -16,6 +17,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   onAcceptChange,
   onRejectChange,
   previewMode,
+  previewDevice,
 }) => {
   const renderElement = (element: EmailElement) => {
     const isPending = element.pending === true;
@@ -69,35 +71,46 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
      );
    };
 
-  // --- Styling --- 
+  // --- Refined Mobile Frame & Dark Mode Styling --- 
 
-  // 1. Base wrapper classes + light/dark mode background and text
-  const wrapperClasses = cn(
-    "shadow-md rounded-lg overflow-hidden border-2 border-gray-300 dark:border-gray-700",
-    "transition-colors duration-300 mx-auto",
-    // Background is now handled by the outer inversion wrapper or kept standard 
-    // Apply text color based on mode IF background is applied here (optional)
-    // previewMode === 'light' ? 'bg-white text-gray-900' : 'bg-gray-900 text-gray-100' 
-    // Keeping bg-white as default, filter handles inversion
-    "bg-white text-gray-900" 
-  );
+  // 1. Define frame classes including overflow and adaptive height for mobile
+  const frameClass = 
+    previewDevice === 'mobile'
+      ? 'w-[375px] h-full max-h-[calc(100vh-6rem)] border border-gray-300 dark:border-gray-700 rounded-xl shadow-lg overflow-auto overflow-x-auto' 
+      // Add border and rounding for desktop view
+      : 'max-w-[650px] w-full mx-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden'; // Added border, rounding, shadow, overflow
+      
+  // 2. Define the frame's base background (always light, inversion filter handles dark)
+  const frameBackground = 'bg-white';
+  
+  // 3. Define the inversion class for simulating forced dark mode
+  const inversionClass = previewMode === 'dark' ? 'filter invert hue-rotate-180' : '';
 
-  // 2. Apply template styles directly
-  const containerStyle = {
-    ...(template.styles || {}),
-    width: template.styles?.width || '100%',
+  // 4. Outer container remains for centering
+  const outerContainerClass = "flex justify-center py-6"; 
+
+  // 5. Inner content container style (applies template styles)
+  const contentContainerStyle = {
+      ...(template.styles || {}),
+      // Width/maxWidth should come from template styles if defined
+      // Margin is not needed as outer container centers
+      margin: undefined,
   };
 
-  // 3. Calculate inversion class for the outer wrapper
-  const inversionWrapperClass = 
-    previewMode === 'dark' ? 'filter invert hue-rotate-180' : '';
+  // 6. Inner content container classes (for min-width and padding)
+  const contentContainerClasses = cn(
+      "min-w-[375px]", // Ensure content doesn't shrink below mobile width
+      "px-4 py-6" // Add fallback padding
+  );
 
   return (
-    // Outer wrapper applies the inversion filter in dark mode
-    <div className={inversionWrapperClass}>
-      {/* Inner wrapper applies structural styles and base light-mode appearance */}
-      <div className={wrapperClasses} style={containerStyle}>
-        {template.sections.map((section) => renderSection(section))}
+    <div className={outerContainerClass}>
+      {/* Frame div applies device dimensions, overflow, background, and inversion filter */}
+      <div className={cn(frameClass, frameBackground, inversionClass)}>
+        {/* Content container applies template styles + min-width and padding */}
+        <div style={contentContainerStyle} className={contentContainerClasses}>
+            {template.sections.map((section) => renderSection(section))}
+        </div>
       </div>
     </div>
   );
