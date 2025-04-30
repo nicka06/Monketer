@@ -18,6 +18,20 @@ serve(async (req) => {
   }
 
   try {
+    // Check if API key is available
+    if (!openAIApiKey) {
+      console.error("OpenAI API key is not set in environment variables");
+      return new Response(
+        JSON.stringify({
+          error: "OpenAI API key is not configured. Please contact the administrator.",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Parse the request body
     const { prompt, currentTemplate, chatHistory } = await req.json();
     
@@ -65,81 +79,108 @@ DO NOT modify elements without marking them as pending.`;
 
     console.log("Sending request to OpenAI...");
     
-    // Call OpenAI API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 2500,
-      }),
-    });
-
-    // Check for API errors
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
-    }
-
-    // Parse the response
-    const data = await response.json();
-    console.log("Received response from OpenAI");
-
-    // Extract the content from OpenAI's response
-    const aiResponse = data.choices[0].message.content;
-    console.log("AI Response:", aiResponse);
-
-    // Try to extract JSON and explanation from the response
-    let updatedTemplate = currentTemplate;
-    let explanation = "I've processed your request.";
-
     try {
-      // Look for JSON in the response
-      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
-      if (jsonMatch && jsonMatch[1]) {
-        // Parse the JSON template
-        updatedTemplate = JSON.parse(jsonMatch[1]);
-        
-        // Extract explanation (text before or after the JSON)
-        const parts = aiResponse.split(/```json\n[\s\S]*?\n```/);
-        explanation = parts.join(' ').trim();
-      } else {
-        // If no JSON block is found, use a simpler extraction method
-        // This assumes the AI might return just an explanation without JSON
-        // In a real app, you'd want more robust parsing
-        explanation = aiResponse;
-        console.log("No JSON found in response, using explanation only");
-      }
-    } catch (error) {
-      console.error("Error parsing AI response:", error);
-      explanation = "I processed your request but had trouble formatting the response. Here's what I understood: " + aiResponse;
-    }
+      // Call OpenAI API
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 2500,
+        }),
+      });
 
-    // Return the processed response
-    return new Response(
-      JSON.stringify({
-        explanation,
-        updatedTemplate
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Check for API errors
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("OpenAI API error:", errorData);
+        return new Response(
+          JSON.stringify({
+            error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}`,
+            explanation: "There was an error processing your request with the AI service. Please try again later or contact support.",
+            updatedTemplate: currentTemplate
+          }),
+          {
+            status: 200, // Return 200 to avoid frontend errors, but include error in response
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
-    );
+
+      // Parse the response
+      const data = await response.json();
+      console.log("Received response from OpenAI");
+
+      // Extract the content from OpenAI's response
+      const aiResponse = data.choices[0].message.content;
+      console.log("AI Response:", aiResponse);
+
+      // Try to extract JSON and explanation from the response
+      let updatedTemplate = currentTemplate;
+      let explanation = "I've processed your request.";
+
+      try {
+        // Look for JSON in the response
+        const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          // Parse the JSON template
+          updatedTemplate = JSON.parse(jsonMatch[1]);
+          
+          // Extract explanation (text before or after the JSON)
+          const parts = aiResponse.split(/```json\n[\s\S]*?\n```/);
+          explanation = parts.join(' ').trim();
+        } else {
+          // If no JSON block is found, use a simpler extraction method
+          // This assumes the AI might return just an explanation without JSON
+          // In a real app, you'd want more robust parsing
+          explanation = aiResponse;
+          console.log("No JSON found in response, using explanation only");
+        }
+      } catch (error) {
+        console.error("Error parsing AI response:", error);
+        explanation = "I processed your request but had trouble formatting the response. Here's what I understood: " + aiResponse;
+      }
+
+      // Return the processed response
+      return new Response(
+        JSON.stringify({
+          explanation,
+          updatedTemplate
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    } catch (error) {
+      console.error("Error calling OpenAI API:", error);
+      return new Response(
+        JSON.stringify({
+          error: error.message || "Error calling OpenAI API",
+          explanation: "There was an error connecting to the AI service. This might be due to an invalid API key or service unavailability.",
+          updatedTemplate: currentTemplate
+        }),
+        {
+          status: 200, // Return 200 to avoid frontend errors, but include error in response
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
   } catch (error) {
     console.error('Error in generate-email-changes function:', error);
     
     return new Response(
       JSON.stringify({
         error: error.message || 'An unexpected error occurred',
+        explanation: "I'm sorry, something went wrong while processing your request.",
+        updatedTemplate: null // Client should handle this case and maintain current template
       }),
       {
-        status: 500,
+        status: 200, // Return 200 to avoid frontend errors, but include error in response
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

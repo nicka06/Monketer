@@ -337,11 +337,17 @@ const Editor = () => {
           }
         });
         
+        // Check if the response contains an error
         if (response.error) {
           throw new Error(response.error.message || 'Error generating email changes');
         }
         
-        const { explanation, updatedTemplate } = response.data;
+        const { explanation, updatedTemplate, error } = response.data;
+        
+        // Handle error in response data
+        if (error) {
+          throw new Error(error);
+        }
         
         // Save assistant message to the database
         const aiMessageId = generateId();
@@ -378,7 +384,7 @@ const Editor = () => {
         console.error('Error processing with AI:', error);
         toast({
           title: 'AI Processing Error',
-          description: error.message || 'Failed to process request with AI',
+          description: error.message || 'Failed to process request with AI. Please make sure the OpenAI API key is valid.',
           variant: 'destructive',
         });
         
@@ -387,7 +393,7 @@ const Editor = () => {
           ...prev, 
           {
             id: generateId(),
-            content: `Error: ${error.message || 'Failed to process request with AI'}. Please try again.`,
+            content: `Error: ${error.message || 'Failed to process request with AI'}. This might be due to an issue with the OpenAI API key or service.`,
             timestamp: new Date(),
             role: 'assistant'
           }
