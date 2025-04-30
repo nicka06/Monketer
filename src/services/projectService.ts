@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, handleSupabaseError } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
 // Create a new project
@@ -395,6 +395,9 @@ export async function getProject(projectId: string) {
 // Save chat message
 export async function saveChatMessage(projectId: string, content: string, role: 'user' | 'assistant' = 'user') {
   try {
+    // Log the request for debugging
+    console.log(`Saving chat message for project ${projectId}`, { content, role });
+    
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
@@ -404,7 +407,13 @@ export async function saveChatMessage(projectId: string, content: string, role: 
       })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      // Use our new error handler
+      handleSupabaseError(error);
+      throw error;
+    }
+    
+    console.log('Chat message saved successfully:', data);
     return data[0];
   } catch (error) {
     console.error('Error saving chat message:', error);

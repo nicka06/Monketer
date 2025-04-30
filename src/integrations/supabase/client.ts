@@ -9,4 +9,34 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
+
+// Add a global error handler to help debug permission issues
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Supabase auth event:', event);
+  if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+    console.log('Auth session updated:', event);
+  }
+});
+
+// Helper for catching and logging Supabase errors
+export const handleSupabaseError = (error: any) => {
+  if (error?.code === '403') {
+    console.error('Permission denied error. This may be due to Row Level Security (RLS) policies.');
+    // Check if user is still authenticated
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        console.error('User session not found. Please log in again.');
+      } else {
+        console.log('User is authenticated but lacks permission for this operation.');
+      }
+    });
+  }
+  return error;
+};
