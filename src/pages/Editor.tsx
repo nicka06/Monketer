@@ -14,7 +14,8 @@ import {
   createProject, 
   getProjectByNameAndUsername, 
   getUsernameFromId,
-  savePendingChange 
+  savePendingChange,
+  exportEmailAsHtml 
 } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
@@ -368,7 +369,7 @@ const Editor = () => {
         
         // Generate HTML from the updated template and save to database
         // This ensures HTML is updated even for pending changes
-        const htmlOutput = convertTemplateToHtml(updatedTemplate);
+        const htmlOutput = await exportEmailAsHtml(updatedTemplate);
         
         // Save both pending changes and update the HTML in the database
         await Promise.all([
