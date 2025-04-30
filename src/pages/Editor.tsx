@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -58,6 +59,7 @@ const Editor = () => {
   const { user } = useAuth();
   
   const [projectData, setProjectData] = useState<Project | null>(null);
+  const [actualProjectId, setActualProjectId] = useState<string | null>(null); // Store the resolved project ID
   const [projectTitle, setProjectTitle] = useState('Untitled Document 1');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
@@ -86,14 +88,16 @@ const Editor = () => {
         
         // Case 1: Using the /editor/:projectId route
         if (projectId) {
-          loadProjectById(projectId);
+          await loadProjectById(projectId);
+          setActualProjectId(projectId);
         }
         // Case 2: Using the /editor/:username/:projectName route
         else if (username && projectName) {
           try {
             const project = await getProjectByNameAndUsername(decodeURIComponent(projectName), username);
             if (project) {
-              loadProjectById(project.id);
+              await loadProjectById(project.id);
+              setActualProjectId(project.id);
             }
           } catch (error) {
             console.error('Error loading project by name:', error);
@@ -112,6 +116,7 @@ const Editor = () => {
           setChatMessages([]);
           setPendingChanges([]);
           setHasCode(false);
+          setActualProjectId(null);
           setIsLoadingProject(false);
         }
       } catch (error) {
@@ -307,7 +312,7 @@ const Editor = () => {
       setIsLoading(true);
       
       // If there's no projectId yet, create one first
-      let targetProjectId = projectId;
+      let targetProjectId = actualProjectId;
       let newProjectCreated = false;
       
       if (!targetProjectId && !projectData) {
@@ -315,6 +320,7 @@ const Editor = () => {
         const newProject = await createProject(projectTitle);
         targetProjectId = newProject.id;
         setProjectData(newProject);
+        setActualProjectId(newProject.id);
         newProjectCreated = true;
         
         // Update URL to include the username and project name
@@ -323,6 +329,17 @@ const Editor = () => {
         } else {
           navigate(`/editor/${targetProjectId}`, { replace: true });
         }
+      }
+      
+      if (!targetProjectId) {
+        console.error('No valid project ID available');
+        toast({
+          title: 'Error',
+          description: 'No valid project ID available',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
       }
       
       // Add user message to chat with explicit 'user' role
@@ -337,7 +354,7 @@ const Editor = () => {
       setChatMessages((prev) => [...prev, userMessage]);
       
       // Save user message to the database with explicit 'user' role
-      await saveChatMessage(targetProjectId!, message, 'user');
+      await saveChatMessage(targetProjectId, message, 'user');
       
       try {
         // Get the current template or use empty template if none exists
@@ -381,7 +398,7 @@ const Editor = () => {
         };
         
         setChatMessages((prev) => [...prev, aiMessage]);
-        await saveChatMessage(targetProjectId!, explanation, 'assistant');
+        await saveChatMessage(targetProjectId, explanation, 'assistant');
         
         // Calculate differences and save as pending changes
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
@@ -396,13 +413,13 @@ const Editor = () => {
         setHasCode(true);
         
         // IMPORTANT CHANGE: Immediately update the project with the changes
-        await updateProjectWithEmailChanges(targetProjectId!, htmlOutput, updatedTemplate);
+        await updateProjectWithEmailChanges(targetProjectId, htmlOutput, updatedTemplate);
         
         // Save pending changes to database
         await Promise.all(
           newPendingChanges.map(change => 
             savePendingChange(
-              targetProjectId!,
+              targetProjectId,
               change.elementId,
               change.changeType,
               change.oldContent,
@@ -503,7 +520,7 @@ const Editor = () => {
 
   // Handle accepting a pending change
   const handleAcceptChange = async (elementId: string) => {
-    if (!projectId || !emailTemplate) return;
+    if (!actualProjectId || !emailTemplate) return;
     
     try {
       const change = pendingChanges.find((c) => c.elementId === elementId);
@@ -532,7 +549,7 @@ const Editor = () => {
       }
       
       // Save the accepted change and update the template
-      await acceptPendingChange(change.id, projectId, updatedTemplate);
+      await acceptPendingChange(change.id, actualProjectId, updatedTemplate);
       
       // Update local state
       setEmailTemplate(updatedTemplate);
@@ -557,7 +574,7 @@ const Editor = () => {
 
   // Handle rejecting a pending change
   const handleRejectChange = async (elementId: string) => {
-    if (!projectId || !emailTemplate) return;
+    if (!actualProjectId || !emailTemplate) return;
     
     try {
       const change = pendingChanges.find((c) => c.elementId === elementId);
@@ -597,7 +614,7 @@ const Editor = () => {
       const htmlOutput = await exportEmailAsHtml(updatedTemplate);
       
       // UPDATE: Also update the project with the restored template
-      await updateProjectWithEmailChanges(projectId, htmlOutput, updatedTemplate);
+      await updateProjectWithEmailChanges(actualProjectId, htmlOutput, updatedTemplate);
       
       // Update local state
       setEmailTemplate(updatedTemplate);
