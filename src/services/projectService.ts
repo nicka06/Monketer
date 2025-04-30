@@ -98,21 +98,21 @@ export async function getUsernameFromId(userId: string): Promise<string> {
       return user.email || 'user';
     }
     
-    // Alternative: Query user_info table directly using the UUID string
-    // The user_info table has an ID field of type 'number', but we have a UUID string
-    // We need to handle this type mismatch properly
+    // Since user_info.id is a bigint and userId is a UUID string, 
+    // we need a different approach to query the user_info table
+    // Try to find the user by a text field that might store the UUID
     const { data: userInfo, error } = await supabase
       .from('user_info')
       .select('username')
-      .eq('id', userId)  // Use the UUID directly, don't try to parse it as number
-      .single();
+      .eq('username', userId) // Try matching on username field instead
+      .maybeSingle();
     
-    if (error) {
+    if (error || !userInfo) {
       console.error('Error fetching username:', error);
       return 'user'; // Fallback username
     }
     
-    return userInfo?.username || 'user';
+    return userInfo.username || 'user';
   } catch (error) {
     console.error('Error in getUsernameFromId:', error);
     return 'user'; // Fallback username
