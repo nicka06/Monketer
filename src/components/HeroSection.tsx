@@ -1,9 +1,8 @@
 
 import { ArrowRight } from "lucide-react";
-import { useState } from "react";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
+import { useState, useEffect } from "react";
 import { Textarea } from "./ui/textarea";
+import { Button } from "./ui/button";
 import { useNavigate } from "react-router-dom";
 import { 
   Dialog,
@@ -12,12 +11,19 @@ import {
   DialogHeader,
   DialogTitle
 } from "./ui/dialog";
-import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   const [emailContent, setEmailContent] = useState("");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const navigate = useNavigate();
+
+  // Properly load saved content with useEffect
+  useEffect(() => {
+    const savedContent = localStorage.getItem('savedEmailContent');
+    if (savedContent) {
+      setEmailContent(savedContent);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,11 +59,17 @@ const HeroSection = () => {
           
           <form onSubmit={handleSubmit} className="mt-10 mx-auto max-w-2xl">
             <div className="flex flex-col items-center">
-              <label htmlFor="email-content" className="text-left self-start mb-2 text-sm font-medium text-gray-700 px-[240px]">
+              <label htmlFor="email-content" className="text-left self-start mb-2 text-sm font-medium text-gray-700">
                 Describe the email you want to create
               </label>
               <div className="relative w-full">
-                <Textarea id="email-content" placeholder="E.g., Create a promotional email announcing our summer sale with 20% off all products..." value={emailContent} onChange={e => setEmailContent(e.target.value)} className="min-h-[120px] text-base p-4 border-2 border-emailore-purple/30 focus:border-emailore-purple shadow-sm transition-all duration-200" />
+                <Textarea 
+                  id="email-content" 
+                  placeholder="E.g., Create a promotional email announcing our summer sale with 20% off all products..." 
+                  value={emailContent} 
+                  onChange={e => setEmailContent(e.target.value)} 
+                  className="min-h-[120px] text-base p-4 border-2 border-emailore-purple/30 focus:border-emailore-purple shadow-sm transition-all duration-200" 
+                />
                 <Button type="submit" className="mt-4 w-full sm:w-auto flex items-center justify-center bg-emailore-purple hover:bg-emailore-purple-dark transition-colors group px-[93px]">
                   Generate Email
                   <ArrowRight className="ml-2 h-4 w-4 inline-block transition-all group-hover:translate-x-1" />
