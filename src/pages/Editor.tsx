@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings } from 'lucide-react';
@@ -364,19 +363,36 @@ const Editor = () => {
         // Calculate differences and save as pending changes
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
         
-        // Save pending changes to database
-        for (const change of newPendingChanges) {
-          await savePendingChange(
-            targetProjectId!,
-            change.elementId,
-            change.changeType,
-            change.oldContent,
-            change.newContent
-          );
-        }
-        
         // Update the email template with pending changes
         setEmailTemplate(updatedTemplate);
+        
+        // Generate HTML from the updated template and save to database
+        // This ensures HTML is updated even for pending changes
+        const htmlOutput = convertTemplateToHtml(updatedTemplate);
+        
+        // Save both pending changes and update the HTML in the database
+        await Promise.all([
+          // Save pending changes to database
+          ...newPendingChanges.map(change => 
+            savePendingChange(
+              targetProjectId!,
+              change.elementId,
+              change.changeType,
+              change.oldContent,
+              change.newContent
+            )
+          ),
+          // Update HTML in the database
+          supabase
+            .from('projects')
+            .update({ 
+              current_html: htmlOutput,
+              last_edited_at: new Date().toISOString()
+            })
+            .eq('id', targetProjectId)
+        ]);
+        
+        // Update local state with new pending changes
         setPendingChanges((prev) => [...prev, ...newPendingChanges]);
         setHasCode(true);
         

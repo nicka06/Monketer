@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '@/types/editor';
 import { Button } from './ui/button';
@@ -44,12 +45,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Determine if a message is from the user or assistant
   const isUserMessage = (message: ChatMessage) => {
-    // If there's a role property, use it
+    // Always respect the explicit role property if present
     if (message.role) {
       return message.role === 'user';
     }
-    // Otherwise, use a simple heuristic - odd indices are user messages
-    return messages.indexOf(message) % 2 !== 0;
+    
+    // Fall back to message ID pattern if available (assuming user messages have even IDs)
+    if (message.id) {
+      const idNum = parseInt(message.id.replace(/\D/g, ''));
+      return idNum % 2 === 0;
+    }
+    
+    // Last resort fallback - use position in the array
+    // This is less reliable but maintains backward compatibility
+    return messages.indexOf(message) % 2 === 0;
   };
 
   return (

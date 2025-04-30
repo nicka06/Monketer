@@ -484,5 +484,22 @@ export async function rejectPendingChange(changeId: string) {
 
 // Export the email as HTML
 export async function exportEmailAsHtml(template: EmailTemplate): Promise<string> {
-  return convertTemplateToHtml(template);
+  // Generate HTML from template
+  const html = convertTemplateToHtml(template);
+  
+  // If we're exporting from a project, also save it to the database
+  if (template.id) {
+    try {
+      // Try to update the current_html field of the project
+      // We don't want to throw if this fails, as the primary goal is to return the HTML
+      await supabase
+        .from('projects')
+        .update({ current_html: html })
+        .eq('id', template.id);
+    } catch (err) {
+      console.error('Failed to update project HTML during export:', err);
+    }
+  }
+  
+  return html;
 }
