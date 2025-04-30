@@ -494,23 +494,33 @@ const Editor = () => {
   // Helper function to identify differences between templates and generate pending changes
   const generatePendingChanges = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate): PendingChange[] => {
     const changes: PendingChange[] = [];
+    console.log("====== TEMPLATE COMPARISON DEBUG ======");
     console.log("Comparing templates to generate changes:");
-    console.log("Old template:", JSON.stringify(oldTemplate).substring(0, 100) + "...");
-    console.log("New template:", JSON.stringify(newTemplate).substring(0, 100) + "...");
+    console.log("Old template full:", JSON.stringify(oldTemplate));
+    console.log("New template full:", JSON.stringify(newTemplate));
     
     // Ensure both templates have valid IDs
     if (oldTemplate.id) oldTemplate.id = cleanUuid(oldTemplate.id);
     if (newTemplate.id) newTemplate.id = cleanUuid(newTemplate.id);
     
+    console.log("=== ELEMENT BY ELEMENT COMPARISON ===");
     // Compare each element in old and new templates to detect changes
-    newTemplate.sections.forEach(newSection => {
+    newTemplate.sections.forEach((newSection, sectionIndex) => {
+      console.log(`Analyzing section ${sectionIndex} with ID ${newSection.id}`);
       const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
       
-      newSection.elements.forEach(newElement => {
+      if (!oldSection) {
+        console.log(`Section ${newSection.id} is new, not found in old template`);
+      } else {
+        console.log(`Found matching section ${oldSection.id} in old template`);
+      }
+      
+      newSection.elements.forEach((newElement, elementIndex) => {
         // Make sure the element has a valid ID
         if (newElement.id) newElement.id = cleanUuid(newElement.id);
         
-        console.log(`Checking element ${newElement.id} of type ${newElement.type}`);
+        console.log(`\n--- Analyzing element ${elementIndex}: ${newElement.id} of type ${newElement.type} ---`);
+        console.log(`New element full details:`, JSON.stringify(newElement));
         
         // Try to find matching element in old template
         let oldElement: EmailElement | undefined;
@@ -520,6 +530,9 @@ const Editor = () => {
           oldElement = oldSection.elements.find(e => e.id === newElement.id);
           if (oldElement) {
             oldSectionId = oldSection.id;
+            console.log(`Found matching element in same section. Old element full details:`, JSON.stringify(oldElement));
+          } else {
+            console.log(`Element ${newElement.id} not found in same section, searching all sections`);
           }
         }
         
@@ -530,8 +543,13 @@ const Editor = () => {
             if (foundElement) {
               oldElement = foundElement;
               oldSectionId = s.id;
+              console.log(`Found element ${newElement.id} in different section ${s.id}`);
             }
           });
+          
+          if (!oldElement) {
+            console.log(`Element ${newElement.id} is completely new, not found in any section of old template`);
+          }
         }
         
         // Detect changes (modified, added or deleted elements)
@@ -552,30 +570,41 @@ const Editor = () => {
               element: { ...newElement },
               sectionId: newSection.id
             };
+            console.log(`Creating 'add' pending change for ${newElement.id}`);
           } else if (newElement.pendingType === 'edit') {
             if (oldElement) {
               change.oldContent = { ...oldElement };
               change.newContent = { ...newElement };
+              console.log(`Creating 'edit' pending change for ${newElement.id}`);
             }
           } else if (newElement.pendingType === 'delete') {
             if (oldElement) {
               change.oldContent = { ...oldElement };
+              console.log(`Creating 'delete' pending change for ${newElement.id}`);
             }
           }
           
-          console.log("Created pending change:", change);
+          console.log("Created pending change from explicit mark:", change);
           changes.push(change);
         } 
         // Detect style changes even if not explicitly marked as pending
         else if (oldElement) {
+          console.log("=== STYLE COMPARISON ===");
           // Improved style comparison logic
-          const hasStyleChanges = detectStyleChanges(oldElement.styles || {}, newElement.styles || {});
+          const oldStyles = oldElement.styles || {};
+          const newStyles = newElement.styles || {};
+          
+          console.log("Old styles:", JSON.stringify(oldStyles));
+          console.log("New styles:", JSON.stringify(newStyles));
+          
+          const hasStyleChanges = detectStyleChanges(oldStyles, newStyles);
           const hasContentChanges = oldElement.content !== newElement.content;
+          
+          console.log(`Style changes detected: ${hasStyleChanges}`);
+          console.log(`Content changes detected: ${hasContentChanges}`);
           
           if (hasStyleChanges || hasContentChanges) {
             console.log(`Detected style or content changes for element ${newElement.id}`);
-            console.log("Old styles:", JSON.stringify(oldElement.styles));
-            console.log("New styles:", JSON.stringify(newElement.styles));
             
             // Create a new element with pending flags
             const pendingElement = {
@@ -593,26 +622,56 @@ const Editor = () => {
               newContent: pendingElement
             };
             
-            console.log("Created style change:", change);
+            console.log("Created style/content change:", change);
             changes.push(change);
             
             // Mark the element as pending in the template
             newElement.pending = true;
             newElement.pendingType = 'edit';
+          } else {
+            console.log(`No style or content changes detected for element ${newElement.id}`);
+          }
+        } else {
+          console.log(`No matching element found in old template - this is a new element`);
+          // This is a new element that wasn't explicitly marked as pending
+          if (!newElement.pending) {
+            console.log(`Element ${newElement.id} is new but not marked as pending, marking it now`);
+            newElement.pending = true;
+            newElement.pendingType = 'add';
+            
+            const change: PendingChange = {
+              id: generateId(),
+              elementId: newElement.id,
+              changeType: 'add',
+              status: 'pending',
+              newContent: {
+                element: { ...newElement },
+                sectionId: newSection.id
+              }
+            };
+            
+            console.log("Created add change for unmarked new element:", change);
+            changes.push(change);
           }
         }
       });
     });
     
     // Check for deleted elements in the old template that are missing from the new template
-    oldTemplate.sections.forEach(oldSection => {
-      oldSection.elements.forEach(oldElement => {
+    console.log("=== CHECKING FOR DELETED ELEMENTS ===");
+    oldTemplate.sections.forEach((oldSection, sectionIndex) => {
+      console.log(`Checking section ${sectionIndex} with ID ${oldSection.id} for deleted elements`);
+      
+      oldSection.elements.forEach((oldElement, elementIndex) => {
         // Check if this element exists in the new template
         let foundInNew = false;
+        
+        console.log(`Checking if element ${oldElement.id} exists in new template`);
         
         for (const newSection of newTemplate.sections) {
           if (newSection.elements.some(newElem => newElem.id === oldElement.id)) {
             foundInNew = true;
+            console.log(`Element ${oldElement.id} found in new template section ${newSection.id}`);
             break;
           }
         }
@@ -629,24 +688,38 @@ const Editor = () => {
             oldContent: { ...oldElement }
           };
           
+          console.log("Created delete change:", change);
           changes.push(change);
         }
       });
     });
 
-    // Log the changes for debugging
+    // Log the final changes
+    console.log("=== FINAL PENDING CHANGES ===");
     console.log("Generated pending changes:", changes);
+    console.log("Total pending changes: " + changes.length);
+    console.log("====== END TEMPLATE COMPARISON DEBUG ======");
     
     return changes;
   };
 
   // Helper function to detect style changes with deep comparison
   const detectStyleChanges = (oldStyles: Record<string, string>, newStyles: Record<string, string>): boolean => {
+    console.log("=== DETAILED STYLE COMPARISON ===");
+    
     // Deep comparison of style objects
-    if (!oldStyles && !newStyles) return false;
-    if (!oldStyles || !newStyles) return true;
+    if (!oldStyles && !newStyles) {
+      console.log("Both styles are null/undefined - no change");
+      return false;
+    }
+    
+    if (!oldStyles || !newStyles) {
+      console.log("One of the styles is null/undefined - this is a change");
+      return true;
+    }
     
     // Check if backgroundColor has changed (with special attention)
+    console.log(`Background color comparison: old=${oldStyles.backgroundColor}, new=${newStyles.backgroundColor}`);
     if (oldStyles.backgroundColor !== newStyles.backgroundColor) {
       console.log(`Background color changed from ${oldStyles.backgroundColor} to ${newStyles.backgroundColor}`);
       return true;
@@ -657,11 +730,13 @@ const Editor = () => {
     
     // Different number of style properties
     if (oldKeys.length !== newKeys.length) {
+      console.log(`Different number of style properties: old=${oldKeys.length}, new=${newKeys.length}`);
       return true;
     }
     
     // Check each style property
     for (const key of oldKeys) {
+      console.log(`Comparing style property ${key}: old=${oldStyles[key]}, new=${newStyles[key]}`);
       if (oldStyles[key] !== newStyles[key]) {
         console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'}`);
         return true;
@@ -676,7 +751,80 @@ const Editor = () => {
       }
     }
     
+    console.log("No style changes detected");
     return false;
+  };
+
+  // New helper function to ensure changes are properly marked as pending
+  const ensureChangesAreMarkedAsPending = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate) => {
+    console.log("Ensuring changes are properly marked as pending");
+    
+    newTemplate.sections.forEach(newSection => {
+      const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
+      
+      newSection.elements.forEach(newElement => {
+        if (newElement.id) newElement.id = cleanUuid(newElement.id);
+        
+        // Find corresponding old element
+        let oldElement: EmailElement | undefined;
+        
+        if (oldSection) {
+          oldElement = oldSection.elements.find(e => e.id === newElement.id);
+        }
+        
+        if (!oldElement) {
+          // Look in all sections
+          for (const section of oldTemplate.sections) {
+            const found = section.elements.find(e => e.id === newElement.id);
+            if (found) {
+              oldElement = found;
+              break;
+            }
+          }
+        }
+        
+        // If we found an old element, check for changes
+        if (oldElement) {
+          const oldStyles = oldElement.styles || {};
+          const newStyles = newElement.styles || {};
+          
+          // Check for style changes
+          const hasStyleChanges = detectStyleChanges(oldStyles, newStyles);
+          const hasContentChanges = oldElement.content !== newElement.content;
+          
+          if ((hasStyleChanges || hasContentChanges) && !newElement.pending) {
+            console.log(`Marking element ${newElement.id} as pending due to detected changes`);
+            newElement.pending = true;
+            newElement.pendingType = 'edit';
+          }
+        } else if (!newElement.pending) {
+          // This is a new element that wasn't marked as pending
+          console.log(`Marking new element ${newElement.id} as pending`);
+          newElement.pending = true;
+          newElement.pendingType = 'add';
+        }
+      });
+    });
+    
+    // Check for deleted elements
+    oldTemplate.sections.forEach(oldSection => {
+      oldSection.elements.forEach(oldElement => {
+        let foundInNew = false;
+        
+        for (const newSection of newTemplate.sections) {
+          if (newSection.elements.some(e => e.id === oldElement.id)) {
+            foundInNew = true;
+            break;
+          }
+        }
+        
+        if (!foundInNew) {
+          console.log(`Element ${oldElement.id} is missing in new template - should be marked for deletion`);
+          // We would add this element back with a pending delete flag
+          // But we'll let generatePendingChanges handle this
+        }
+      });
+    });
   };
 
   // Handle accepting a pending change
