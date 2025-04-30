@@ -56,6 +56,8 @@ export const handleSupabaseError = (error: any) => {
     console.error('Unique constraint violation. This record already exists.');
   } else if (error?.code === '23503') {
     console.error('Foreign key constraint violation. Referenced record does not exist.');
+  } else if (error?.message?.includes('invalid input syntax for type uuid')) {
+    console.error('Invalid UUID format. Check your identifiers for correct formatting.', error);
   }
   
   return error;
@@ -66,5 +68,18 @@ export type JsonValue = string | number | boolean | null | { [key: string]: Json
 
 // Helper function to safely convert any object to Supabase-compatible Json type
 export function toJson<T>(data: T): JsonValue {
-  return JSON.parse(JSON.stringify(data));
+  // Clean up any potential malformed UUIDs in the data
+  const cleaned = JSON.parse(JSON.stringify(data));
+  if (cleaned && typeof cleaned === 'object' && cleaned.id && typeof cleaned.id === 'string') {
+    // Fix malformed UUIDs (remove spaces and trailing numbers)
+    cleaned.id = cleaned.id.trim().split(' ')[0];
+  }
+  return cleaned;
+}
+
+// Helper function to fix malformed UUIDs
+export function cleanUuid(id: string): string {
+  if (!id) return id;
+  // Remove any spaces and trailing numbers after the UUID
+  return id.trim().split(' ')[0];
 }

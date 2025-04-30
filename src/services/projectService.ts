@@ -1,5 +1,4 @@
-
-import { supabase, handleSupabaseError, toJson } from '@/integrations/supabase/client';
+import { supabase, handleSupabaseError, toJson, cleanUuid } from '@/integrations/supabase/client';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
 
 // Create a new project
@@ -97,6 +96,11 @@ export async function updateProjectWithEmailChanges(
     console.log("Updating project with email changes:", projectId);
     console.log("HTML output:", htmlOutput.substring(0, 100) + "...");
     console.log("Updated template:", JSON.stringify(updatedEmailTemplate).substring(0, 100) + "...");
+    
+    // Make sure the template ID is clean
+    if (updatedEmailTemplate.id) {
+      updatedEmailTemplate.id = cleanUuid(updatedEmailTemplate.id);
+    }
     
     // Update the project last_edited_at timestamp and HTML content
     const { data, error } = await supabase
@@ -220,6 +224,11 @@ export async function getProjectByNameAndUsername(projectName: string, username:
 
 // Helper function to convert email template to HTML
 function convertTemplateToHtml(template: EmailTemplate): string {
+  // Ensure we have a clean ID for the template
+  if (template.id) {
+    template.id = cleanUuid(template.id);
+  }
+  
   // This is an enhanced version with better HTML generation
   let html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${template.name}</title></head><body style="${styleObjectToString(template.styles || {})}">`;
   
@@ -442,6 +451,13 @@ export async function savePendingChange(
   newContent?: any
 ) {
   try {
+    console.log(`Saving pending change for element ${elementId} of type ${changeType}`);
+    console.log("Old content:", oldContent ? JSON.stringify(oldContent).substring(0, 100) + "..." : "null");
+    console.log("New content:", newContent ? JSON.stringify(newContent).substring(0, 100) + "..." : "null");
+    
+    // Clean the element ID
+    elementId = cleanUuid(elementId);
+    
     const { data, error } = await supabase
       .from('pending_changes')
       .insert({
@@ -453,7 +469,13 @@ export async function savePendingChange(
       })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error saving pending change:", error);
+      handleSupabaseError(error);
+      throw error;
+    }
+    
+    console.log("Pending change saved successfully:", data);
     return data[0];
   } catch (error) {
     console.error('Error saving pending change:', error);

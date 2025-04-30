@@ -21,7 +21,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, cleanUuid } from '@/integrations/supabase/client';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -359,12 +359,20 @@ const Editor = () => {
         // Get the current template or use empty template if none exists
         const currentTemplateToUse = emailTemplate || emptyTemplate;
         
+        // Ensure the template ID is valid (remove any spaces or trailing numbers)
+        if (currentTemplateToUse.id) {
+          currentTemplateToUse.id = cleanUuid(currentTemplateToUse.id);
+        }
+        
         // Format chat history for context
         const chatHistoryForAI = chatMessages.map(msg => ({
           id: msg.id,
           content: msg.content,
           role: msg.role || (chatMessages.indexOf(msg) % 2 === 0 ? 'user' : 'assistant')
         }));
+        
+        // Log for debugging
+        console.log("Sending template to AI:", JSON.stringify(currentTemplateToUse).substring(0, 100) + "...");
         
         // Call our OpenAI Edge Function
         const response = await supabase.functions.invoke('generate-email-changes', {
@@ -400,7 +408,12 @@ const Editor = () => {
         await saveChatMessage(targetProjectId, explanation, 'assistant');
         
         // Important: Log the received updatedTemplate for debugging
-        console.log("Received updated template from OpenAI:", updatedTemplate);
+        console.log("Received updated template from OpenAI:", JSON.stringify(updatedTemplate).substring(0, 100) + "...");
+        
+        // Ensure the updatedTemplate has a clean ID
+        if (updatedTemplate && updatedTemplate.id) {
+          updatedTemplate.id = cleanUuid(updatedTemplate.id);
+        }
         
         // Generate pending changes by comparing the old and new templates
         const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
@@ -481,12 +494,24 @@ const Editor = () => {
   // Helper function to identify differences between templates and generate pending changes
   const generatePendingChanges = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate): PendingChange[] => {
     const changes: PendingChange[] = [];
+    console.log("Comparing templates to generate changes:");
+    console.log("Old template:", JSON.stringify(oldTemplate).substring(0, 100) + "...");
+    console.log("New template:", JSON.stringify(newTemplate).substring(0, 100) + "...");
+    
+    // Ensure both templates have valid IDs
+    if (oldTemplate.id) oldTemplate.id = cleanUuid(oldTemplate.id);
+    if (newTemplate.id) newTemplate.id = cleanUuid(newTemplate.id);
     
     // Compare each element in old and new templates to detect changes
     newTemplate.sections.forEach(newSection => {
       const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
       
       newSection.elements.forEach(newElement => {
+        // Make sure the element has a valid ID
+        if (newElement.id) newElement.id = cleanUuid(newElement.id);
+        
+        console.log(`Checking element ${newElement.id} of type ${newElement.type}`);
+        
         // Try to find matching element in old template
         let oldElement: EmailElement | undefined;
         let oldSectionId: string | undefined;
@@ -512,6 +537,8 @@ const Editor = () => {
         // Detect changes (modified, added or deleted elements)
         if (newElement.pending === true) {
           // Element is explicitly marked as pending by the AI
+          console.log(`Element ${newElement.id} is marked as pending with type ${newElement.pendingType}`);
+          
           const change: PendingChange = {
             id: generateId(),
             elementId: newElement.id,
@@ -536,13 +563,23 @@ const Editor = () => {
             }
           }
           
+          console.log("Created pending change:", change);
           changes.push(change);
         } 
         // Detect style changes even if not explicitly marked as pending
         else if (oldElement) {
           // Compare styles to detect style-only changes
-          const hasStyleChanges = JSON.stringify(oldElement.styles) !== JSON.stringify(newElement.styles);
-          if (hasStyleChanges) {
+          const oldStylesStr = JSON.stringify(oldElement.styles || {});
+          const newStylesStr = JSON.stringify(newElement.styles || {});
+          
+          const hasStyleChanges = oldStylesStr !== newStylesStr;
+          const hasContentChanges = oldElement.content !== newElement.content;
+          
+          if (hasStyleChanges || hasContentChanges) {
+            console.log(`Detected style or content changes for element ${newElement.id}`);
+            console.log("Old styles:", oldStylesStr);
+            console.log("New styles:", newStylesStr);
+            
             const change: PendingChange = {
               id: generateId(),
               elementId: newElement.id,
@@ -557,6 +594,36 @@ const Editor = () => {
             newElement.pending = true;
             newElement.pendingType = 'edit';
           }
+        }
+      });
+    });
+    
+    // Check for deleted elements in the old template that are missing from the new template
+    oldTemplate.sections.forEach(oldSection => {
+      oldSection.elements.forEach(oldElement => {
+        // Check if this element exists in the new template
+        let foundInNew = false;
+        
+        for (const newSection of newTemplate.sections) {
+          if (newSection.elements.some(newElem => newElem.id === oldElement.id)) {
+            foundInNew = true;
+            break;
+          }
+        }
+        
+        if (!foundInNew) {
+          console.log(`Element ${oldElement.id} from old template is missing in new template - marking as deleted`);
+          
+          // It's been deleted - add a pending change for it
+          const change: PendingChange = {
+            id: generateId(),
+            elementId: oldElement.id,
+            changeType: 'delete',
+            status: 'pending',
+            oldContent: { ...oldElement }
+          };
+          
+          changes.push(change);
         }
       });
     });
