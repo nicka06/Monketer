@@ -301,14 +301,14 @@ const Editor = () => {
             console.log("New project created with ID:", currentProjectId);
             setHasCode(false); // Initially no code until first generation
         }
-
+        
         // Ensure project ID is set before proceeding
         if (!currentProjectId) {
              throw new Error("Project ID is still missing after creation check.");
         }
         
         setProgress(50);
-
+        
         // --- Prepare Payload for Edge Function --- 
         // Remove currentTemplate/emailTemplate from payload
         const payload = {
@@ -319,7 +319,7 @@ const Editor = () => {
             projectId: currentProjectId 
         };
         console.log("Sending payload to generate-email-changes:", payload);
-
+        
         // --- Call Edge Function --- 
         // Assign to the outer response variable
         response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
@@ -345,8 +345,8 @@ const Editor = () => {
                 errorData.message = errorText.substring(0, 100) || 'Failed to process request';
             }
             throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
-        }
-
+      }
+      
         // --- Process Successful Response --- 
         const result = await response.json();
         console.log("[handleSendMessage] Success response body:", result);
@@ -374,7 +374,7 @@ const Editor = () => {
         // NOW update pending changes state
         setPendingChanges(fetchedChanges); 
         console.log("[handleSendMessage] Pending changes state updated.");
-
+        
         // THEN update project data state with new semantic/HTML
         setProjectData(prevData => {
             if (!prevData && !currentProjectId) {
@@ -412,7 +412,7 @@ const Editor = () => {
         setEmailTemplate(newSemanticEmail); 
         setHasCode(true); 
         console.log("[handleSendMessage] Project data and related states updated.");
-
+            
         // --- Save Chat Messages --- 
         const newAiMessage: ChatMessage = {
               id: generateId(),
@@ -457,7 +457,7 @@ const Editor = () => {
                         console.error("--- Problematic JSON from Backend End ---");
                         backendErrorDetails += " (Problematic JSON logged to console)";
                      }
-                 } 
+          }
              } catch (e) {
                  // Failed to parse backend error response, stick with original message
                  console.warn("Could not parse detailed backend error response.");
@@ -466,7 +466,7 @@ const Editor = () => {
 
         // Revert optimistic UI update for user message
         setChatMessages(chatMessages);
-        
+          
         // Add specific error message to chat, using detailed message if available
         const errorAiMessage: ChatMessage = {
             id: generateId(),
@@ -495,7 +495,7 @@ const Editor = () => {
       });
       return;
     }
-
+    
     try {
       // Generate the HTML from the current template state
       const currentHtml = await exportEmailAsHtml(emailTemplate);
@@ -522,7 +522,7 @@ const Editor = () => {
     if (!actualProjectId) {
       toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
       return;
-    }
+            }
     if (pendingChanges.length === 0) {
       toast({ title: 'Info', description: 'No pending changes to accept.' });
       return;
@@ -577,7 +577,7 @@ const Editor = () => {
       setTimeout(() => setProgress(0), 500);
     }
   };
-
+      
   // Handle rejecting all pending changes
   const handleRejectAll = async () => {
     if (!actualProjectId) {
