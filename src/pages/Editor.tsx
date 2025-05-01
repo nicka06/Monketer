@@ -665,13 +665,14 @@ const Editor = () => {
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="overflow-auto bg-neutral-100 dark:bg-neutral-950 flex flex-col"
+            className="overflow-auto bg-neutral-100 dark:bg-neutral-950 flex flex-col relative"
           >
             {/* Preview Controls Header */}
             <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center flex-shrink-0">
               {/* Left side (Placeholder or future use) */}
               <div>
-                {/* Conditionally render Accept/Reject buttons */}
+                {/* Conditionally render Accept/Reject buttons - REMOVED FROM HERE */}
+                {/* 
                 {pendingChanges && pendingChanges.length > 0 && (
                   <div className="flex items-center space-x-2">
                     <Button
@@ -696,6 +697,7 @@ const Editor = () => {
                     </Button>
                   </div>
                 )}
+                 */}
               </div>
 
               {/* Right-aligned controls wrapper */}
@@ -765,6 +767,34 @@ const Editor = () => {
                 </>
               )}
             </div>
+
+            {/* --- Floating Accept/Reject Bar (Inside Preview Panel) --- */}
+            {pendingChanges && pendingChanges.length > 0 && (
+              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bg-background border border-border rounded-lg shadow-xl p-3 flex items-center gap-3">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRejectAll} 
+                  disabled={isLoading}
+                  className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700 px-3 py-1.5" // Adjusted padding
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Reject All
+                </Button>
+                <Button 
+                  variant="default"
+                  size="sm"
+                  onClick={handleAcceptAll} 
+                  disabled={isLoading}
+                   className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5" // Adjusted padding and colors
+                >
+                  <Check className="mr-1.5 h-4 w-4" />
+                  Accept All
+                </Button>
+              </div>
+            )}
+            {/* --- End Floating Bar --- */}
+            
           </ResizablePanel>
           
           {/* Resizable handle */}
@@ -789,6 +819,7 @@ const Editor = () => {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
+
     </div>
   );
 };
