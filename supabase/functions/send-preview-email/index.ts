@@ -65,7 +65,7 @@ serve(async (req) => {
     console.log('Transporter created successfully.');
 
     const mailOptions = {
-      from: `"Emailore Preview" <${gmailUser}>`, // Sender address
+      from: `\"Emailore Preview\" <test@monketer.com>`, // Sender address - Use custom domain
       to: recipientEmail, // List of receivers
       subject: 'Your Email Preview from Emailore', // Subject line
       html: emailHtml, // html body
