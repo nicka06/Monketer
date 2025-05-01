@@ -40,6 +40,10 @@ serve(async (req) => {
     const gmailUser = Deno.env.get('GMAIL_USER');
     const gmailAppPassword = Deno.env.get('GMAIL_APP_PASSWORD');
 
+    // Add explicit logging for debugging
+    console.log(`Retrieved GMAIL_USER: ${gmailUser ? '***found***' : '***NOT FOUND***'}`); 
+    console.log(`Retrieved GMAIL_APP_PASSWORD: ${gmailAppPassword ? '***found***' : '***NOT FOUND***'}`);
+
     if (!gmailUser || !gmailAppPassword) {
       console.error('Missing GMAIL_USER or GMAIL_APP_PASSWORD environment variables.');
       throw new Error("Email sending configuration is missing on the server.");
