@@ -1,25 +1,54 @@
-import { supabase, handleSupabaseError, toJson, cleanUuid } from '@/integrations/supabase/client';
+import { supabase, handleSupabaseError, toJson } from '@/integrations/supabase/client';
+// import { cleanUuid } from '@/integrations/supabase/client'; // Removed - now importing from uuid-utils
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
+import { cleanUuid } from '@/lib/uuid-utils'; // Import from new location
 
 // Create a new project
 export async function createProject(name: string, initialContent?: EmailTemplate) {
+  console.log("[createProject] Starting..."); // Log entry
   try {
     // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    console.log("[createProject] Getting user..."); // Log before getUser
+    const { data: authData, error: authError } = await supabase.auth.getUser(); // Get whole auth response
+    
+    // Log the raw auth response
+    console.log("[createProject] Auth response:", { authData, authError }); 
+
+    // Check for auth error first
+    if (authError) {
+        console.error("[createProject] Auth error occurred:", authError);
+        throw authError; // Re-throw auth error
+    }
+    
+    // Check if user object exists within data
+    if (!authData?.user) { // Safer check for user object
+      console.error("[createProject] User object not found in auth data.");
+      throw new Error('User not authenticated or user data missing.');
+    }
+    
+    // Destructure user *after* checks
+    const user = authData.user; 
+    console.log(`[createProject] User ID: ${user.id}`);
 
     // Check if project name already exists for this user
+    console.log(`[createProject] Checking for existing project named '${name}'...`); // Log before check
     const { data: existingProjects, error: checkError } = await supabase
       .from('projects')
       .select('name')
       .eq('user_id', user.id)
       .ilike('name', `${name}%`);
+      
+    console.log("[createProject] Existing check response:", { existingProjects, checkError }); // Log check response
     
-    if (checkError) throw checkError;
+    if (checkError) {
+        console.error("[createProject] Error checking existing projects:", checkError);
+        throw checkError; // Re-throw check error
+    }
     
     // Modify name if it already exists
     let uniqueName = name;
     if (existingProjects && existingProjects.length > 0) {
+        console.log("[createProject] Found existing similar names, generating unique name...");
       // Find similar names and generate a name with an incremented number
       const similarNames = existingProjects.map(p => p.name);
       let counter = 1;
@@ -28,8 +57,10 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         uniqueName = `${name} (${counter})`;
         counter++;
       }
+      console.log(`[createProject] Unique name generated: ${uniqueName}`);
     }
 
+    console.log(`[createProject] Inserting project '${uniqueName}'...`); // Log before insert
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -40,22 +71,17 @@ export async function createProject(name: string, initialContent?: EmailTemplate
       })
       .select()
       .single();
+      
+    console.log("[createProject] Insert response:", { project, projectError }); // Log insert response
 
-    if (projectError) throw projectError;
+    if (projectError) {
+        console.error("[createProject] Error inserting project:", projectError);
+        throw projectError; // Re-throw insert error
+    }
     
     // If initial content is provided, create first version and update HTML/semantic fields
     if (initialContent) {
-      // Create email version
-      const { error: versionError } = await supabase
-        .from('email_versions')
-        .insert({
-          project_id: project.id,
-          version_number: 1,
-          content: toJson(initialContent), // Use toJson helper to safely convert EmailTemplate to Json
-        });
-
-      if (versionError) throw versionError;
-      
+        console.log(`[createProject] Initial content provided, updating project ID ${project.id}...`); // Log before update
       // Convert template to HTML
       const htmlOutput = convertTemplateToHtml(initialContent);
       
@@ -65,23 +91,65 @@ export async function createProject(name: string, initialContent?: EmailTemplate
         .update({
           current_html: htmlOutput,
           semantic_email: toJson(initialContent), // Use toJson helper 
-          last_edited_at: new Date().toISOString()
+          last_edited_at: new Date().toISOString(),
+          // Make sure to set initial version number here
+          version: 1 
         })
         .eq('id', project.id);
         
-      if (updateError) throw updateError;
+        console.log("[createProject] Update response:", { updateError }); // Log update response
+        
+      if (updateError) {
+        console.error("[createProject] Error updating project after insert:", updateError);
+        throw updateError; // Re-throw update error
+      }
     }
 
     // Convert from database schema to our app schema
+    // Fetch the potentially updated project data after the update
+    console.log(`[createProject] Re-fetching project data for ID ${project.id}...`); // Log before select
+    const { data: updatedProjectData, error: fetchError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', project.id)
+        .single();
+        
+    console.log("[createProject] Final select response:", { updatedProjectData, fetchError }); // Log select response
+        
+    if (fetchError) {
+        console.error("[createProject] Could not re-fetch project data after initial creation update:", fetchError);
+        // Don't throw here, just warn and return potentially incomplete data
+        console.warn("Returning potentially incomplete project data due to fetch error.");
+        // Fallback to original data if re-fetch fails
+         return {
+          id: project.id,
+          name: project.name,
+          lastEditedAt: new Date(project.last_edited_at),
+          createdAt: new Date(project.created_at),
+          isArchived: project.is_archived,
+          current_html: project.current_html, // Might be null if initialContent wasn't provided
+          semantic_email: project.semantic_email, // Might be null
+          version: project.version // Might be default/null
+        } as Project;
+    }
+    
+    // Return the fully populated project data
+    console.log("[createProject] Successfully created and fetched project.");
     return {
-      id: project.id,
-      name: project.name,
-      lastEditedAt: new Date(project.last_edited_at),
-      createdAt: new Date(project.created_at),
-      isArchived: project.is_archived
+      id: updatedProjectData.id,
+      name: updatedProjectData.name,
+      lastEditedAt: new Date(updatedProjectData.last_edited_at),
+      createdAt: new Date(updatedProjectData.created_at),
+      isArchived: updatedProjectData.is_archived,
+      current_html: updatedProjectData.current_html,
+      semantic_email: updatedProjectData.semantic_email,
+      version: updatedProjectData.version
     } as Project;
+
   } catch (error) {
-    console.error('Error creating project:', error);
+    // Log the raw error object structure as well
+    console.error('[createProject] Error caught:', error);
+    console.error('[createProject] Raw error structure:', JSON.stringify(error, null, 2)); 
     throw error;
   }
 }
@@ -343,99 +411,102 @@ export async function getUserProjects() {
 // Get a specific project and its latest version
 export async function getProject(projectId: string) {
   try {
-    // Get project details
-    const { data: project, error: projectError } = await supabase
+    const { data, error } = await supabase
       .from('projects')
-      .select('*')
+      // Select all needed fields, including the new ones
+      .select(`
+        id,
+        name,
+        last_edited_at,
+        created_at,
+        is_archived,
+        current_html,
+        semantic_email,
+        version
+      `)
       .eq('id', projectId)
       .single();
 
-    if (projectError) throw projectError;
+    if (error) handleSupabaseError(error);
+    if (!data) throw new Error('Project not found');
 
-    // Get latest email version
-    const { data: versions, error: versionError } = await supabase
-      .from('email_versions')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('version_number', { ascending: false })
-      .limit(1);
-
-    if (versionError) throw versionError;
-
-    const latestVersion = versions && versions.length > 0 ? versions[0] : null;
-
-    // Get pending changes
-    const { data: pendingChanges, error: pendingChangesError } = await supabase
-      .from('pending_changes')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('status', 'pending');
-
-    if (pendingChangesError) throw pendingChangesError;
-
-    // Get chat history
-    const { data: chatMessages, error: chatMessagesError } = await supabase
+    // Fetch related chat messages
+    const { data: chatMessages, error: chatError } = await supabase
       .from('chat_messages')
-      .select('*')
+      .select('id, project_id, content, created_at, role')
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
 
-    if (chatMessagesError) throw chatMessagesError;
+    if (chatError) handleSupabaseError(chatError);
 
-    // Convert to our app schema types
-    const emailContent = latestVersion?.content as unknown as EmailTemplate;
-    
-    const formattedPendingChanges = (pendingChanges || []).map(change => ({
-      id: change.id,
-      elementId: change.element_id,
-      changeType: change.change_type as 'add' | 'edit' | 'delete',
-      oldContent: change.old_content,
-      newContent: change.new_content,
-      status: change.status as 'pending' | 'accepted' | 'rejected'
-    })) as PendingChange[];
-    
-    const formattedChatMessages = (chatMessages || []).map(msg => ({
+    // Fetch related pending changes
+    const { data: pendingChanges, error: changesError } = await supabase
+      .from('pending_changes')
+      .select('id, element_id, change_type, old_content, new_content, status')
+      .eq('project_id', projectId)
+      .eq('status', 'pending') // Only fetch pending changes
+      .order('created_at', { ascending: true });
+
+    if (changesError) handleSupabaseError(changesError);
+
+    // Convert project data to our app schema
+    const project: Project = {
+      id: data.id,
+      name: data.name,
+      lastEditedAt: new Date(data.last_edited_at),
+      createdAt: new Date(data.created_at),
+      isArchived: data.is_archived,
+      current_html: data.current_html, // Include current_html
+      semantic_email: data.semantic_email as EmailTemplate | null, // Cast and include semantic_email
+      version: data.version // Include version
+    };
+
+    // Convert chat messages
+    const formattedMessages: ChatMessage[] = (chatMessages || []).map((msg: any) => ({
       id: msg.id,
+      project_id: msg.project_id,
       content: msg.content,
       timestamp: new Date(msg.created_at),
-      role: msg.role || 'assistant' // Set a default role if none exists for legacy messages
-    })) as ChatMessage[];
+      role: msg.role
+    }));
+
+    // Convert pending changes
+    const formattedChanges: PendingChange[] = (pendingChanges || []).map((chg: any) => ({
+      id: chg.id,
+      elementId: chg.element_id,
+      changeType: chg.change_type,
+      oldContent: chg.old_content,
+      newContent: chg.new_content,
+      status: chg.status
+    }));
 
     return {
       project,
-      emailContent,
-      pendingChanges: formattedPendingChanges,
-      chatMessages: formattedChatMessages,
+      // Kept emailContent mapping for backward compatibility if needed, but prefer semantic_email
+      emailContent: data.semantic_email as EmailTemplate | null, 
+      chatMessages: formattedMessages,
+      pendingChanges: formattedChanges
     };
+
   } catch (error) {
     console.error('Error fetching project:', error);
     throw error;
   }
 }
 
-// Save chat message
-export async function saveChatMessage(projectId: string, content: string, role: 'user' | 'assistant' = 'user') {
+// Save a chat message (updated signature)
+export async function saveChatMessage(message: ChatMessage) {
   try {
-    // Log the request for debugging
-    console.log(`Saving chat message for project ${projectId}`, { content, role });
-    
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('chat_messages')
       .insert({
-        project_id: projectId,
-        content,
-        role
-      })
-      .select();
+        id: message.id, // Use ID from message object
+        project_id: message.project_id,
+        content: message.content,
+        role: message.role || 'user' // Default to user if role is missing
+      });
 
-    if (error) {
-      // Use our new error handler
-      handleSupabaseError(error);
-      throw error;
-    }
-    
-    console.log('Chat message saved successfully:', data);
-    return data[0];
+    if (error) handleSupabaseError(error);
   } catch (error) {
     console.error('Error saving chat message:', error);
     throw error;
@@ -565,4 +636,34 @@ export async function exportEmailAsHtml(template: EmailTemplate): Promise<string
   }
   
   return html;
+}
+
+// Fetch pending changes for a project
+export async function getPendingChanges(projectId: string): Promise<PendingChange[]> {
+  if (!projectId) {
+    console.warn("[getPendingChanges] Project ID is required, but was not provided.");
+    return [];
+  }
+  console.log(`[getPendingChanges] Fetching for project ID: ${projectId}`);
+  try {
+    const { data, error } = await supabase
+      .from('pending_changes')
+      .select('*') // Select all columns from pending_changes
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true }); // Optional: order by creation time
+
+    if (error) {
+      console.error(`[getPendingChanges] Error fetching pending changes for project ${projectId}:`, error);
+      handleSupabaseError(error);
+      return []; // Return empty array on error
+    }
+
+    console.log(`[getPendingChanges] Found ${data?.length || 0} pending changes.`);
+    // Ensure the returned data matches the PendingChange type structure if necessary
+    // For now, assume the table structure matches the type
+    return data as PendingChange[];
+  } catch (error) {
+    console.error('[getPendingChanges] Unexpected error:', error);
+    return []; // Return empty array on unexpected error
+  }
 }

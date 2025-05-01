@@ -1,3 +1,8 @@
+# Environment variables
+.env
+.env.*
+!/.env.example
+
 # Logs
 logs
 *.log
@@ -7,16 +12,34 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+# Runtime data
+
+# Build outputs
 dist
 dist-ssr
+
+# Dependency directories
+node_modules/
+
+# IDE directories
+.idea/
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test outputs
+coverage/
+
+# Bun
+.bun
+
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj

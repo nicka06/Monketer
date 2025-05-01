@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings, Mail, Sun, Moon, Smartphone, Monitor } from 'lucide-react';
+import { ArrowLeft, Settings, Mail, Sun, Moon, Smartphone, Monitor, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
@@ -9,8 +9,7 @@ import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from
 import { 
   getProject, 
   saveChatMessage, 
-  acceptPendingChange, 
-  rejectPendingChange, 
+  getPendingChanges,
   createProject, 
   getProjectByNameAndUsername, 
   getUsernameFromId,
@@ -21,11 +20,14 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
 import { Progress } from '@/components/ui/progress';
-import { supabase, cleanUuid } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+
+// Define InteractionMode type locally or import if shared
+type InteractionMode = 'ask' | 'edit' | 'major';
 
 // Sample empty template for new projects
 const emptyTemplate: EmailTemplate = {
@@ -80,6 +82,9 @@ const Editor = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [isMobileView, setIsMobileView] = useState(false); // State for mobile switch
+  
+  // Add state for selected mode
+  const [selectedMode, setSelectedMode] = useState<InteractionMode>('edit'); 
   
   // Load username for current user
   useEffect(() => {
@@ -152,61 +157,40 @@ const Editor = () => {
 
   const loadProjectById = async (id: string) => {
     try {
-      const projectData = await getProject(id);
+      // Fetch project data including pending changes
+      const { project, chatMessages, emailContent, pendingChanges: fetchedPendingChanges } = await getProject(id);
       
-      setProjectTitle(projectData.project.name);
+      setProjectTitle(project.name);
       setProjectData({
-        id: projectData.project.id,
-        name: projectData.project.name,
-        lastEditedAt: new Date(projectData.project.last_edited_at),
-        createdAt: new Date(projectData.project.created_at),
-        isArchived: projectData.project.is_archived
+        id: project.id,
+        name: project.name,
+        lastEditedAt: new Date(project.lastEditedAt),
+        createdAt: new Date(project.createdAt),
+        isArchived: project.isArchived,
+        current_html: project.current_html,
+        semantic_email: project.semantic_email,
+        version: project.version
       });
-      
-      // Convert chat messages to our format
-      const formattedMessages = projectData.chatMessages || [];
-      
+
+      const formattedMessages = chatMessages || [];
       setChatMessages(formattedMessages);
-      
-      // Check if we have email content (either from standard content or semantic_email)
-      if (projectData.emailContent) {
-        // Apply pending changes to the template if both email content and pending changes exist
-        if (projectData.pendingChanges && projectData.pendingChanges.length > 0) {
-          const updatedTemplate = applyPendingChangesToTemplate(
-            projectData.emailContent,
-            projectData.pendingChanges
-          );
-          setEmailTemplate(updatedTemplate);
-        } else {
-          setEmailTemplate(projectData.emailContent);
-        }
-        setPendingChanges(projectData.pendingChanges || []);
-        
-        // IMPORTANT: Always set hasCode to true if we have email content
-        setHasCode(true);
-      } else if (projectData.project.semantic_email) {
-        // If semantic_email exists in the project, use it
-        // We need to properly cast the semantic_email to EmailTemplate
-        const semanticEmail = projectData.project.semantic_email as unknown as EmailTemplate;
-        
-        // Validate that it has the structure we expect
-        if (semanticEmail && 
-            semanticEmail.id && 
-            semanticEmail.sections && 
-            Array.isArray(semanticEmail.sections)) {
-          setEmailTemplate(semanticEmail);
-          setPendingChanges(projectData.pendingChanges || []);
+      setPendingChanges(fetchedPendingChanges || []); // Set pending changes from fetched data
+
+      // Use current_html for preview, semantic_email for state if available
+      if (project.semantic_email) {
+        const semanticEmail = project.semantic_email as unknown as EmailTemplate;
+        if (semanticEmail && semanticEmail.id && semanticEmail.sections && Array.isArray(semanticEmail.sections)) {
+            setEmailTemplate(semanticEmail); // Keep semantic email for future edits
           setHasCode(true);
         } else {
-          // If the structure is invalid, don't set the email template
           setEmailTemplate(null);
           setHasCode(false);
         }
       } else {
-        // If no email content exists yet but we have a project, show empty state
-        setEmailTemplate(null);
-        setHasCode(false);
+        setEmailTemplate(null); // No semantic structure yet
+        setHasCode(!!project.current_html); // hasCode depends on if there's any HTML
       }
+
     } catch (error) {
       console.error('Error loading project:', error);
       toast({
@@ -235,64 +219,6 @@ const Editor = () => {
       setProgress(0);
     }
   }, [isLoading]);
-
-  // Apply pending changes to the email template
-  const applyPendingChangesToTemplate = (
-    template: EmailTemplate,
-    changes: PendingChange[]
-  ): EmailTemplate => {
-    const updatedTemplate = { ...template };
-    
-    changes.forEach((change) => {
-      // Find the element by ID (could be in any section)
-      let targetElement = null;
-      let targetSection = null;
-      
-      for (const section of updatedTemplate.sections) {
-        for (const element of section.elements) {
-          if (element.id === change.elementId) {
-            targetElement = element;
-            targetSection = section;
-            break;
-          }
-        }
-        if (targetElement) break;
-      }
-      
-      if (targetElement) {
-        // Mark the element as pending with the appropriate type
-        targetElement.pending = true;
-        targetElement.pendingType = change.changeType;
-        
-        if (change.changeType === 'edit' && change.newContent) {
-          // Keep the element but update its content while marking it as pending
-          Object.assign(targetElement, {
-            ...change.newContent,
-            pending: true,
-            pendingType: 'edit',
-          });
-        }
-      } else if (change.changeType === 'add' && change.newContent) {
-        // Handle adding new elements
-        const section = updatedTemplate.sections.find(
-          (s) => s.id === change.newContent.sectionId
-        );
-        
-        if (section) {
-          const newElement = {
-            ...change.newContent.element,
-            id: change.elementId,
-            pending: true,
-            pendingType: 'add',
-          };
-          
-          section.elements.push(newElement);
-        }
-      }
-    });
-    
-    return updatedTemplate;
-  };
 
   // Handle title change and potentially update project name
   const handleTitleChange = async (newTitle: string) => {
@@ -328,194 +254,236 @@ const Editor = () => {
     }
   };
 
-  // Handle sending a message to the AI
-  const handleSendMessage = async (message: string) => {
-    try {
-      setIsLoading(true);
-      
-      // If there's no projectId yet, create one first
-      let targetProjectId = actualProjectId;
-      let newProjectCreated = false;
-      
-      if (!targetProjectId && !projectData) {
-        // Create a new project since this is the first message
-        const newProject = await createProject(projectTitle);
-        targetProjectId = newProject.id;
-        setProjectData(newProject);
-        setActualProjectId(newProject.id);
-        newProjectCreated = true;
-        
-        // Update URL to include the username and project name
-        if (currentUsername) {
-          navigate(`/editor/${currentUsername}/${encodeURIComponent(newProject.name)}`, { replace: true });
-        } else {
-          navigate(`/editor/${targetProjectId}`, { replace: true });
-        }
-      }
-      
-      if (!targetProjectId) {
-        console.error('No valid project ID available');
-        toast({
-          title: 'Error',
-          description: 'No valid project ID available',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
+  // handleSendMessage now matches ChatInterface prop expectations
+  const handleSendMessage = async (message: string, mode: InteractionMode) => {
+    console.log(`[handleSendMessage] Mode: ${mode}, ProjectID: ${actualProjectId}`);
+    if (!user) {
+        toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
         return;
       }
       
-      // Add user message to chat with explicit 'user' role
-      const userMessageId = generateId();
-      const userMessage: ChatMessage = {
-        id: userMessageId,
+    let currentProjectId = actualProjectId;
+
+    // --- Prepare User Message & Update UI Optimistically ---
+    const newUserMessage: ChatMessage = {
+        id: generateId(),
+        project_id: currentProjectId || 'pending_creation', // Temp ID if needed
+        role: 'user',
         content: message,
         timestamp: new Date(),
-        role: 'user'
-      };
-      
-      setChatMessages((prev) => [...prev, userMessage]);
-      
-      // Save user message to the database with explicit 'user' role
-      await saveChatMessage(targetProjectId, message, 'user');
-      
-      try {
-        // Get the current template or use empty template if none exists
-        const currentTemplateToUse = emailTemplate || emptyTemplate;
-        
-        // Ensure the template ID is valid (remove any spaces or trailing numbers)
-        if (currentTemplateToUse.id) {
-          currentTemplateToUse.id = cleanUuid(currentTemplateToUse.id);
+    };
+    const tempMessages = [...chatMessages, newUserMessage];
+    setChatMessages(tempMessages);
+    setIsLoading(true);
+    setProgress(30);
+
+    let response: Response | null = null; // Declare response variable here
+
+    try {
+        // --- Ensure Project Exists --- 
+        if (!currentProjectId) {
+             // Always create project first if it doesn't exist, regardless of mode.
+            console.log("No project ID found. Creating new project before sending message...");
+            const titleForNewProject = projectTitle || "Untitled Document"; 
+            
+             // Create a minimal project first
+             // We no longer need to pass an initial template here.
+            const newProject = await createProject(titleForNewProject); // Simplified createProject
+            currentProjectId = newProject.id;
+            setActualProjectId(currentProjectId);
+            setProjectData(newProject); // Set minimal project data
+            newUserMessage.project_id = currentProjectId; // Update message project ID
+
+            // Update URL if needed
+            if (currentUsername) {
+                window.history.pushState({}, '', `/editor/${currentUsername}/${encodeURIComponent(titleForNewProject)}`);
+            }
+            console.log("New project created with ID:", currentProjectId);
+            setHasCode(false); // Initially no code until first generation
+        }
+
+        // Ensure project ID is set before proceeding
+        if (!currentProjectId) {
+             throw new Error("Project ID is still missing after creation check.");
         }
         
-        // Format chat history for context
-        const chatHistoryForAI = chatMessages.map(msg => ({
-          id: msg.id,
-          content: msg.content,
-          role: msg.role || (chatMessages.indexOf(msg) % 2 === 0 ? 'user' : 'assistant')
-        }));
-        
-        // Log for debugging
-        console.log("Sending template to AI:", JSON.stringify(currentTemplateToUse).substring(0, 100) + "...");
-        
-        // Call our OpenAI Edge Function
-        const response = await supabase.functions.invoke('generate-email-changes', {
-          body: {
+        setProgress(50);
+
+        // --- Prepare Payload for Edge Function --- 
+        // Remove currentTemplate/emailTemplate from payload
+        const payload = {
             prompt: message,
-            currentTemplate: currentTemplateToUse,
-            chatHistory: chatHistoryForAI,
-          }
+            // Send chat history *before* the current user message for context
+            chatHistory: chatMessages, 
+            mode: mode,
+            projectId: currentProjectId 
+        };
+        console.log("Sending payload to generate-email-changes:", payload);
+
+        // --- Call Edge Function --- 
+        // Assign to the outer response variable
+        response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+            },
+            body: JSON.stringify(payload),
         });
-        
-        // Check if the response contains an error
-        if (response.error) {
-          throw new Error(response.error.message || 'Error generating email changes');
+        setProgress(80);
+        console.log(`[handleSendMessage] Fetch response status: ${response.status}`);
+
+        if (!response.ok) {
+            let errorData = { error: 'Unknown backend error', message: 'Response not OK' };
+            try {
+                errorData = await response.json();
+                console.error("[handleSendMessage] Backend error response body:", errorData);
+            } catch (parseError) {
+                console.error("[handleSendMessage] Failed to parse error response body:", parseError);
+                const errorText = await response.text();
+                console.error("[handleSendMessage] Backend error response text:", errorText);
+                errorData.message = errorText.substring(0, 100) || 'Failed to process request';
+            }
+            throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
+        }
+
+        // --- Process Successful Response --- 
+        const result = await response.json();
+        console.log("[handleSendMessage] Success response body:", result);
+
+        // Destructure the new expected fields
+        const { message: aiResponseMessage, newSemanticEmail, newHtml } = result;
+
+        if (!newSemanticEmail || !newHtml) {
+             throw new Error("Backend response missing newSemanticEmail or newHtml.");
         }
         
-        const { explanation, updatedTemplate, error } = response.data;
-        
-        // Handle error in response data
-        if (error) {
-          throw new Error(error);
+        // Fetch pending changes separately FIRST
+        let fetchedChanges: PendingChange[] = [];
+        try {
+            console.log("[handleSendMessage] Fetching pending changes...");
+            fetchedChanges = (await getPendingChanges(currentProjectId)) || [];
+            console.log(`[handleSendMessage] Fetched ${fetchedChanges.length} pending changes.`);
+        } catch (fetchChangesError) {
+            console.error("Failed to fetch pending changes:", fetchChangesError);
+            toast({ title: 'Warning', description: 'Could not fetch pending changes after update.', variant: 'default' });
+            // Set to empty array on error to avoid stale overlays
+            fetchedChanges = []; 
         }
         
-        // Save assistant message to the database with explicit 'assistant' role
-        const aiMessageId = generateId();
-        const aiMessage: ChatMessage = {
-          id: aiMessageId,
-          content: explanation,
-          timestamp: new Date(),
-          role: 'assistant'
+        // NOW update pending changes state
+        setPendingChanges(fetchedChanges); 
+        console.log("[handleSendMessage] Pending changes state updated.");
+
+        // THEN update project data state with new semantic/HTML
+        setProjectData(prevData => {
+            if (!prevData && !currentProjectId) {
+                 // If projectData was null AND we just created the project, use the new ID
+                 // This case needs careful review - projectData might be minimal after creation
+                 console.warn("[handleSendMessage] Project data was null, reconstructing after creation.");
+                 // It might be better to fetch the full project data here after creation?
+                 // For now, construct based on what we have.
+                 return { 
+                    id: currentProjectId!, // ID is guaranteed here now 
+                    name: projectTitle || "Untitled Document", // Use current title
+                    semantic_email: newSemanticEmail, 
+                    current_html: newHtml,
+                    // Add default/initial values for other required fields
+                    lastEditedAt: new Date(),
+                    createdAt: new Date(), 
+                    isArchived: false, 
+                    version: newSemanticEmail.version || 1 
+                 } as Project;
+            } else if (!prevData) {
+                 console.error("[handleSendMessage] Project data is null but project ID exists. State inconsistency?");
+                 return null; // Cannot update null
+            }
+            // Update existing project data
+            return {
+                ...prevData,
+                semantic_email: newSemanticEmail,
+                current_html: newHtml,
+                // Optionally update version if returned by backend
+                 version: newSemanticEmail.version || prevData.version, // Use version from newSemanticEmail if available
+                 lastEditedAt: new Date() // Update last edited time
+            };
+        });
+        // Update related states AFTER projectData
+        setEmailTemplate(newSemanticEmail); 
+        setHasCode(true); 
+        console.log("[handleSendMessage] Project data and related states updated.");
+
+        // --- Save Chat Messages --- 
+        const newAiMessage: ChatMessage = {
+              id: generateId(),
+            project_id: currentProjectId,
+            role: 'assistant',
+            content: aiResponseMessage || "Email updated.", // Use message from response
+            timestamp: new Date(),
         };
         
-        setChatMessages((prev) => [...prev, aiMessage]);
-        await saveChatMessage(targetProjectId, explanation, 'assistant');
-        
-        // Important: Log the received updatedTemplate for debugging
-        console.log("Received updated template from OpenAI:", JSON.stringify(updatedTemplate).substring(0, 100) + "...");
-        
-        // Ensure the updatedTemplate has a clean ID
-        if (updatedTemplate && updatedTemplate.id) {
-          updatedTemplate.id = cleanUuid(updatedTemplate.id);
+        try {
+             // Save user message (ensure ID is correct)
+             newUserMessage.project_id = currentProjectId;
+             await saveChatMessage(newUserMessage);
+             // Save AI message
+             await saveChatMessage(newAiMessage);
+             console.log("[handleSendMessage] Chat messages saved successfully.");
+             // Update UI chat state *after* successful save
+             setChatMessages((prev) => [...prev, newAiMessage]);
+        } catch (saveError) {
+            console.error("Failed to save chat messages:", saveError);
+             toast({ title: 'Warning', description: 'Failed to save chat messages.', variant: 'default' });
+             // Add AI message to UI even if save failed so user sees the response
+             setChatMessages((prev) => [...prev, newAiMessage]);
         }
-        
-        // IMPORTANT NEW STEP: Make sure any changes are properly marked as pending
-        ensureChangesAreMarkedAsPending(currentTemplateToUse, updatedTemplate);
-        
-        // Generate pending changes by comparing the old and new templates
-        const newPendingChanges = generatePendingChanges(currentTemplateToUse, updatedTemplate);
-        
-        // Log the pending changes for debugging
-        console.log("Generated pending changes:", newPendingChanges);
-        
-        // Update the email template with pending changes
-        setEmailTemplate(updatedTemplate);
-        
-        // Generate HTML from the updated template
-        const htmlOutput = await exportEmailAsHtml(updatedTemplate);
-        
-        // IMPORTANT: Ensure we always set hasCode to true when we have a template
-        setHasCode(true);
-        
-        // IMPORTANT: Immediately update the project with the changes
-        // This ensures the semantic_email field in the database is properly updated
-        await updateProjectWithEmailChanges(targetProjectId, htmlOutput, updatedTemplate);
-        
-        // Save pending changes to database
-        if (newPendingChanges.length > 0) {
-          await Promise.all(
-            newPendingChanges.map(change => 
-              savePendingChange(
-                targetProjectId,
-                change.elementId,
-                change.changeType,
-                change.oldContent,
-                change.newContent
-              )
-            )
-          );
-          
-          // Update local state with new pending changes
-          setPendingChanges((prev) => [...prev, ...newPendingChanges]);
-        } else {
-          console.log("No pending changes detected to save");
-        }
-        
-        toast({
-          title: 'Changes applied',
-          description: 'Email template updated successfully',
-        });
-        
-      } catch (error) {
-        console.error('Error processing with AI:', error);
-        toast({
-          title: 'AI Processing Error',
-          description: error.message || 'Failed to process request with AI. Please make sure the OpenAI API key is valid.',
-          variant: 'destructive',
-        });
-        
-        // Add a system message about the error with explicit 'assistant' role
-        setChatMessages((prev) => [
-          ...prev, 
-          {
-            id: generateId(),
-            content: `Error: ${error.message || 'Failed to process request with AI'}. This might be due to an issue with the OpenAI API key or service.`,
-            timestamp: new Date(),
-            role: 'assistant'
-          }
-        ]);
-      }
-      
+
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to send message',
-        variant: 'destructive',
-      });
+        console.error('[handleSendMessage] Error processing message:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Failed to get response from AI.';
+        toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+        
+        // Log the detailed error from backend if available
+        let backendErrorDetails = errorMsg;
+        if (response && !response.ok) { // Check if response exists and was not ok
+             try {
+                 // The backend might send back a stringified JSON with more details
+                 const parsedBackendError = await response.json(); 
+                 if (parsedBackendError && parsedBackendError.error) {
+                     backendErrorDetails = parsedBackendError.error; // Use the error message from the parsed object
+                     if (parsedBackendError.problematicJson) {
+                        console.error("--- Problematic JSON from Backend Start ---");
+                        console.error(parsedBackendError.problematicJson);
+                        console.error("--- Problematic JSON from Backend End ---");
+                        backendErrorDetails += " (Problematic JSON logged to console)";
+                     }
+                 } 
+             } catch (e) {
+                 // Failed to parse backend error response, stick with original message
+                 console.warn("Could not parse detailed backend error response.");
+             }
+        }
+
+        // Revert optimistic UI update for user message
+        setChatMessages(chatMessages);
+        
+        // Add specific error message to chat, using detailed message if available
+        const errorAiMessage: ChatMessage = {
+            id: generateId(),
+            project_id: currentProjectId || 'error',
+            role: 'assistant',
+            content: `Error: ${backendErrorDetails}`,
+            timestamp: new Date(),
+            isError: true,
+        };
+        setChatMessages((prev) => [...prev, errorAiMessage]);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
+        setProgress(100);
+        setTimeout(() => setProgress(0), 500);
+        console.log(`[handleSendMessage] Finished.`);
     }
-  };
+ };
 
   // Function to navigate to the send page
   const handleNavigateToSendPage = async () => {
@@ -549,476 +517,125 @@ const Editor = () => {
     }
   };
 
-  // Helper function to identify differences between templates and generate pending changes
-  const generatePendingChanges = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate): PendingChange[] => {
-    const changes: PendingChange[] = [];
-    console.log("====== TEMPLATE COMPARISON DEBUG ======");
-    console.log("Comparing templates to generate changes:");
-    console.log("Old template full:", JSON.stringify(oldTemplate));
-    console.log("New template full:", JSON.stringify(newTemplate));
-    
-    // Ensure both templates have valid IDs
-    if (oldTemplate.id) oldTemplate.id = cleanUuid(oldTemplate.id);
-    if (newTemplate.id) newTemplate.id = cleanUuid(newTemplate.id);
-    
-    console.log("=== ELEMENT BY ELEMENT COMPARISON ===");
-    // Compare each element in old and new templates to detect changes
-    newTemplate.sections.forEach((newSection, sectionIndex) => {
-      console.log(`Analyzing section ${sectionIndex} with ID ${newSection.id}`);
-      const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
-      
-      if (!oldSection) {
-        console.log(`Section ${newSection.id} is new, not found in old template`);
-      } else {
-        console.log(`Found matching section ${oldSection.id} in old template`);
-      }
-      
-      newSection.elements.forEach((newElement, elementIndex) => {
-        // Make sure the element has a valid ID
-        if (newElement.id) newElement.id = cleanUuid(newElement.id);
-        
-        console.log(`\n--- Analyzing element ${elementIndex}: ${newElement.id} of type ${newElement.type} ---`);
-        console.log(`New element full details:`, JSON.stringify(newElement));
-        
-        // Try to find matching element in old template
-        let oldElement: EmailElement | undefined;
-        let oldSectionId: string | undefined;
-        
-        if (oldSection) {
-          oldElement = oldSection.elements.find(e => e.id === newElement.id);
-          if (oldElement) {
-            oldSectionId = oldSection.id;
-            console.log(`Found matching element in same section. Old element full details:`, JSON.stringify(oldElement));
-          } else {
-            console.log(`Element ${newElement.id} not found in same section, searching all sections`);
-          }
-        }
-        
-        // If no matching element found in old section, look in all sections
-        if (!oldElement) {
-          oldTemplate.sections.forEach(s => {
-            const foundElement = s.elements.find(e => e.id === newElement.id);
-            if (foundElement) {
-              oldElement = foundElement;
-              oldSectionId = s.id;
-              console.log(`Found element ${newElement.id} in different section ${s.id}`);
-            }
-          });
-          
-          if (!oldElement) {
-            console.log(`Element ${newElement.id} is completely new, not found in any section of old template`);
-          }
-        }
-        
-        // Detect changes (modified, added or deleted elements)
-        if (newElement.pending === true) {
-          // Element is explicitly marked as pending by the AI
-          console.log(`Element ${newElement.id} is marked as pending with type ${newElement.pendingType}`);
-          
-          const change: PendingChange = {
-            id: generateId(),
-            elementId: newElement.id,
-            changeType: newElement.pendingType || 'edit',
-            status: 'pending'
-          };
-          
-          // Add old and new content based on change type
-          if (newElement.pendingType === 'add') {
-            change.newContent = {
-              element: { ...newElement },
-              sectionId: newSection.id
-            };
-            console.log(`Creating 'add' pending change for ${newElement.id}`);
-          } else if (newElement.pendingType === 'edit') {
-            if (oldElement) {
-              change.oldContent = { ...oldElement };
-              change.newContent = { ...newElement };
-              console.log(`Creating 'edit' pending change for ${newElement.id}`);
-            }
-          } else if (newElement.pendingType === 'delete') {
-            if (oldElement) {
-              change.oldContent = { ...oldElement };
-              console.log(`Creating 'delete' pending change for ${newElement.id}`);
-            }
-          }
-          
-          console.log("Created pending change from explicit mark:", change);
-          changes.push(change);
-        } 
-        // Detect style changes even if not explicitly marked as pending
-        else if (oldElement) {
-          console.log("=== STYLE COMPARISON ===");
-          // Improved style comparison logic
-          const oldStyles = oldElement.styles || {};
-          const newStyles = newElement.styles || {};
-          
-          console.log("Old styles:", JSON.stringify(oldStyles));
-          console.log("New styles:", JSON.stringify(newStyles));
-          
-          const hasStyleChanges = detectStyleChanges(oldStyles, newStyles);
-          const hasContentChanges = oldElement.content !== newElement.content;
-          
-          console.log(`Style changes detected: ${hasStyleChanges}`);
-          console.log(`Content changes detected: ${hasContentChanges}`);
-          
-          if (hasStyleChanges || hasContentChanges) {
-            console.log(`Detected style or content changes for element ${newElement.id}`);
-            
-            // Create a new element with pending flags
-            const pendingElement = {
-              ...newElement,
-              pending: true,
-              pendingType: 'edit'
-            };
-            
-            const change: PendingChange = {
-              id: generateId(),
-              elementId: newElement.id,
-              changeType: 'edit',
-              status: 'pending',
-              oldContent: { ...oldElement },
-              newContent: pendingElement
-            };
-            
-            console.log("Created style/content change:", change);
-            changes.push(change);
-            
-            // Mark the element as pending in the template
-            newElement.pending = true;
-            newElement.pendingType = 'edit';
-          } else {
-            console.log(`No style or content changes detected for element ${newElement.id}`);
-          }
-        } else {
-          console.log(`No matching element found in old template - this is a new element`);
-          // This is a new element that wasn't explicitly marked as pending
-          if (!newElement.pending) {
-            console.log(`Element ${newElement.id} is new but not marked as pending, marking it now`);
-            newElement.pending = true;
-            newElement.pendingType = 'add';
-            
-            const change: PendingChange = {
-              id: generateId(),
-              elementId: newElement.id,
-              changeType: 'add',
-              status: 'pending',
-              newContent: {
-                element: { ...newElement },
-                sectionId: newSection.id
-              }
-            };
-            
-            console.log("Created add change for unmarked new element:", change);
-            changes.push(change);
-          }
-        }
-      });
-    });
-    
-    // Check for deleted elements in the old template that are missing from the new template
-    console.log("=== CHECKING FOR DELETED ELEMENTS ===");
-    oldTemplate.sections.forEach((oldSection, sectionIndex) => {
-      console.log(`Checking section ${sectionIndex} with ID ${oldSection.id} for deleted elements`);
-      
-      oldSection.elements.forEach((oldElement, elementIndex) => {
-        // Check if this element exists in the new template
-        let foundInNew = false;
-        
-        console.log(`Checking if element ${oldElement.id} exists in new template`);
-        
-        for (const newSection of newTemplate.sections) {
-          if (newSection.elements.some(newElem => newElem.id === oldElement.id)) {
-            foundInNew = true;
-            console.log(`Element ${oldElement.id} found in new template section ${newSection.id}`);
-            break;
-          }
-        }
-        
-        if (!foundInNew) {
-          console.log(`Element ${oldElement.id} from old template is missing in new template - marking as deleted`);
-          
-          // It's been deleted - add a pending change for it
-          const change: PendingChange = {
-            id: generateId(),
-            elementId: oldElement.id,
-            changeType: 'delete',
-            status: 'pending',
-            oldContent: { ...oldElement }
-          };
-          
-          console.log("Created delete change:", change);
-          changes.push(change);
-        }
-      });
-    });
+  // Handle accepting all pending changes
+  const handleAcceptAll = async () => {
+    if (!actualProjectId) {
+      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
+      return;
+    }
+    if (pendingChanges.length === 0) {
+      toast({ title: 'Info', description: 'No pending changes to accept.' });
+      return;
+    }
 
-    // Log the final changes
-    console.log("=== FINAL PENDING CHANGES ===");
-    console.log("Generated pending changes:", changes);
-    console.log("Total pending changes: " + changes.length);
-    console.log("====== END TEMPLATE COMPARISON DEBUG ======");
-    
-    return changes;
-  };
+    setIsLoading(true); // Use main loading state? Or a specific one? Let's use main for now.
+    setProgress(30);
 
-  // Helper function to detect style changes with deep comparison
-  const detectStyleChanges = (oldStyles: Record<string, string>, newStyles: Record<string, string>): boolean => {
-    console.log("=== DETAILED STYLE COMPARISON ===");
-    
-    // Deep comparison of style objects
-    if (!oldStyles && !newStyles) {
-      console.log("Both styles are null/undefined - no change");
-      return false;
-    }
-    
-    if (!oldStyles || !newStyles) {
-      console.log("One of the styles is null/undefined - this is a change");
-      return true;
-    }
-    
-    // Check if backgroundColor has changed (with special attention and case insensitivity)
-    console.log(`Background color comparison: old=${oldStyles.backgroundColor}, new=${newStyles.backgroundColor}`);
-    
-    // Case-insensitive color comparison
-    const oldBgColor = oldStyles.backgroundColor ? oldStyles.backgroundColor.toLowerCase() : undefined;
-    const newBgColor = newStyles.backgroundColor ? newStyles.backgroundColor.toLowerCase() : undefined;
-    
-    if (oldBgColor !== newBgColor) {
-      console.log(`Background color changed from ${oldStyles.backgroundColor} to ${newStyles.backgroundColor}`);
-      return true;
-    }
-    
-    const oldKeys = Object.keys(oldStyles);
-    const newKeys = Object.keys(newStyles);
-    
-    // Different number of style properties
-    if (oldKeys.length !== newKeys.length) {
-      console.log(`Different number of style properties: old=${oldKeys.length}, new=${newKeys.length}`);
-      return true;
-    }
-    
-    // Check each style property (case-insensitive for colors)
-    for (const key of oldKeys) {
-      console.log(`Comparing style property ${key}: old=${oldStyles[key]}, new=${newStyles[key]}`);
-      
-      // For color values, do case-insensitive comparison
-      if (key.toLowerCase().includes('color')) {
-        const oldColor = oldStyles[key]?.toLowerCase();
-        const newColor = newStyles[key]?.toLowerCase();
-        
-        if (oldColor !== newColor) {
-          console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'} (case-insensitive comparison)`);
-          return true;
-        }
-      } else if (oldStyles[key] !== newStyles[key]) {
-        console.log(`Style ${key} changed from ${oldStyles[key]} to ${newStyles[key] || 'undefined'}`);
-        return true;
-      }
-    }
-    
-    // Check for new properties not in old styles
-    for (const key of newKeys) {
-      if (!oldStyles.hasOwnProperty(key)) {
-        console.log(`New style property added: ${key} = ${newStyles[key]}`);
-        return true;
-      }
-    }
-    
-    console.log("No style changes detected");
-    return false;
-  };
-
-  // New helper function to ensure changes are properly marked as pending
-  const ensureChangesAreMarkedAsPending = (oldTemplate: EmailTemplate, newTemplate: EmailTemplate) => {
-    console.log("Ensuring changes are properly marked as pending");
-    
-    newTemplate.sections.forEach(newSection => {
-      const oldSection = oldTemplate.sections.find(s => s.id === newSection.id);
-      
-      newSection.elements.forEach(newElement => {
-        if (newElement.id) newElement.id = cleanUuid(newElement.id);
-        
-        // Find corresponding old element
-        let oldElement: EmailElement | undefined;
-        
-        if (oldSection) {
-          oldElement = oldSection.elements.find(e => e.id === newElement.id);
-        }
-        
-        if (!oldElement) {
-          // Look in all sections
-          for (const section of oldTemplate.sections) {
-            const found = section.elements.find(e => e.id === newElement.id);
-            if (found) {
-              oldElement = found;
-              break;
-            }
-          }
-        }
-        
-        // If we found an old element, check for changes
-        if (oldElement) {
-          const oldStyles = oldElement.styles || {};
-          const newStyles = newElement.styles || {};
-          
-          // Check for style changes
-          const hasStyleChanges = detectStyleChanges(oldStyles, newStyles);
-          const hasContentChanges = oldElement.content !== newElement.content;
-          
-          if ((hasStyleChanges || hasContentChanges) && !newElement.pending) {
-            console.log(`Marking element ${newElement.id} as pending due to detected changes`);
-            newElement.pending = true;
-            newElement.pendingType = 'edit';
-          }
-        } else if (!newElement.pending) {
-          // This is a new element that wasn't marked as pending
-          console.log(`Marking new element ${newElement.id} as pending`);
-          newElement.pending = true;
-          newElement.pendingType = 'add';
-        }
-      });
-    });
-    
-    // Check for deleted elements
-    oldTemplate.sections.forEach(oldSection => {
-      oldSection.elements.forEach(oldElement => {
-        let foundInNew = false;
-        
-        for (const newSection of newTemplate.sections) {
-          if (newSection.elements.some(e => e.id === oldElement.id)) {
-            foundInNew = true;
-            break;
-          }
-        }
-        
-        if (!foundInNew) {
-          console.log(`Element ${oldElement.id} is missing in new template - should be marked for deletion`);
-          // We would add this element back with a pending delete flag
-          // But we'll let generatePendingChanges handle this
-        }
-      });
-    });
-  };
-
-  // Handle accepting a pending change
-  const handleAcceptChange = async (elementId: string) => {
-    if (!actualProjectId || !emailTemplate) return;
-    
     try {
-      const change = pendingChanges.find((c) => c.elementId === elementId);
-      if (!change) return;
-      
-      // Create an updated template with the accepted change
-      const updatedTemplate = { ...emailTemplate };
-      
-      // Find the element and remove pending flags
-      for (const section of updatedTemplate.sections) {
-        for (let i = 0; i < section.elements.length; i++) {
-          const element = section.elements[i];
-          
-          if (element.id === elementId) {
-            if (element.pendingType === 'delete') {
-              // Remove the element if it was pending deletion
-              section.elements.splice(i, 1);
-            } else {
-              // Otherwise just remove the pending flags
-              delete element.pending;
-              delete element.pendingType;
-            }
-            break;
-          }
-        }
-      }
-      
-      // Save the accepted change and update the template
-      await acceptPendingChange(change.id, actualProjectId, updatedTemplate);
-      
-      // Update local state
-      setEmailTemplate(updatedTemplate);
-      setPendingChanges(pendingChanges.filter((c) => c.id !== change.id));
-      
-      // IMPORTANT: Ensure hasCode remains true
-      setHasCode(true);
-      
-      toast({
-        title: 'Change accepted',
-        description: 'The change has been applied to your email',
+      console.log(`Calling manage-pending-changes with action: accept for project ${actualProjectId}`);
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+        },
+        body: JSON.stringify({
+          projectId: actualProjectId,
+          action: 'accept',
+        }),
       });
-    } catch (error) {
-      console.error('Error accepting change:', error);
+
+      setProgress(70);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to accept changes');
+      }
+
+      const result = await response.json();
       toast({
-        title: 'Error',
-        description: 'Failed to accept change',
+        title: 'Success',
+        description: result.message || 'All pending changes accepted.',
+      });
+
+      // Refresh project data to reflect accepted state
+      await loadProjectById(actualProjectId);
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
+      console.error('Error accepting all changes:', error);
+      toast({
+        title: 'Error Accepting Changes',
+        description: errorMsg,
         variant: 'destructive',
       });
+      // Optionally reload data even on error to sync with potential partial backend changes?
+      // await loadProjectById(actualProjectId);
+    } finally {
+      setIsLoading(false);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 500);
     }
   };
 
-  // Handle rejecting a pending change
-  const handleRejectChange = async (elementId: string) => {
-    if (!actualProjectId || !emailTemplate) return;
-    
+  // Handle rejecting all pending changes
+  const handleRejectAll = async () => {
+    if (!actualProjectId) {
+      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
+      return;
+    }
+     if (pendingChanges.length === 0) {
+      toast({ title: 'Info', description: 'No pending changes to reject.' });
+      return;
+    }
+
+    setIsLoading(true);
+    setProgress(30);
+
     try {
-      const change = pendingChanges.find((c) => c.elementId === elementId);
-      if (!change) return;
-      
-      // Create an updated template with the change rejected
-      const updatedTemplate = { ...emailTemplate };
-      
-      for (const section of updatedTemplate.sections) {
-        for (let i = 0; i < section.elements.length; i++) {
-          const element = section.elements[i];
-          
-          if (element.id === elementId) {
-            if (element.pendingType === 'add') {
-              // Remove added elements
-              section.elements.splice(i, 1);
-            } else if (element.pendingType === 'edit' && change.oldContent) {
-              // Restore original content for edited elements
-              section.elements[i] = {
-                ...change.oldContent,
-                id: elementId,
-              };
-            } else if (element.pendingType === 'delete') {
-              // Just remove pending flags for elements that were going to be deleted
-              delete element.pending;
-              delete element.pendingType;
-            }
-            break;
-          }
-        }
-      }
-      
-      // Reject the change in the database
-      await rejectPendingChange(change.id);
-      
-      // Generate HTML from the restored template
-      const htmlOutput = await exportEmailAsHtml(updatedTemplate);
-      
-      // UPDATE: Also update the project with the restored template
-      await updateProjectWithEmailChanges(actualProjectId, htmlOutput, updatedTemplate);
-      
-      // Update local state
-      setEmailTemplate(updatedTemplate);
-      setPendingChanges(pendingChanges.filter((c) => c.id !== change.id));
-      
-      // IMPORTANT: Ensure hasCode remains true if we still have a template with elements
-      const stillHasElements = updatedTemplate.sections.some(section => section.elements.length > 0);
-      if (stillHasElements) {
-        setHasCode(true);
-      }
-      
-      toast({
-        title: 'Change rejected',
-        description: 'The change has been discarded',
+      console.log(`Calling manage-pending-changes with action: reject for project ${actualProjectId}`);
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+        },
+        body: JSON.stringify({
+          projectId: actualProjectId,
+          action: 'reject',
+        }),
       });
-    } catch (error) {
-      console.error('Error rejecting change:', error);
+
+       setProgress(70);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to reject changes');
+      }
+
+      const result = await response.json();
       toast({
-        title: 'Error',
-        description: 'Failed to reject change',
+        title: 'Success',
+        description: result.message || 'All pending changes rejected.',
+      });
+
+      // Refresh project data to reflect rejected state
+      await loadProjectById(actualProjectId);
+
+    } catch (error) {
+       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
+      console.error('Error rejecting all changes:', error);
+      toast({
+        title: 'Error Rejecting Changes',
+        description: errorMsg,
         variant: 'destructive',
       });
+       // Optionally reload data even on error
+      // await loadProjectById(actualProjectId);
+    } finally {
+      setIsLoading(false);
+       setProgress(100);
+       setTimeout(() => setProgress(0), 500);
     }
   };
 
@@ -1107,14 +724,41 @@ const Editor = () => {
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="overflow-auto bg-neutral-100 dark:bg-neutral-950"
+            className="overflow-auto bg-neutral-100 dark:bg-neutral-950 flex flex-col"
           >
-            {/* Update Preview Controls Container - Remove label, use justify-end */}
-            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-end items-center">
-              {/* Removed Preview Mode Label */}
-              
+            {/* Preview Controls Header */}
+            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center flex-shrink-0">
+              {/* Left side (Placeholder or future use) */}
+              <div>
+                {/* Conditionally render Accept/Reject buttons */}
+                {pendingChanges && pendingChanges.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAcceptAll}
+                      disabled={isLoading}
+                      className="bg-green-50 hover:bg-green-100 border-green-300 text-green-700"
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Accept All ({pendingChanges.length})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRejectAll}
+                      disabled={isLoading}
+                      className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Reject All
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {/* Right-aligned controls wrapper */}
-              <div className="flex items-center space-x-6"> 
+              <div className="flex items-center space-x-6">
                 {/* Light/Dark Mode Switch */}
                 <div className="flex items-center space-x-2">
                   <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
@@ -1123,6 +767,7 @@ const Editor = () => {
                     checked={isDarkMode}
                     onCheckedChange={setIsDarkMode}
                     aria-label="Toggle Dark Mode"
+                    disabled={isLoading} // Disable switches during loading
                   />
                   <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
                 </div>
@@ -1135,6 +780,7 @@ const Editor = () => {
                     checked={isMobileView}
                     onCheckedChange={setIsMobileView}
                     aria-label="Toggle Mobile View"
+                    disabled={isLoading} // Disable switches during loading
                   />
                   <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
                 </div>
@@ -1142,14 +788,15 @@ const Editor = () => {
             </div>
             
             {/* Preview Content Area */}
-            <div className="p-6 h-full overflow-y-auto">
-              {!hasCode ? (
-                <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center">
+            <div className="p-6 flex-grow overflow-y-auto">
+              {!hasCode && !projectData?.current_html ? (
+                <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center h-full flex flex-col justify-center">
+                  <div>
                   <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
                   <p className="text-gray-500 mb-6">
                     Send a message to the AI assistant to start generating your email template.
-                    The AI will create an email layout based on your requirements.
                   </p>
+                  </div>
                   {isLoading && (
                     <div className="space-y-3 mt-6">
                       <p className="text-sm text-gray-500">Generating email template...</p>
@@ -1159,14 +806,20 @@ const Editor = () => {
                 </div>
               ) : (
                 <>
-                  {emailTemplate && (
+                  {/* Use projectData.current_html directly */}
                     <EmailPreview
-                      template={emailTemplate}
-                      onAcceptChange={handleAcceptChange}
-                      onRejectChange={handleRejectChange}
-                      previewMode={previewMode}
-                      previewDevice={previewDevice}
-                    />
+                    currentHtml={projectData?.current_html || null}
+                    pendingChanges={pendingChanges}
+                    previewMode={previewMode}
+                    previewDevice={previewDevice}
+                  />
+                   {isLoading && ( // Show progress overlay during any loading state
+                     <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-20">
+                        <div className="text-center">
+                            <p className="text-sm text-gray-500 mb-2">Processing...</p>
+                            <Progress value={progress} className="h-2 w-32" />
+                        </div>
+                     </div>
                   )}
                 </>
               )}
@@ -1187,7 +840,9 @@ const Editor = () => {
                 messages={chatMessages}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
-                initialInputValue={initialInputValue || ''} // Pass down the initial value
+                initialInputValue={initialInputValue} 
+                selectedMode={selectedMode}
+                onModeChange={(mode) => !isLoading && setSelectedMode(mode)}
               />
             </div>
           </ResizablePanel>
