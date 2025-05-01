@@ -333,40 +333,48 @@ serve(async (req) => {
     
     // --- Handle Initial Project State (semantic_email is null) ---
     let isFirstInteraction = false;
-    // --- IMPORTANT: Make `mode` mutable --- 
-    let currentMode = mode; // Create a mutable variable for mode
+    let currentMode = mode; // Use mutable mode variable
     if (!oldSemanticEmail) {
         console.warn(`oldSemanticEmail for project ${projectId} is null. Assuming first interaction.`);
         isFirstInteraction = true;
-        // Create a default empty template structure
+        // Create a default empty template structure in memory
         oldSemanticEmail = {
-            id: projectId, // Use project ID for template ID consistency?
-            name: 'Untitled', // Or fetch project name?
+            id: projectId, 
+            name: 'Untitled', // Consider fetching actual project name later if needed
             version: 0,
             sections: [],
             styles: {}
         };
-        console.log("Using default empty template as oldSemanticEmail.");
+        console.log("Using default empty template as oldSemanticEmail for this request.");
 
         // Force mode to 'major' for the first interaction, regardless of user selection
-        if (currentMode === 'edit') { // Check mutable mode
+        if (currentMode === 'edit') {
             console.log("Overriding mode from 'edit' to 'major' for initial content generation.");
-            currentMode = 'major'; // Update mutable mode
+            currentMode = 'major';
         }
     }
+    // --- END Initial State Handling ---
 
-    // --- Prepare AI Request based on Mode (now using potentially overridden currentMode) --- 
-    // --- Declare and initialize prompt variables AFTER potential mode override --- 
+    // Now, oldSemanticEmail is guaranteed to be an object (either fetched or default)
+
+    // --- Prepare AI Request based on Mode --- 
     let systemPrompt = '';
     let userPrompt = `User Request: ${prompt}\n\n`; // Base user prompt
     let expectJsonResponse = false;
     let expectHtmlResponse = false;
 
     const baseSystemPrompt = `You are an AI assistant helping modify email templates. Respond ONLY with the requested format. Do not include explanations or apologies.`;
+    
+    // Safety check (should always pass now due to handling above)
+    if (!oldSemanticEmail) {
+      console.error(`Critical Error: oldSemanticEmail is null for project ${projectId} despite handling logic.`);
+      throw new Error(`Internal state error: Project ${projectId} structure is missing unexpectedly.`);
+    }
+    
     const formatInstructions = `\nStructure Definitions:\ntype EmailTemplate = { id: string; name: string; version: number; sections: EmailSection[]; styles?: Record<string, any>; };\ntype EmailSection = { id: string; styles?: Record<string, any>; elements: EmailElement[]; };\ntype EmailElement = { id: string; type: 'header' | 'text' | 'button' | 'image' | 'divider' | 'spacer' | string; content?: string; styles?: Record<string, any>; };\n\nExisting Template Structure (JSON):\n\`\`\`json\n${JSON.stringify(oldSemanticEmail, null, 2)}\n\`\`\`\n    `;
 
-    // --- Assign prompts based on the final currentMode ---
-    if (currentMode === 'edit') {
+    // --- Assign prompts based on the potentially overridden currentMode ---
+    if (currentMode === 'edit') { // Use currentMode here
         console.log("Mode: Edit - Expecting JSON response.");
         expectJsonResponse = true;
         systemPrompt = `${baseSystemPrompt}\nYou will be given the current email structure as JSON and a user request.\nModify the JSON structure according to the user request.\n**CRITICAL**: Maintain the existing 'id' for elements that are modified. Generate new UUIDs ONLY for newly added elements.\nReturn ONLY the complete, updated EmailTemplate JSON object, ensuring it is **perfectly valid RFC 8259 JSON**.\n\n**ABSOLUTELY ESSENTIAL**: All string values within the JSON *must* be properly escaped. Pay close attention to:\n  - Double quotes: \" must be escaped as \\\". Example: { \"content\": \"He said \\\"Hello!\\\"\" }\n  - Backslashes: \\ must be escaped as \\\\. Example: { \"path\": \"C:\\\\Users\\\\Name\" }\n  - Newlines: A literal newline must be escaped as \\\\n. Example: { \"text\": \"First line.\\\\nSecond line.\" }\n  - Tabs: A literal tab must be escaped as \\\\t. Example: { \"data\": \"Column1\\\\tColumn2\" }\n  - Other control characters (like carriage return \\r, backspace \\b, form feed \\f) must also be escaped if they appear in strings.\n\nDouble-check your entire JSON output for syntax errors like missing commas, trailing commas, or unescaped characters before responding.\n${formatInstructions}\n`;
@@ -523,7 +531,7 @@ serve(async (req) => {
     if (!oldSemanticEmail || !Array.isArray(oldSemanticEmail.sections)) {
         console.error("Validation Failed: oldSemanticEmail is missing or its sections property is not an array before calling diff.", oldSemanticEmail);
         throw new Error("Internal Error: Could not validate existing email structure before diffing.");
-    }
+      }
     // --- End Validation ---
     
     const semanticChanges = diffSemanticEmails(oldSemanticEmail, newSemanticEmail);
@@ -541,7 +549,7 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         }
-    );
+      );
 
   } catch (error) {
     console.error('Error in generate-email-changes function:', error);
@@ -562,7 +570,7 @@ serve(async (req) => {
     
     return new Response(
         JSON.stringify(finalErrorPayload),
-        {
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: finalErrorPayload.error.includes("Invalid request") || finalErrorPayload.error.includes("not found") ? 400 : 500,
       }
