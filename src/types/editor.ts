@@ -1,4 +1,3 @@
-
 // Types for email content and pending changes
 
 export interface EmailElement {
@@ -37,9 +36,11 @@ export interface PendingChange {
 
 export interface ChatMessage {
   id: string;
+  project_id: string;
   content: string;
   timestamp: Date;
   role?: 'user' | 'assistant';
+  isError?: boolean;
 }
 
 export interface Project {
@@ -48,4 +49,15 @@ export interface Project {
   lastEditedAt: Date;
   createdAt: Date;
   isArchived: boolean;
+  current_html: string | null;
+  semantic_email: EmailTemplate | null;
+  version: number;
+}
+
+// Props for EmailPreview component
+export interface EmailPreviewProps {
+  currentHtml: string | null;
+  pendingChanges: PendingChange[];
+  previewMode: 'light' | 'dark';
+  previewDevice: 'desktop' | 'mobile';
 }

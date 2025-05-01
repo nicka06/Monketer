@@ -5,12 +5,21 @@ import { Textarea } from './ui/textarea';
 import { Send, Loader2, ChevronUp } from 'lucide-react';
 import { Avatar } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+
+// Define InteractionMode type locally or import if shared
+type InteractionMode = 'ask' | 'edit' | 'major';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
-  onSendMessage: (message: string) => Promise<void>;
+  // Update onSendMessage to accept mode
+  onSendMessage: (message: string, mode: InteractionMode) => Promise<void>; 
   isLoading: boolean;
   initialInputValue?: string;
+  // Add props for mode control
+  selectedMode: InteractionMode;
+  onModeChange: (mode: InteractionMode) => void;
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -18,6 +27,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   isLoading,
   initialInputValue,
+  selectedMode, // Receive mode state
+  onModeChange, // Receive mode change handler
 }) => {
   const [input, setInput] = useState(initialInputValue || '');
   const [displayCount, setDisplayCount] = useState(5);
@@ -28,7 +39,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setInput(initialInputValue);
     }
   }, [initialInputValue]);
-
+  
   const visibleMessages = messages.slice(-displayCount);
   const hasMoreMessages = messages.length > displayCount;
   
@@ -47,7 +58,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (input.trim() && !isLoading) {
       const message = input.trim();
       setInput('');
-      await onSendMessage(message);
+      // Pass the selectedMode when calling the prop
+      await onSendMessage(message, selectedMode); 
     }
   };
 
@@ -135,14 +147,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
       </ScrollArea>
       
-      <div className="p-3 border-t mt-auto">
+      <div className="p-3 border-t mt-auto space-y-3">
+        {/* Mode Selection Radio Group */}
+         <div className="flex justify-center">
+            <RadioGroup 
+              defaultValue={selectedMode} 
+              onValueChange={(value) => onModeChange(value as InteractionMode)} 
+              className="flex items-center space-x-4"
+              aria-label="Interaction Mode"
+              disabled={isLoading} // Disable during loading
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="ask" id="mode-ask" disabled={isLoading}/>
+                <Label htmlFor="mode-ask" className="text-xs">Ask</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="edit" id="mode-edit" disabled={isLoading}/>
+                <Label htmlFor="mode-edit" className="text-xs">Edit</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="major" id="mode-major" disabled={isLoading}/>
+                <Label htmlFor="mode-major" className="text-xs">Major Edit</Label>
+              </div>
+            </RadioGroup>
+        </div>
+        
+        {/* Text Input Area */}
         <div className="flex items-end gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder="Ask the AI to help create or modify your email..."
-            className="min-h-[80px] resize-none"
+            className="min-h-[60px] max-h-[150px] resize-none" // Adjusted height
             disabled={isLoading}
           />
           <Button

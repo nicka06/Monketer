@@ -112,9 +112,9 @@ const Dashboard = () => {
                 <TableCell>{formatDate(project.lastEditedAt.toString())}</TableCell>
                 <TableCell className="text-right">
                   {username ? (
-                    <Button variant="outline" asChild>
-                      <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
-                    </Button>
+                  <Button variant="outline" asChild>
+                    <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
+                  </Button>
                   ) : (
                     <Button variant="outline" disabled>Open</Button>
                   )}
