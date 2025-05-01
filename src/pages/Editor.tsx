@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings, Mail, Sun, Moon, Smartphone, Monitor, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,9 @@ import {
   getPendingChanges,
   createProject, 
   getProjectByNameAndUsername, 
-  getUsernameFromId,
   savePendingChange,
   exportEmailAsHtml,
-  updateProjectWithEmailChanges 
+  updateProject,
 } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
 import { generateId } from '@/lib/uuid';
@@ -65,9 +64,8 @@ const Editor = () => {
   
   const [projectData, setProjectData] = useState<Project | null>(null);
   const [actualProjectId, setActualProjectId] = useState<string | null>(null); // Store the resolved project ID
-  const [projectTitle, setProjectTitle] = useState('Untitled Document 1');
+  const [projectTitle, setProjectTitle] = useState('Untitled Document');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,120 +86,126 @@ const Editor = () => {
   
   // Load username for current user
   useEffect(() => {
-    if (user) {
-      getUsernameFromId(user.id).then(name => setCurrentUsername(name));
+    if (user?.email) {
+      setCurrentUsername(user.email);
+    } else if (user?.id) {
+      console.warn("User email not found, using fallback for username.");
+      setCurrentUsername('user'); // Or handle differently
     }
   }, [user]);
+
+  // Function to load pending changes separately
+  const loadPendingChanges = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      const changes = await getPendingChanges(projId);
+      setPendingChanges(changes || []);
+    } catch (error) {
+      console.error('Error loading pending changes:', error);
+      toast({ title: 'Warning', description: 'Could not load pending changes.' });
+      setPendingChanges([]); // Reset on error
+    }
+  }, [toast]);
+
+  // Function to load chat history separately
+  const loadChatHistory = useCallback(async (projId: string) => {
+    if (!projId) return;
+    try {
+      console.log("Chat history loading not implemented yet.");
+      setChatMessages([]); // Placeholder
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+      toast({ title: 'Warning', description: 'Could not load chat history.' });
+      setChatMessages([]); // Reset on error
+    }
+  }, [toast]);
+
+  // Function to fetch and set project data (used by useEffect and accept/reject handlers)
+  const fetchAndSetProject = useCallback(async (id: string) => {
+    try {
+      const fetchedResult = await getProject(id);
+      if (fetchedResult && fetchedResult.project) {
+        setProjectData(fetchedResult.project);
+        setProjectTitle(fetchedResult.project.name);
+        setActualProjectId(fetchedResult.project.id);
+        setHasCode(!!fetchedResult.project.current_html);
+        setChatMessages(fetchedResult.chatMessages || []);
+        setPendingChanges(fetchedResult.pendingChanges || []);
+        return fetchedResult.project;
+      } else {
+        toast({ title: 'Error', description: 'Project not found.', variant: 'destructive' });
+        navigate('/dashboard');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      toast({ title: 'Error', description: 'Failed to load project data.', variant: 'destructive' });
+      navigate('/dashboard');
+      return null;
+    }
+  }, [navigate, toast]);
 
   // Handle projectId or username/projectName route
   useEffect(() => {
     if (!user) return;
     
     const loadProjectData = async () => {
-      try {
         setIsLoadingProject(true);
+      setProjectData(null);
+      setChatMessages([]);
+      setPendingChanges([]);
+      setHasCode(false);
+      setActualProjectId(null);
         
+      try {
         // Case 1: Using the /editor/:projectId route
         if (projectId) {
-          await loadProjectById(projectId);
-          setActualProjectId(projectId);
+          console.log(`Loading project by ID: ${projectId}`);
+          await fetchAndSetProject(projectId);
         }
-        // Case 2: Using the /editor/:username/:projectName route
+        // Case 2: Using the /editor/:username/:projectName route (DEPRECATED)
         else if (username && projectName) {
+          console.log(`Loading project by name: ${projectName} for user ${username}`);
           try {
-            const project = await getProjectByNameAndUsername(decodeURIComponent(projectName), username);
-            if (project) {
-              await loadProjectById(project.id);
-              setActualProjectId(project.id);
+            const projectInfo = await getProjectByNameAndUsername(decodeURIComponent(projectName), username);
+            if (projectInfo && projectInfo.id) {
+              await fetchAndSetProject(projectInfo.id);
+            } else {
+              toast({ title: 'Error', description: 'Project not found by name.', variant: 'destructive' });
+              navigate('/dashboard');
             }
           } catch (error) {
             console.error('Error loading project by name:', error);
-            toast({
-              title: 'Error',
-              description: 'Project not found',
-              variant: 'destructive',
-            });
+            toast({ title: 'Error', description: 'Project not found or error loading by name.', variant: 'destructive' });
             navigate('/dashboard');
           }
         } 
         // Case 3: Creating a new project at /editor route
         else {
-          setProjectTitle('Untitled Document 1');
-          setEmailTemplate(null);
-          setChatMessages([]); // Always start with empty chat messages
-          setPendingChanges([]);
-          setHasCode(false);
+          console.log("No project ID or name provided, preparing for new project.");
+          setProjectTitle('Untitled Document');
           setActualProjectId(null);
 
           // Check localStorage for saved content and set as initial input value
           const savedContent = localStorage.getItem('savedEmailContent');
           if (savedContent) {
             console.log("Found saved content in localStorage:", savedContent);
-            setInitialInputValue(savedContent); // Set the initial input value state
-            localStorage.removeItem('savedEmailContent'); // Clear immediately after reading
+            setInitialInputValue(savedContent);
+            localStorage.removeItem('savedEmailContent');
             console.log("Cleared savedEmailContent from localStorage");
-          } else {
-            setInitialInputValue(null); // Ensure it's null if nothing found
-          }
-
-          setIsLoadingProject(false);
-        }
-      } catch (error) {
-        console.error('Error in loadProjectData:', error);
-        setIsLoadingProject(false);
-      }
-    };
-    
-    loadProjectData();
-  }, [projectId, username, projectName, user, navigate, toast]);
-
-  const loadProjectById = async (id: string) => {
-    try {
-      // Fetch project data including pending changes
-      const { project, chatMessages, emailContent, pendingChanges: fetchedPendingChanges } = await getProject(id);
-      
-      setProjectTitle(project.name);
-      setProjectData({
-        id: project.id,
-        name: project.name,
-        lastEditedAt: new Date(project.lastEditedAt),
-        createdAt: new Date(project.createdAt),
-        isArchived: project.isArchived,
-        current_html: project.current_html,
-        semantic_email: project.semantic_email,
-        version: project.version
-      });
-
-      const formattedMessages = chatMessages || [];
-      setChatMessages(formattedMessages);
-      setPendingChanges(fetchedPendingChanges || []); // Set pending changes from fetched data
-
-      // Use current_html for preview, semantic_email for state if available
-      if (project.semantic_email) {
-        const semanticEmail = project.semantic_email as unknown as EmailTemplate;
-        if (semanticEmail && semanticEmail.id && semanticEmail.sections && Array.isArray(semanticEmail.sections)) {
-            setEmailTemplate(semanticEmail); // Keep semantic email for future edits
-          setHasCode(true);
         } else {
-          setEmailTemplate(null);
-          setHasCode(false);
-        }
-      } else {
-        setEmailTemplate(null); // No semantic structure yet
-        setHasCode(!!project.current_html); // hasCode depends on if there's any HTML
+            setInitialInputValue(null);
+          }
       }
-
     } catch (error) {
-      console.error('Error loading project:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load project data',
-        variant: 'destructive',
-      });
+        console.error('Error in loadProjectData wrapper:', error);
     } finally {
       setIsLoadingProject(false);
     }
   };
+    
+    loadProjectData();
+  }, [projectId, username, projectName, user, navigate, toast, fetchAndSetProject]);
 
   // Simulate progress for loading animation
   useEffect(() => {
@@ -222,35 +226,36 @@ const Editor = () => {
 
   // Handle title change and potentially update project name
   const handleTitleChange = async (newTitle: string) => {
+    const originalTitle = projectData?.name || projectTitle;
     setProjectTitle(newTitle);
     
-    if (projectData?.id) {
+    if (actualProjectId) {
       try {
-        // Update project title in the database
-        const { error } = await supabase
-          .from('projects')
-          .update({ name: newTitle })
-          .eq('id', projectData.id);
-          
-        if (error) throw error;
+        const updatedProject = await updateProject(actualProjectId, { name: newTitle });
         
-        // Update URL to reflect new project name if using the username/projectName format
-        if (username && projectName && currentUsername) {
-          navigate(`/editor/${currentUsername}/${encodeURIComponent(newTitle)}`);
+        if (!updatedProject) {
+          throw new Error("Update failed to return project data.");
         }
         
-        toast({
-          title: 'Success',
-          description: 'Project name updated',
-        });
+        setProjectData(updatedProject);
+
+        if (username && projectName && currentUsername) {
+          console.warn("Updating deprecated username/projectname route");
+          navigate(`/editor/${currentUsername}/${encodeURIComponent(newTitle)}`, { replace: true });
+        } else if (actualProjectId) {
+          if (window.location.pathname !== `/editor/${actualProjectId}`) {
+            window.history.replaceState({}, '', `/editor/${actualProjectId}`);
+          }
+        }
+        
+        toast({ title: 'Success', description: 'Project name updated' });
       } catch (error) {
         console.error('Error updating project name:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to update project name',
-          variant: 'destructive',
-        });
+        toast({ title: 'Error', description: 'Failed to update project name', variant: 'destructive' });
+        setProjectTitle(originalTitle);
       }
+    } else {
+      console.log("Project not yet created, updating title state only.");
     }
   };
 
@@ -258,7 +263,7 @@ const Editor = () => {
   const handleSendMessage = async (message: string, mode: InteractionMode) => {
     console.log(`[handleSendMessage] Mode: ${mode}, ProjectID: ${actualProjectId}`);
     if (!user) {
-        toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
         return;
       }
       
@@ -266,228 +271,172 @@ const Editor = () => {
 
     // --- Prepare User Message & Update UI Optimistically ---
     const newUserMessage: ChatMessage = {
-        id: generateId(),
-        project_id: currentProjectId || 'pending_creation', // Temp ID if needed
-        role: 'user',
+      id: generateId(),
+      project_id: currentProjectId || 'pending_creation',
+      role: 'user',
         content: message,
         timestamp: new Date(),
     };
-    const tempMessages = [...chatMessages, newUserMessage];
-    setChatMessages(tempMessages);
+    setChatMessages(prev => [...prev, newUserMessage]);
     setIsLoading(true);
     setProgress(30);
 
-    let response: Response | null = null; // Declare response variable here
+    let response: Response | null = null; 
 
     try {
-        // --- Ensure Project Exists --- 
-        if (!currentProjectId) {
-             // Always create project first if it doesn't exist, regardless of mode.
-            console.log("No project ID found. Creating new project before sending message...");
-            const titleForNewProject = projectTitle || "Untitled Document"; 
-            
-             // Create a minimal project first
-             // We no longer need to pass an initial template here.
-            const newProject = await createProject(titleForNewProject); // Simplified createProject
-            currentProjectId = newProject.id;
-            setActualProjectId(currentProjectId);
-            setProjectData(newProject); // Set minimal project data
-            newUserMessage.project_id = currentProjectId; // Update message project ID
-
-            // Update URL if needed
-            if (currentUsername) {
-                window.history.pushState({}, '', `/editor/${currentUsername}/${encodeURIComponent(titleForNewProject)}`);
-            }
-            console.log("New project created with ID:", currentProjectId);
-            setHasCode(false); // Initially no code until first generation
+      // --- Ensure Project Exists --- 
+      if (!currentProjectId) {
+        console.log("No project ID found. Creating new project before sending message...");
+        const titleForNewProject = projectTitle || "Untitled Document"; 
+        
+        const newProject = await createProject(titleForNewProject);
+        if (!newProject || !newProject.id) { 
+          throw new Error('Failed to create project or project ID is missing.');
         }
-        
-        // Ensure project ID is set before proceeding
-        if (!currentProjectId) {
-             throw new Error("Project ID is still missing after creation check.");
-        }
-        
-        setProgress(50);
-        
-        // --- Prepare Payload for Edge Function --- 
-        // Remove currentTemplate/emailTemplate from payload
-        const payload = {
-            prompt: message,
-            // Send chat history *before* the current user message for context
-            chatHistory: chatMessages, 
-            mode: mode,
-            projectId: currentProjectId 
-        };
-        console.log("Sending payload to generate-email-changes:", payload);
-        
-        // --- Call Edge Function --- 
-        // Assign to the outer response variable
-        response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-            },
-            body: JSON.stringify(payload),
-        });
-        setProgress(80);
-        console.log(`[handleSendMessage] Fetch response status: ${response.status}`);
+        currentProjectId = newProject.id;
+        setActualProjectId(currentProjectId);
+        setProjectData(newProject);
+        newUserMessage.project_id = currentProjectId;
 
-        if (!response.ok) {
-            let errorData = { error: 'Unknown backend error', message: 'Response not OK' };
-            try {
-                errorData = await response.json();
-                console.error("[handleSendMessage] Backend error response body:", errorData);
-            } catch (parseError) {
-                console.error("[handleSendMessage] Failed to parse error response body:", parseError);
-                const errorText = await response.text();
-                console.error("[handleSendMessage] Backend error response text:", errorText);
-                errorData.message = errorText.substring(0, 100) || 'Failed to process request';
-            }
-            throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
+        window.history.pushState({}, '', `/editor/${currentProjectId}`); 
+        
+        console.log("New project created with ID:", currentProjectId);
+        setHasCode(!!newProject.current_html);
+        setPendingChanges([]);
       }
       
-        // --- Process Successful Response --- 
-        const result = await response.json();
-        console.log("[handleSendMessage] Success response body:", result);
+      if (!currentProjectId) {
+        throw new Error("Project ID is still missing after creation check.");
+      }
+      
+      setProgress(50);
+      
+      // --- Prepare Payload for Edge Function --- 
+      const payload = {
+        prompt: message,
+        chatHistory: chatMessages.filter(m => m.id !== newUserMessage.id), 
+        mode: mode,
+        projectId: currentProjectId 
+      };
+      console.log("Sending payload to generate-email-changes:", payload);
+      
+      // --- Call Edge Function --- 
+      response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`, 
+        },
+        body: JSON.stringify(payload),
+      });
+      setProgress(80);
+      console.log(`[handleSendMessage] Fetch response status: ${response.status}`);
 
-        // Destructure the new expected fields
-        const { message: aiResponseMessage, newSemanticEmail, newHtml } = result;
-
-        if (!newSemanticEmail || !newHtml) {
-             throw new Error("Backend response missing newSemanticEmail or newHtml.");
-        }
-        
-        // Fetch pending changes separately FIRST
-        let fetchedChanges: PendingChange[] = [];
+      if (!response.ok) {
+        let errorData = { error: 'Unknown backend error', message: 'Response not OK', problematicJson: null };
         try {
-            console.log("[handleSendMessage] Fetching pending changes...");
-            fetchedChanges = (await getPendingChanges(currentProjectId)) || [];
-            console.log(`[handleSendMessage] Fetched ${fetchedChanges.length} pending changes.`);
-        } catch (fetchChangesError) {
-            console.error("Failed to fetch pending changes:", fetchChangesError);
-            toast({ title: 'Warning', description: 'Could not fetch pending changes after update.', variant: 'default' });
-            // Set to empty array on error to avoid stale overlays
-            fetchedChanges = []; 
+          const errorJson = await response.json();
+          console.error("[handleSendMessage] Backend error response body:", errorJson);
+          errorData.error = errorJson.error || errorData.error;
+          errorData.message = errorJson.message || errorData.message;
+          errorData.problematicJson = errorJson.problematicJson || null;
+        } catch (parseError) {
+          console.error("[handleSendMessage] Failed to parse error response body:", parseError);
+          const errorText = await response.text();
+          console.error("[handleSendMessage] Backend error response text:", errorText);
+          errorData.message = errorText.substring(0, 200) || 'Failed to process request';
         }
-        
-        // NOW update pending changes state
-        setPendingChanges(fetchedChanges); 
-        console.log("[handleSendMessage] Pending changes state updated.");
-        
-        // THEN update project data state with new semantic/HTML
-        setProjectData(prevData => {
-            if (!prevData && !currentProjectId) {
-                 // If projectData was null AND we just created the project, use the new ID
-                 // This case needs careful review - projectData might be minimal after creation
-                 console.warn("[handleSendMessage] Project data was null, reconstructing after creation.");
-                 // It might be better to fetch the full project data here after creation?
-                 // For now, construct based on what we have.
-                 return { 
-                    id: currentProjectId!, // ID is guaranteed here now 
-                    name: projectTitle || "Untitled Document", // Use current title
-                    semantic_email: newSemanticEmail, 
-                    current_html: newHtml,
-                    // Add default/initial values for other required fields
-                    lastEditedAt: new Date(),
-                    createdAt: new Date(), 
-                    isArchived: false, 
-                    version: newSemanticEmail.version || 1 
-                 } as Project;
-            } else if (!prevData) {
-                 console.error("[handleSendMessage] Project data is null but project ID exists. State inconsistency?");
-                 return null; // Cannot update null
-            }
-            // Update existing project data
-            return {
-                ...prevData,
-                semantic_email: newSemanticEmail,
-                current_html: newHtml,
-                // Optionally update version if returned by backend
-                 version: newSemanticEmail.version || prevData.version, // Use version from newSemanticEmail if available
-                 lastEditedAt: new Date() // Update last edited time
-            };
-        });
-        // Update related states AFTER projectData
-        setEmailTemplate(newSemanticEmail); 
-        setHasCode(true); 
-        console.log("[handleSendMessage] Project data and related states updated.");
-            
-        // --- Save Chat Messages --- 
-        const newAiMessage: ChatMessage = {
-              id: generateId(),
-            project_id: currentProjectId,
-            role: 'assistant',
-            content: aiResponseMessage || "Email updated.", // Use message from response
-            timestamp: new Date(),
+         throw { message: errorData.error, details: errorData.message, problematicJson: errorData.problematicJson };
+      }
+      
+      // --- Process Successful Response --- 
+      const result = await response.json();
+      console.log("[handleSendMessage] Success response body:", result);
+
+      const { message: aiResponseMessage, newSemanticEmail, newHtml } = result;
+
+      if (!newSemanticEmail || !newHtml) {
+        throw new Error("Backend response missing newSemanticEmail or newHtml.");
+      }
+      
+      await loadPendingChanges(currentProjectId);
+      
+      setProjectData(prevData => {
+        if (!prevData) {
+          console.error("[handleSendMessage] Project data was null before update despite having project ID. Reconstructing.");
+          return { 
+            id: currentProjectId!, 
+            name: projectTitle || "Untitled Document", 
+            semantic_email: newSemanticEmail, 
+            current_html: newHtml,
+            lastEditedAt: new Date(),
+            createdAt: new Date(),
+            isArchived: false, 
+            version: newSemanticEmail.version || 1 
+          } as Project;
+        }
+        return {
+          ...prevData,
+          semantic_email: newSemanticEmail,
+          current_html: newHtml,
+          lastEditedAt: new Date(),
+          version: newSemanticEmail.version || prevData.version,
         };
-        
-        try {
-             // Save user message (ensure ID is correct)
-             newUserMessage.project_id = currentProjectId;
-             await saveChatMessage(newUserMessage);
-             // Save AI message
-             await saveChatMessage(newAiMessage);
-             console.log("[handleSendMessage] Chat messages saved successfully.");
-             // Update UI chat state *after* successful save
-             setChatMessages((prev) => [...prev, newAiMessage]);
-        } catch (saveError) {
-            console.error("Failed to save chat messages:", saveError);
-             toast({ title: 'Warning', description: 'Failed to save chat messages.', variant: 'default' });
-             // Add AI message to UI even if save failed so user sees the response
-             setChatMessages((prev) => [...prev, newAiMessage]);
-        }
+      });
+      setHasCode(true);
+      console.log("[handleSendMessage] Project data and related states updated.");
 
-    } catch (error) {
-        console.error('[handleSendMessage] Error processing message:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Failed to get response from AI.';
-        toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
-        
-        // Log the detailed error from backend if available
-        let backendErrorDetails = errorMsg;
-        if (response && !response.ok) { // Check if response exists and was not ok
-             try {
-                 // The backend might send back a stringified JSON with more details
-                 const parsedBackendError = await response.json(); 
-                 if (parsedBackendError && parsedBackendError.error) {
-                     backendErrorDetails = parsedBackendError.error; // Use the error message from the parsed object
-                     if (parsedBackendError.problematicJson) {
-                        console.error("--- Problematic JSON from Backend Start ---");
-                        console.error(parsedBackendError.problematicJson);
-                        console.error("--- Problematic JSON from Backend End ---");
-                        backendErrorDetails += " (Problematic JSON logged to console)";
-                     }
-          }
-             } catch (e) {
-                 // Failed to parse backend error response, stick with original message
-                 console.warn("Could not parse detailed backend error response.");
-             }
-        }
-
-        // Revert optimistic UI update for user message
-        setChatMessages(chatMessages);
-          
-        // Add specific error message to chat, using detailed message if available
-        const errorAiMessage: ChatMessage = {
+      const assistantMessage: ChatMessage = {
             id: generateId(),
-            project_id: currentProjectId || 'error',
-            role: 'assistant',
-            content: `Error: ${backendErrorDetails}`,
-            timestamp: new Date(),
-            isError: true,
-        };
-        setChatMessages((prev) => [...prev, errorAiMessage]);
+        project_id: currentProjectId,
+        role: 'assistant',
+        content: aiResponseMessage || 'Email updated.',
+        timestamp: new Date(),
+      };
+      setChatMessages(prev => [...prev, assistantMessage]);
+      
+      try {
+        await saveChatMessage(newUserMessage);
+        await saveChatMessage(assistantMessage);
+        console.log("[handleSendMessage] Chat messages saved successfully.");
+      } catch(saveError) {
+        console.error("Error saving chat messages:", saveError);
+        toast({ title: 'Warning', description: 'Could not save chat history.', variant: 'default' });
+      }
+
+    } catch (error: any) {
+      console.error("[handleSendMessage] Error processing message:", error);
+      
+      let displayError = "An unexpected error occurred.";
+      let problematicJson = null;
+      if (typeof error === 'object' && error !== null) {
+        displayError = error.message || displayError;
+        problematicJson = error.problematicJson || null;
+      } else if (typeof error === 'string') {
+        displayError = error;
+      }
+
+      const errorId = generateId();
+      const errorMessageObject: ChatMessage = {
+        id: errorId,
+        project_id: currentProjectId || 'unknown',
+        role: 'assistant',
+        content: `Error: ${displayError}${problematicJson ? `\n\nProblematic JSON:\n\`\`\`json\n${problematicJson}\n\`\`\`\`` : ''}`,
+        timestamp: new Date(),
+        isError: true,
+      };
+      setChatMessages(prev => [...prev.filter(m => m.id !== newUserMessage.id), errorMessageObject]);
+      toast({ title: 'Error', description: displayError.substring(0, 100), variant: 'destructive' });
     } finally {
-        setIsLoading(false);
-        setProgress(100);
-        setTimeout(() => setProgress(0), 500);
-        console.log(`[handleSendMessage] Finished.`);
+      setIsLoading(false);
+      setProgress(100);
+      console.log("[handleSendMessage] Finished.");
     }
- };
+  };
 
   // Function to navigate to the send page
   const handleNavigateToSendPage = async () => {
-    if (!emailTemplate) {
+    if (!projectData?.current_html) {
       toast({
         title: "Cannot Send",
         description: "Please generate an email template first.",
@@ -497,14 +446,12 @@ const Editor = () => {
     }
     
     try {
-      // Generate the HTML from the current template state
-      const currentHtml = await exportEmailAsHtml(emailTemplate);
+      // Pass the semantic email object, not the HTML string
+      const currentHtml = await exportEmailAsHtml(projectData.semantic_email); 
       
-      // Store the HTML in sessionStorage
       sessionStorage.setItem('emailHtmlToSend', currentHtml);
       console.log("Stored current email HTML in sessionStorage.");
 
-      // Navigate to the send page
       navigate('/send-email');
 
     } catch (error) {
@@ -522,13 +469,13 @@ const Editor = () => {
     if (!actualProjectId) {
       toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
       return;
-            }
+    }
     if (pendingChanges.length === 0) {
       toast({ title: 'Info', description: 'No pending changes to accept.' });
       return;
     }
 
-    setIsLoading(true); // Use main loading state? Or a specific one? Let's use main for now.
+    setIsLoading(true);
     setProgress(30);
 
     try {
@@ -558,8 +505,7 @@ const Editor = () => {
         description: result.message || 'All pending changes accepted.',
       });
 
-      // Refresh project data to reflect accepted state
-      await loadProjectById(actualProjectId);
+      await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -569,8 +515,6 @@ const Editor = () => {
         description: errorMsg,
         variant: 'destructive',
       });
-      // Optionally reload data even on error to sync with potential partial backend changes?
-      // await loadProjectById(actualProjectId);
     } finally {
       setIsLoading(false);
       setProgress(100);
@@ -619,8 +563,7 @@ const Editor = () => {
         description: result.message || 'All pending changes rejected.',
       });
 
-      // Refresh project data to reflect rejected state
-      await loadProjectById(actualProjectId);
+      await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
        const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -630,8 +573,6 @@ const Editor = () => {
         description: errorMsg,
         variant: 'destructive',
       });
-       // Optionally reload data even on error
-      // await loadProjectById(actualProjectId);
     } finally {
       setIsLoading(false);
        setProgress(100);

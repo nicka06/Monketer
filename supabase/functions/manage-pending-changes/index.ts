@@ -248,167 +248,121 @@ serve(async (req) => {
 
         // --- Get Pending Changes --- 
         console.log(`Fetching pending changes for project ID: ${projectId}`);
-        const { data: pendingChanges, error: changesError } = await supabase
+        const { data: pendingChangesData, error: changesError } = await supabase
             .from('pending_changes')
-            .select('*') // Select all columns needed for applying changes
+            .select('*') // Select all fields needed for revert logic
             .eq('project_id', projectId)
             .eq('status', 'pending')
-            .order('created_at', { ascending: true }); // Process changes in order? Maybe not critical here.
+            .order('created_at', { ascending: true }); // Order is important for applying revert correctly
 
-        if (changesError) throw new Error(`Failed to fetch pending changes: ${changesError.message}`);
+        if (changesError) {
+            throw new Error(`Failed to fetch pending changes: ${changesError.message}`);
+        }
+        const pendingChanges = pendingChangesData as PendingChange[] || []; // Type assertion
 
-        const pendingChangeIds = (pendingChanges || []).map(pc => pc.id);
-        if (pendingChangeIds.length === 0 && action === 'accept') {
-             console.log("No pending changes found to accept.");
-             // Return early? Or proceed to update timestamp?
-             return new Response(JSON.stringify({ message: "No pending changes to accept." }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-             });
+        if (pendingChanges.length === 0) {
+            return new Response(JSON.stringify({ message: "No pending changes found." }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
         }
 
-        // --- Perform Action --- 
-        let message = "";
-
+        // --- Process Action ---
         if (action === 'accept') {
-            console.log(`Action: ACCEPT for project ${projectId}`);
-            if (!pendingChanges || pendingChanges.length === 0) {
-                 throw new Error("Cannot accept: No pending changes found (internal check).");
-            }
-
-            // 1. Apply changes to semantic structure
-            const updatedSemanticEmail = applyPendingChanges(currentSemanticEmail, pendingChanges as PendingChangeInput[]);
-
-            // 2. Generate new HTML
-            const newHtml = await generateHtmlFromSemantic(updatedSemanticEmail);
-            const newVersion = currentVersion + 1;
-
-            // 3. Create Email Version Snapshot
-            console.log(`Creating snapshot for version ${newVersion} of project ${projectId}`);
-            const { error: versionError } = await supabase
-                .from('email_versions') // Assumes table named 'email_versions' exists
-                .insert({
-                    project_id: projectId,
-                    version_number: newVersion,
-                    semantic_snapshot: updatedSemanticEmail, // Save the newly accepted state
-                    created_at: new Date().toISOString() // Timestamp the version
-                 });
-             // Log error but don't necessarily fail the whole process if snapshotting fails
-            if (versionError) {
-                console.error(`Failed to save email version snapshot (v${newVersion}) for project ${projectId}:`, versionError.message);
-            }
-
-            // 4. Update Project Table
-            console.log(`Updating project ${projectId} to version ${newVersion}`);
-            const { error: updateError } = await supabase
-                .from('projects')
-                .update({
-                    semantic_email: updatedSemanticEmail,
-                    current_html: newHtml,
-                    version: newVersion,
-                    last_edited_at: new Date().toISOString()
-                })
-                .eq('id', projectId);
-            if (updateError) throw new Error(`Failed to update project: ${updateError.message}`);
-
-            // 5. Update Pending Changes Status
+            console.log(`Processing ACCEPT action for project ${projectId}`);
+            // 1. Update Pending Changes Status
+            const pendingChangeIds = pendingChanges.map(c => c.id);
             console.log(`Updating status to 'accepted' for ${pendingChangeIds.length} changes.`);
-             const { error: statusUpdateError } = await supabase
+            const { error: updateStatusError } = await supabase
                 .from('pending_changes')
                 .update({ status: 'accepted' })
                 .in('id', pendingChangeIds);
-            if (statusUpdateError) throw new Error(`Failed to update pending changes status: ${statusUpdateError.message}`);
 
-            message = `Successfully accepted ${pendingChangeIds.length} changes. Project updated to version ${newVersion}.`;
+            if (updateStatusError) {
+                throw new Error(`Failed to update pending change status: ${updateStatusError.message}`);
+            }
+
+            // 2. Create New Version Snapshot
+            const nextVersionNumber = currentVersion + 1;
+            console.log(`Creating version snapshot ${nextVersionNumber} for project ${projectId}`);
+            const { error: saveVersionError } = await supabase
+                .from('email_versions')
+                .insert({
+                    project_id: projectId,
+                    version_number: nextVersionNumber,
+                    content: currentSemanticEmail, // Snapshot the *current* accepted state
+                    created_at: new Date().toISOString()
+                });
+
+            if (saveVersionError) {
+                // Log error but maybe don't fail the whole operation?
+                console.error("Failed to save email version snapshot:", saveVersionError);
+                // Decide if this should be a critical failure or just a warning
+                // For now, we'll continue but log it.
+            }
+
+            // 3. Update Project Version Number (after successful status update and version attempt)
+            const { error: updateProjectVersionError } = await supabase
+                 .from('projects')
+                 .update({ version: nextVersionNumber, last_edited_at: new Date().toISOString() })
+                 .eq('id', projectId);
+                 
+            if (updateProjectVersionError) {
+                console.error("Failed to update project version number:", updateProjectVersionError);
+                // This is less critical than the version snapshot failing, maybe log and continue
+            }
+
+            return new Response(JSON.stringify({ message: `Accepted ${pendingChanges.length} changes. Project version updated to ${nextVersionNumber}.` }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
 
         } else if (action === 'reject') {
-            console.log(`Action: REJECT for project ${projectId}`);
+            console.log(`Processing REJECT action for project ${projectId}`);
+            // 1. Revert Semantic Email in Memory
+            console.log("Calculating reverted semantic email...");
+            const revertedSemanticEmail = applyRevert(currentSemanticEmail, pendingChanges);
+            console.log("Reverted semantic email calculated.");
 
-            // Ensure there are changes to reject before proceeding
-            if (!pendingChanges || pendingChanges.length === 0) {
-                console.log("No pending changes found to reject.");
-                // Optionally update timestamp even if no changes? Decide later.
-                return new Response(JSON.stringify({ message: "No pending changes to reject." }), {
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-                });
-            }
-
-            // 1. Apply revert logic to the current semantic email
-            console.log(`Applying revert logic using ${pendingChanges.length} pending changes.`);
-            // Ensure we pass PendingChange[], not PendingChangeInput[]
-            const revertedSemanticEmail = applyRevert(currentSemanticEmail, pendingChanges as PendingChange[]); 
-            console.log("Revert applied, resulting semantic state:", JSON.stringify(revertedSemanticEmail).substring(0, 200) + "..."); // Log reverted state for debugging
-
-            // 2. Regenerate HTML from the *reverted* semantic email
-            console.log(`Regenerating HTML from the reverted semantic state.`);
+            // 2. Regenerate HTML from Reverted State
+            console.log("Regenerating HTML from reverted state...");
             const revertedHtml = await generateHtmlFromSemantic(revertedSemanticEmail);
-            console.log("Regenerated HTML from reverted state:", revertedHtml.substring(0, 200) + "..."); // Log regenerated HTML
+            console.log("Regenerated HTML from reverted state.");
 
-            // // Use a database transaction to ensure atomicity --- Reverted for now
-            // const txResult = await supabase.rpc('manage_reject_transaction', {
-            //   _project_id: projectId,
-            //   _reverted_semantic_email: revertedSemanticEmail,
-            //   _reverted_html: revertedHtml,
-            //   _change_ids: pendingChangeIds
-            // });
-            // 
-            // if (txResult.error) {
-            //     console.error("Transaction error during reject:", txResult.error);
-            //     throw new Error(`Failed to execute reject transaction: ${txResult.error.message}`);
-            // }
+            // 3. Call the database function to perform updates atomically
+            const pendingChangeIds = pendingChanges.map(c => c.id);
+            console.log(`Calling manage_reject_transaction RPC for project ${projectId} and ${pendingChangeIds.length} changes.`);
 
-            // --- Perform updates (ideally in a transaction, but separate for now) ---
-            
-            // 3. Update Project Table with reverted state
-            console.log(`Updating project ${projectId} with reverted semantic email and HTML.`);
-            const { error: updateError } = await supabase
-                .from('projects')
-                .update({
-                    semantic_email: revertedSemanticEmail, // Update semantic state
-                    current_html: revertedHtml,          // Update HTML
-                    last_edited_at: new Date().toISOString()
-                })
-                .eq('id', projectId);
-            if (updateError) {
-                // Log the error but potentially continue to update status?
-                // Or throw here? Let's throw for now to indicate failure.
-                console.error("Failed to update project with reverted state:", updateError);
-                throw new Error(`Failed to update project with reverted state: ${updateError.message}`);
+            const { error: rpcError } = await supabase.rpc('manage_reject_transaction', {
+              _project_id: projectId,
+              _reverted_semantic_email: revertedSemanticEmail,
+              _reverted_html: revertedHtml,
+              _change_ids: pendingChangeIds
+            });
+
+            if (rpcError) {
+                console.error("Error calling manage_reject_transaction RPC:", rpcError);
+                throw new Error(`Failed to reject changes via RPC: ${rpcError.message}`);
             }
 
-            // 4. Update Pending Changes Status (after successful project update)
-            console.log(`Updating status to 'rejected' for ${pendingChangeIds.length} changes.`);
-            const { error: statusUpdateError } = await supabase
-                .from('pending_changes')
-                .update({ status: 'rejected' })
-                .in('id', pendingChangeIds);
-            if (statusUpdateError) {
-                // If this fails, the content is reverted, but overlays might still show?
-                // Log the error but don't throw, consider the main action successful.
-                console.error(`Failed to update pending changes status to rejected: ${statusUpdateError.message}`);
-                message = `Successfully rejected ${pendingChangeIds.length} changes. Project content reverted, but failed to update change status.`;
-            } else {
-                 message = `Successfully rejected ${pendingChangeIds.length} pending changes. Project content reverted.`;
-            }
+            console.log("RPC call successful. Project reverted and changes marked as rejected.");
+
+            return new Response(JSON.stringify({ message: `Rejected ${pendingChanges.length} changes. Project reverted.` }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
 
         } else {
-            throw new Error("Invalid action specified.");
+            // Should not happen based on initial check, but good practice
+            throw new Error(`Invalid action specified: ${action}`);
         }
 
-        // --- Return Success Response --- 
-        return new Response(
-            JSON.stringify({ message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-
     } catch (error) {
-        console.error('Error in manage-pending-changes function:', error);
-        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-        return new Response(
-            JSON.stringify({ error: errorMessage, message: `Error processing request: ${errorMessage}` }),
-            {
-                status: errorMessage.includes("Missing required fields") || errorMessage.includes("not found") ? 400 : 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-        );
+        console.error('Error in manage-pending-changes:', error);
+        // Include CORS headers in error responses too
+        return new Response(JSON.stringify({ error: error.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400, // Or 500 for internal errors
+        });
     }
 }); 

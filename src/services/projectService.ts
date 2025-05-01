@@ -1,158 +1,156 @@
 import { supabase, handleSupabaseError, toJson } from '@/integrations/supabase/client';
 // import { cleanUuid } from '@/integrations/supabase/client'; // Removed - now importing from uuid-utils
-import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
+import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement, EmailSection } from '@/types/editor';
 import { cleanUuid } from '@/lib/uuid-utils'; // Import from new location
+// import { SupabaseClient } from '@supabase/supabase-js'; // No longer needed as parameter
+import { generateId } from '@/lib/uuid'; // Used for default template
 
-// Create a new project
-export async function createProject(name: string, initialContent?: EmailTemplate) {
-  console.log("[createProject] Starting..."); // Log entry
-  try {
-    // Get current user ID
-    console.log("[createProject] Getting user..."); // Log before getUser
-    const { data: authData, error: authError } = await supabase.auth.getUser(); // Get whole auth response
-    
-    // Log the raw auth response
-    console.log("[createProject] Auth response:", { authData, authError }); 
+// --- Default Email Template --- 
+const defaultSemanticTemplate: EmailTemplate = {
+    id: generateId(),
+    name: 'New Email',
+    sections: [
+        {
+            id: generateId(),
+            elements: [
+                { id: generateId(), type: 'header', content: 'Welcome to your new email', styles: { fontSize: '24px', fontWeight: 'bold', color: '#333333' } },
+            ],
+            styles: { padding: '20px' },
+        },
+        {
+            id: generateId(),
+            elements: [
+                { id: generateId(), type: 'text', content: 'This is a starter template. Use the AI to help you create amazing emails.', styles: { fontSize: '16px', color: '#555555' } },
+            ],
+            styles: {},
+        },
+        {
+            id: generateId(),
+            elements: [],
+            styles: { height: '20px' },
+        }
+    ],
+    styles: { globalCss: 'body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f4f4f4; }', fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto' },
+    version: 1,
+};
 
-    // Check for auth error first
-    if (authError) {
-        console.error("[createProject] Auth error occurred:", authError);
-        throw authError; // Re-throw auth error
-    }
-    
-    // Check if user object exists within data
-    if (!authData?.user) { // Safer check for user object
-      console.error("[createProject] User object not found in auth data.");
-      throw new Error('User not authenticated or user data missing.');
-    }
-    
-    // Destructure user *after* checks
-    const user = authData.user; 
-    console.log(`[createProject] User ID: ${user.id}`);
+// --- Simple Client-Side HTML Generator (Matches basic structure of backend) ---
+function generateBasicHtml(template: EmailTemplate): string {
+    const globalStyles = template.styles.globalCss || '';
+    let bodyContent = '';
 
-    // Check if project name already exists for this user
-    console.log(`[createProject] Checking for existing project named '${name}'...`); // Log before check
-    const { data: existingProjects, error: checkError } = await supabase
-      .from('projects')
-      .select('name')
-      .eq('user_id', user.id)
-      .ilike('name', `${name}%`);
-      
-    console.log("[createProject] Existing check response:", { existingProjects, checkError }); // Log check response
-    
-    if (checkError) {
-        console.error("[createProject] Error checking existing projects:", checkError);
-        throw checkError; // Re-throw check error
-    }
-    
-    // Modify name if it already exists
-    let uniqueName = name;
-    if (existingProjects && existingProjects.length > 0) {
-        console.log("[createProject] Found existing similar names, generating unique name...");
-      // Find similar names and generate a name with an incremented number
-      const similarNames = existingProjects.map(p => p.name);
-      let counter = 1;
-      
-      while (similarNames.includes(uniqueName)) {
-        uniqueName = `${name} (${counter})`;
-        counter++;
-      }
-      console.log(`[createProject] Unique name generated: ${uniqueName}`);
-    }
+    template.sections.forEach(section => {
+        const sectionStyles = Object.entries(section.styles || {}).map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}:${v};`).join('');
+        let sectionElementsHtml = '';
+        
+        section.elements.forEach(element => {
+            const elementStyles = Object.entries(element.styles || {}).map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}:${v};`).join('');
+            let elementHtml = '';
+            switch(element.type) {
+                case 'header':
+                    elementHtml = `<h1 id="${element.id}" style="margin:0; ${elementStyles}">${element.content}</h1>`;
+                    break;
+                case 'text':
+                    elementHtml = `<p id="${element.id}" style="margin:0; ${elementStyles}">${element.content}</p>`;
+                    break;
+                case 'button': // Basic button rendering
+                    // Note: This is simpler than the backend's table-based button for compatibility.
+                    // It might look different in some email clients.
+                    elementHtml = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto; ${elementStyles}"><tr><td style="text-align: center;" bgcolor="#007bff"><a href="#" target="_blank" id="${element.id}" style="display: inline-block; color: #ffffff; background: #007bff; border: solid 1px #007bff; border-radius: 5px; box-sizing: border-box; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-transform: capitalize; border-color: #007bff;">${element.content}</a></td></tr></table>`;
+                    break;
+                 case 'spacer': // Add basic spacer rendering
+                    elementHtml = `<div id="${element.id}" style="height: ${element.styles?.height || '20px'}; ${elementStyles}"></div>`; // Assuming height is in styles
+                    break;
+                // Add other element types as needed (image, divider etc.)
+                default:
+                     elementHtml = `<div id="${element.id}" style="${elementStyles}">Unsupported element: ${element.type}</div>`;
+            }
+            // Wrap each element for potential padding/margin from styles
+            sectionElementsHtml += `<tr><td style="padding: 5px 10px;">${elementHtml}</td></tr>`; 
+        });
 
-    console.log(`[createProject] Inserting project '${uniqueName}'...`); // Log before insert
-    const { data: project, error: projectError } = await supabase
+        bodyContent += `
+            <!-- Section Start: ${section.id} -->
+            <tr>
+                <td id="section-${section.id}" style="${sectionStyles}">
+                    <table role="presentation" style="width:100%; border-collapse:collapse; border:0; border-spacing:0;">
+                        ${sectionElementsHtml}
+                    </table>
+                </td>
+            </tr>
+            <!-- Section End: ${section.id} -->
+        `;
+    });
+
+    return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${template.name}</title>
+            <style>
+                /* Basic Resets */
+                body { margin: 0; padding: 0; font-family: sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+                table { border-collapse: collapse; border-spacing: 0; }
+                td { padding: 0; vertical-align: top; }
+                img { border: 0; -ms-interpolation-mode: bicubic; max-width: 100%; }
+                a { text-decoration: none; color: inherit; }
+                /* Global Styles */
+                ${globalStyles}
+            </style>
+        </head>
+        <body style="margin:0; padding:0; word-spacing:normal;">
+            <table role="presentation" style="width:100%; border-collapse:collapse; border:0; border-spacing:0; background:#ffffff;">
+                <tr>
+                    <td align="center" style="padding:0;">
+                        <table role="presentation" class="email-container" style="width:602px; max-width: 602px; border-collapse:collapse; border:1px solid #cccccc; border-spacing:0; text-align:left;">
+                            ${bodyContent}
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+    `.trim();
+}
+
+// --- Project Service Functions (Consolidated) --- 
+
+export const createProject = async (name: string): Promise<Project | null> => {
+    try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error("User not authenticated.");
+        
+        const userId = userData.user.id;
+        const username = userData.user.email; // Or another field if preferred
+
+        const defaultHtml = generateBasicHtml(defaultSemanticTemplate);
+
+        const { data, error } = await supabase
       .from('projects')
       .insert({
-        name: uniqueName,
-        user_id: user.id,
-        last_edited_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
+                name: name,
+                user_id: userId,
+                semantic_email: defaultSemanticTemplate as any, // Use the default template
+                current_html: defaultHtml, // Use the generated HTML
+                last_edited_at: new Date(),
+                version: 1
       })
       .select()
       .single();
-      
-    console.log("[createProject] Insert response:", { project, projectError }); // Log insert response
 
-    if (projectError) {
-        console.error("[createProject] Error inserting project:", projectError);
-        throw projectError; // Re-throw insert error
-    }
-    
-    // If initial content is provided, create first version and update HTML/semantic fields
-    if (initialContent) {
-        console.log(`[createProject] Initial content provided, updating project ID ${project.id}...`); // Log before update
-      // Convert template to HTML
-      const htmlOutput = convertTemplateToHtml(initialContent);
-      
-      // Update project with HTML and semantic data
-      const { error: updateError } = await supabase
-        .from('projects')
-        .update({
-          current_html: htmlOutput,
-          semantic_email: toJson(initialContent), // Use toJson helper 
-          last_edited_at: new Date().toISOString(),
-          // Make sure to set initial version number here
-          version: 1 
-        })
-        .eq('id', project.id);
-        
-        console.log("[createProject] Update response:", { updateError }); // Log update response
-        
-      if (updateError) {
-        console.error("[createProject] Error updating project after insert:", updateError);
-        throw updateError; // Re-throw update error
-      }
-    }
+        if (error) {
+            console.error("Error creating project:", error);
+            throw error;
+        }
 
-    // Convert from database schema to our app schema
-    // Fetch the potentially updated project data after the update
-    console.log(`[createProject] Re-fetching project data for ID ${project.id}...`); // Log before select
-    const { data: updatedProjectData, error: fetchError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', project.id)
-        .single();
-        
-    console.log("[createProject] Final select response:", { updatedProjectData, fetchError }); // Log select response
-        
-    if (fetchError) {
-        console.error("[createProject] Could not re-fetch project data after initial creation update:", fetchError);
-        // Don't throw here, just warn and return potentially incomplete data
-        console.warn("Returning potentially incomplete project data due to fetch error.");
-        // Fallback to original data if re-fetch fails
-         return {
-          id: project.id,
-          name: project.name,
-          lastEditedAt: new Date(project.last_edited_at),
-          createdAt: new Date(project.created_at),
-          isArchived: project.is_archived,
-          current_html: project.current_html, // Might be null if initialContent wasn't provided
-          semantic_email: project.semantic_email, // Might be null
-          version: project.version // Might be default/null
-        } as Project;
-    }
-    
-    // Return the fully populated project data
-    console.log("[createProject] Successfully created and fetched project.");
-    return {
-      id: updatedProjectData.id,
-      name: updatedProjectData.name,
-      lastEditedAt: new Date(updatedProjectData.last_edited_at),
-      createdAt: new Date(updatedProjectData.created_at),
-      isArchived: updatedProjectData.is_archived,
-      current_html: updatedProjectData.current_html,
-      semantic_email: updatedProjectData.semantic_email,
-      version: updatedProjectData.version
-    } as Project;
-
+        return data as Project;
   } catch (error) {
-    // Log the raw error object structure as well
-    console.error('[createProject] Error caught:', error);
-    console.error('[createProject] Raw error structure:', JSON.stringify(error, null, 2)); 
-    throw error;
+        console.error("Exception in createProject:", error);
+        return null;
   }
-}
+};
 
 // New function to update project with email changes
 export async function updateProjectWithEmailChanges(
@@ -495,62 +493,43 @@ export async function getProject(projectId: string) {
 }
 
 // Save a chat message (updated signature)
-export async function saveChatMessage(message: ChatMessage) {
+export async function saveChatMessage(message: ChatMessage): Promise<ChatMessage | null> {
   try {
-    const { error } = await supabase
+    // Explicitly list columns to insert, omitting timestamp (assuming DB uses created_at)
+    const { data, error } = await supabase
       .from('chat_messages')
       .insert({
-        id: message.id, // Use ID from message object
-        project_id: message.project_id,
-        content: message.content,
-        role: message.role || 'user' // Default to user if role is missing
-      });
+          id: message.id, 
+          project_id: message.project_id,
+          role: message.role,
+          content: message.content
+          // timestamp field removed
+      })
+      .select()
+      .single();
 
-    if (error) handleSupabaseError(error);
+    if (error) throw error;
+    return data as ChatMessage;
   } catch (error) {
-    console.error('Error saving chat message:', error);
-    throw error;
+    console.error("Error saving chat message:", error);
+    return null;
   }
 }
 
 // Save pending change
-export async function savePendingChange(
-  projectId: string,
-  elementId: string,
-  changeType: 'add' | 'edit' | 'delete',
-  oldContent?: any,
-  newContent?: any
-) {
+export async function savePendingChange(change: PendingChange) {
   try {
-    console.log(`Saving pending change for element ${elementId} of type ${changeType}`);
-    console.log("Old content:", oldContent ? JSON.stringify(oldContent).substring(0, 100) + "..." : "null");
-    console.log("New content:", newContent ? JSON.stringify(newContent).substring(0, 100) + "..." : "null");
-    
-    // Clean the element ID
-    elementId = cleanUuid(elementId);
-    
     const { data, error } = await supabase
       .from('pending_changes')
-      .insert({
-        project_id: projectId,
-        element_id: elementId,
-        change_type: changeType,
-        old_content: oldContent ? toJson(oldContent) : null, // Use toJson helper
-        new_content: newContent ? toJson(newContent) : null, // Use toJson helper
-      })
-      .select();
+      .insert(change)
+      .select()
+      .single();
 
-    if (error) {
-      console.error("Error saving pending change:", error);
-      handleSupabaseError(error);
-      throw error;
-    }
-    
-    console.log("Pending change saved successfully:", data);
-    return data[0];
+    if (error) throw error;
+    return data as PendingChange;
   } catch (error) {
-    console.error('Error saving pending change:', error);
-    throw error;
+    console.error("Error saving pending change:", error);
+    return null;
   }
 }
 
@@ -578,7 +557,7 @@ export async function acceptPendingChange(changeId: string, projectId: string, u
     const nextVersionNumber = versions && versions.length > 0 ? versions[0].version_number + 1 : 1;
 
     // Convert template to HTML
-    const htmlOutput = convertTemplateToHtml(updatedEmailContent);
+    const htmlOutput = generateBasicHtml(updatedEmailContent);
 
     const { error: saveVersionError } = await supabase
       .from('email_versions')
@@ -618,24 +597,12 @@ export async function rejectPendingChange(changeId: string) {
 
 // Export the email as HTML
 export async function exportEmailAsHtml(template: EmailTemplate): Promise<string> {
-  // Generate HTML from template
-  const html = convertTemplateToHtml(template);
-  
-  // If we're exporting from a project, also save it to the database
-  if (template.id) {
-    try {
-      // Try to update the current_html field of the project
-      // We don't want to throw if this fails, as the primary goal is to return the HTML
-      await supabase
-        .from('projects')
-        .update({ current_html: html })
-        .eq('id', template.id);
-    } catch (err) {
-      console.error('Failed to update project HTML during export:', err);
-    }
+  try {
+    return generateBasicHtml(template);
+  } catch (error) {
+    console.error("Error exporting email as HTML:", error);
+    return `<p>Error generating HTML: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
   }
-  
-  return html;
 }
 
 // Fetch pending changes for a project
@@ -650,7 +617,8 @@ export async function getPendingChanges(projectId: string): Promise<PendingChang
       .from('pending_changes')
       .select('*') // Select all columns from pending_changes
       .eq('project_id', projectId)
-      .order('created_at', { ascending: true }); // Optional: order by creation time
+      .eq('status', 'pending') // Only fetch pending changes
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error(`[getPendingChanges] Error fetching pending changes for project ${projectId}:`, error);
@@ -665,5 +633,23 @@ export async function getPendingChanges(projectId: string): Promise<PendingChang
   } catch (error) {
     console.error('[getPendingChanges] Unexpected error:', error);
     return []; // Return empty array on unexpected error
+  }
+}
+
+// Updates a project with the given data
+export async function updateProject(projectId: string, dataToUpdate: Partial<Project>): Promise<Project | null> {
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ ...dataToUpdate, last_edited_at: new Date() })
+      .eq('id', cleanUuid(projectId))
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Project;
+  } catch (error) {
+    console.error(`Error updating project ${projectId}:`, error);
+    return null;
   }
 }

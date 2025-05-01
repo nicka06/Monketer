@@ -11,157 +11,15 @@ import {
     corsHeaders
 } from '../_shared/types.ts';
 import { generateHtmlFromSemantic, parseHtmlToSemantic } from '../_shared/html-utils.ts'; // Need both generation and parsing
+import { diffSemanticEmails } from '../_shared/diff-utils.ts'; // Import from shared file
 
-// Type for the object returned by the diff function (matches structure needed for insertion)
-// We'll call this DiffResult to distinguish from PendingChangeInput which includes project_id/status
+// Type alias for diff result
 type DiffResult = Omit<PendingChangeInput, 'project_id' | 'status'>;
 
-// Get the OpenAI API key from environment variables
+// Get environment variables
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-// Helper function to clean JSON string by removing comments and trailing commas
-function cleanJsonString(jsonStr: string): string {
-  // Remove comments and trailing commas first
-  let cleaned = jsonStr
-    .replace(/\/\/.*$/gm, '') // Remove single-line comments
-    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
-    .replace(/,(\s*[\]}])/g, '$1'); // Remove trailing commas
-
-  // Fix unescaped newlines within string literals
-  cleaned = cleaned.replace(/(\"((?:\\\\\"|[^\"\\n])*?)(\\n)(.*?)\")/g, (match, p1) => {
-      const fixedContent = p1.replace(/\\n/g, '\\\\n');
-      return fixedContent;
-  });
-
-  // Fix unescaped tabs within string literals
-  cleaned = cleaned.replace(/(\"((?:\\\\\"|[^\"\\t])*?)(\\t)(.*?)\")/g, (match, p1) => {
-      const fixedContent = p1.replace(/\\t/g, '\\\\t');
-      return fixedContent;
-  });
-
-  return cleaned;
-}
-
-// --- Diffing Logic --- 
-
-// Helper function for deep comparison of style objects
-function areStylesEqual(style1?: Record<string, any>, style2?: Record<string, any>): boolean {
-  if (!style1 && !style2) return true;
-  if (!style1 || !style2) return false;
-  const keys1 = Object.keys(style1);
-  const keys2 = Object.keys(style2);
-  if (keys1.length !== keys2.length) return false;
-  for (const key of keys1) {
-    if (!style2.hasOwnProperty(key) || style1[key] !== style2[key]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Diff function to compare old and new templates and generate diff results
-// Updated return type to DiffResult[]
-function diffSemanticEmails(
-    oldSemantic: EmailTemplate | null,
-    newSemantic: EmailTemplate
-): Array<DiffResult> {
-  // --- Add Logging Here --- 
-  console.log("--- diffSemanticEmails: oldSemantic Start ---");
-  console.log(JSON.stringify(oldSemantic, null, 2));
-  console.log("--- diffSemanticEmails: oldSemantic End ---");
-  console.log("--- diffSemanticEmails: newSemantic Start ---");
-  console.log(JSON.stringify(newSemantic, null, 2));
-  console.log("--- diffSemanticEmails: newSemantic End ---");
-  // --- End Logging ---
-  
-  const changes: Array<DiffResult> = [];
-
-  // 1. Handle Null oldSemantic (shouldn't happen with new logic but keep for safety)
-  if (!oldSemantic) {
-    console.warn("Diff: oldSemantic was null, treating all as additions.");
-    newSemantic.sections.forEach(section => {
-      section.elements.forEach(element => {
-        changes.push({
-          element_id: element.id,
-          change_type: 'add',
-          old_content: null,
-          new_content: { ...element, targetSectionId: section.id } // Include target section for adds
-        });
-      });
-    });
-    return changes;
-  }
-
-  // 2. Map Old Elements for quick lookup & Store Section ID
-  const oldElementsMap = new Map<string, { element: EmailElement, sectionId: string }>();
-  oldSemantic.sections.forEach(section => {
-    if (!section || !Array.isArray(section.elements)) {
-        console.warn(`[diffSemanticEmails] Skipping old section ${section?.id} because elements array is missing or invalid.`);
-        return;
-    }
-    section.elements.forEach(element => {
-      oldElementsMap.set(element.id, { element: element, sectionId: section.id });
-    });
-  });
-
-  // 3. Iterate New Elements to find additions and edits
-  const newElementIds = new Set<string>();
-  newSemantic.sections.forEach(section => {
-    if (!section || !Array.isArray(section.elements)) {
-        console.warn(`[diffSemanticEmails] Skipping new section ${section?.id} because elements array is missing or invalid.`);
-        return;
-    }
-    section.elements.forEach(newElement => {
-      newElementIds.add(newElement.id);
-      const oldElementData = oldElementsMap.get(newElement.id);
-
-      if (!oldElementData) {
-        // 4a. Element is new (Add)
-        console.log(`Diff: Element ${newElement.id} is ADDED to section ${section.id}.`);
-        changes.push({
-          element_id: newElement.id,
-          change_type: 'add',
-          old_content: null,
-          new_content: { ...newElement, targetSectionId: section.id }
-        });
-      } else {
-        const oldElement = oldElementData.element;
-        // 4b. Element exists, check for modifications (Edit)
-        const contentChanged = newElement.content !== oldElement.content;
-        const stylesChanged = !areStylesEqual(newElement.styles, oldElement.styles);
-        const typeChanged = newElement.type !== oldElement.type;
-
-        if (contentChanged || stylesChanged || typeChanged) {
-          console.log(`Diff: Element ${oldElement.id} is EDITED.`);
-          changes.push({
-            element_id: oldElement.id,
-            change_type: 'edit',
-            old_content: { content: oldElement.content, styles: oldElement.styles, type: oldElement.type },
-            new_content: { content: newElement.content, styles: newElement.styles, type: newElement.type }
-          });
-        }
-      }
-    });
-  });
-
-  // 5. Iterate Old Elements Map to find deletions
-  oldElementsMap.forEach((oldElementData, elementId) => {
-    if (!newElementIds.has(elementId)) {
-      console.log(`Diff: Element ${elementId} is DELETED from section ${oldElementData.sectionId}.`);
-      changes.push({
-        element_id: elementId,
-        change_type: 'delete',
-        old_content: { ...oldElementData.element, originalSectionId: oldElementData.sectionId }, // Store old element + original section ID
-        new_content: null
-      });
-    }
-  });
-
-  console.log(`Diff: Found ${changes.length} changes.`);
-  return changes;
-}
 
 // --- Database Interaction Helpers ---
 
@@ -331,78 +189,64 @@ serve(async (req) => {
     // --- Fetch Current Project State --- (Essential for the new logic)
     let { oldSemanticEmail, oldHtml } = await getProjectData(supabase, projectId);
     
-    // --- Handle Initial Project State (semantic_email is null) ---
-    let isFirstInteraction = false;
-    let currentMode = mode; // Use mutable mode variable
-    if (!oldSemanticEmail) {
-        console.warn(`oldSemanticEmail for project ${projectId} is null. Assuming first interaction.`);
-        isFirstInteraction = true;
-        // Create a default empty template structure in memory
-        oldSemanticEmail = {
-            id: projectId, 
-            name: 'Untitled', // Consider fetching actual project name later if needed
-            version: 0,
-            sections: [],
-            styles: {}
-        };
-        console.log("Using default empty template as oldSemanticEmail for this request.");
-
-        // Force mode to 'major' for the first interaction, regardless of user selection
-        if (currentMode === 'edit') {
-            console.log("Overriding mode from 'edit' to 'major' for initial content generation.");
-            currentMode = 'major';
-        }
-    }
-    // --- END Initial State Handling ---
-
-    // Now, oldSemanticEmail is guaranteed to be an object (either fetched or default)
+    // Use the mode directly from requestData
+    const currentMode = mode; 
 
     // --- Prepare AI Request based on Mode --- 
     let systemPrompt = '';
-    let userPrompt = `User Request: ${prompt}\n\n`; // Base user prompt
+    let userPrompt = `User Request: ${prompt}\n\n`; 
     let expectJsonResponse = false;
     let expectHtmlResponse = false;
-
     const baseSystemPrompt = `You are an AI assistant helping modify email templates. Respond ONLY with the requested format. Do not include explanations or apologies.`;
     
-    // Safety check (should always pass now due to handling above)
     if (!oldSemanticEmail) {
-      console.error(`Critical Error: oldSemanticEmail is null for project ${projectId} despite handling logic.`);
+      console.error(`Critical Error: oldSemanticEmail is null for project ${projectId}. This should not happen.`);
       throw new Error(`Internal state error: Project ${projectId} structure is missing unexpectedly.`);
     }
     
     const formatInstructions = `\nStructure Definitions:\ntype EmailTemplate = { id: string; name: string; version: number; sections: EmailSection[]; styles?: Record<string, any>; };\ntype EmailSection = { id: string; styles?: Record<string, any>; elements: EmailElement[]; };\ntype EmailElement = { id: string; type: 'header' | 'text' | 'button' | 'image' | 'divider' | 'spacer' | string; content?: string; styles?: Record<string, any>; };\n\nExisting Template Structure (JSON):\n\`\`\`json\n${JSON.stringify(oldSemanticEmail, null, 2)}\n\`\`\`\n    `;
 
-    // --- Assign prompts based on the potentially overridden currentMode ---
-    if (currentMode === 'edit') { // Use currentMode here
-        console.log("Mode: Edit - Expecting JSON response.");
-        expectJsonResponse = true;
-        systemPrompt = `${baseSystemPrompt}\nYou will be given the current email structure as JSON and a user request.\nModify the JSON structure according to the user request.\n**CRITICAL**: Maintain the existing 'id' for elements that are modified. Generate new UUIDs ONLY for newly added elements.\nReturn ONLY the complete, updated EmailTemplate JSON object, ensuring it is **perfectly valid RFC 8259 JSON**.\n\n**ABSOLUTELY ESSENTIAL**: All string values within the JSON *must* be properly escaped. Pay close attention to:\n  - Double quotes: \" must be escaped as \\\". Example: { \"content\": \"He said \\\"Hello!\\\"\" }\n  - Backslashes: \\ must be escaped as \\\\. Example: { \"path\": \"C:\\\\Users\\\\Name\" }\n  - Newlines: A literal newline must be escaped as \\\\n. Example: { \"text\": \"First line.\\\\nSecond line.\" }\n  - Tabs: A literal tab must be escaped as \\\\t. Example: { \"data\": \"Column1\\\\tColumn2\" }\n  - Other control characters (like carriage return \\r, backspace \\b, form feed \\f) must also be escaped if they appear in strings.\n\nDouble-check your entire JSON output for syntax errors like missing commas, trailing commas, or unescaped characters before responding.\n${formatInstructions}\n`;
-         userPrompt += `Based on the existing template structure provided in the system prompt, modify it according to the request and return the complete, strictly valid, updated JSON object.`;
+    // Define the base request body structure
+    const apiRequestBody: { 
+      model: string; 
+      messages: { role: string; content: string }[]; 
+      temperature: number; 
+      response_format?: { type: string }; // Optional response_format
+    } = {
+         model: 'gpt-4o', 
+         messages: [], // Will be populated below
+         temperature: 0.5,
+     };
 
+    if (currentMode === 'edit') {
+        console.log("Mode: Edit - Expecting JSON response (JSON mode enabled).");
+        expectJsonResponse = true;
+        systemPrompt = `${baseSystemPrompt}\nYou will be given the current email structure as JSON and a user request.\nModify the JSON structure according to the user request.\n**CRITICAL**: Maintain the existing 'id' for elements that are modified. Generate new UUIDs ONLY for newly added elements.\nReturn ONLY the complete, updated EmailTemplate JSON object.\n**You MUST output a single, valid JSON object and nothing else.**\n${formatInstructions}\n`;
+         userPrompt += `Based on the existing template structure provided in the system prompt, modify it according to the request and return the complete, valid JSON object.`;
+         apiRequestBody.response_format = { type: "json_object" }; // Enable JSON mode
     } else { // mode === 'major'
         console.log("Mode: Major Edit - Expecting HTML response.");
         expectHtmlResponse = true;
-        systemPrompt = `${baseSystemPrompt}\nYou will be given the current email structure as JSON (which might be empty for the first request) and a user request.\nGenerate the complete, new HTML code for the email based *only* on the user request, using the provided JSON structure only as context for the request.\nReturn ONLY the raw HTML code, starting with <!DOCTYPE html>. Do not include markdown formatting like \`\`\`html.\n${formatInstructions}`; // Include structure for context
+        systemPrompt = `${baseSystemPrompt}\nYou will be given the current email structure as JSON (which might be empty for the first request) and a user request.\nGenerate the complete, new HTML code for the email based *only* on the user request, using the provided JSON structure only as context for the request.\nReturn ONLY the raw HTML code, starting with <!DOCTYPE html>. Do not include markdown formatting like \`\`\`html.\n${formatInstructions}`; 
         userPrompt += `Based on the user request (and using the provided JSON structure only as context), generate the complete new HTML for the email. Return ONLY raw HTML.`;
+        // No JSON mode needed for HTML
     }
 
+    // Assign messages to the request body AFTER defining system/user prompts
+    apiRequestBody.messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+    ];
+
     // --- Call OpenAI --- 
-    console.log("Sending request to OpenAI...");
+    console.log("Sending request to OpenAI with body:", JSON.stringify(apiRequestBody)); // Log the final request body
     const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openAIApiKey}`,
+            'Authorization': `Bearer ${openAIApiKey}`,
         },
-        body: JSON.stringify({
-            model: 'gpt-4o', 
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.5,
-        }),
+        body: JSON.stringify(apiRequestBody), // Use the fully constructed request body
       });
 
     if (!aiResponse.ok) {
@@ -422,102 +266,50 @@ serve(async (req) => {
     // --- Process AI Response --- 
     let newSemanticEmail: EmailTemplate;
     let newHtml: string;
-    let cleanedJson = ''; // Define cleanedJson here to be accessible in catch block
 
     if (expectJsonResponse) {
-        console.log("Processing JSON response...");
+        console.log("Processing JSON response (JSON mode enabled)...");
         try {
-            console.log("--- Raw AI Content Start ---");
-            console.log(aiContent);
-            console.log("--- Raw AI Content End ---");
+            console.log("--- Raw AI Content Start (JSON mode) ---");
+            console.log(aiContent); // Should be valid JSON now
+            console.log("--- Raw AI Content End (JSON mode) ---");
 
-            cleanedJson = cleanJsonString(aiContent);
+            // Directly parse the content, assuming API enforces valid JSON
+            newSemanticEmail = JSON.parse(aiContent);
+            console.log("Direct JSON parse successful (JSON mode).");
 
-            console.log("--- Cleaned AI Content (before parsing attempts) Start ---");
-            console.log(cleanedJson);
-            console.log("--- Cleaned AI Content (before parsing attempts) End ---");
-
-            // --- Attempt to parse JSON --- 
-            let parsedSuccessfully = false;
-            try {
-                // Attempt 1: Parse the cleaned content directly
-                console.log("Attempting direct JSON parse...");
-                newSemanticEmail = JSON.parse(cleanedJson);
-                parsedSuccessfully = true;
-                console.log("Direct JSON parse successful.");
-            } catch (directParseError) {
-                console.warn("Direct JSON parse failed. Trying extraction from markdown...");
-                // Attempt 2: Extract from ```json ... ``` block
-                const jsonMatch = cleanedJson.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonMatch && jsonMatch[1]) {
-                    const extractedJson = jsonMatch[1];
-                    console.log("--- Extracted JSON String Start ---");
-                    console.log(extractedJson);
-                    console.log("--- Extracted JSON String End ---");
-                    try {
-                        newSemanticEmail = JSON.parse(extractedJson);
-                        parsedSuccessfully = true;
-                        console.log("JSON parse from markdown block successful.");
-                    } catch (markdownParseError) {
-                        console.error("Failed to parse JSON extracted from markdown block:", markdownParseError);
-                        // Keep the original directParseError as the primary cause
-                        throw directParseError; // Re-throw the more likely original error
-                    }
-                } else {
-                    // If no markdown block found and direct parse failed, throw original error
-                    console.error("No JSON markdown block found after direct parse failed.");
-                    throw directParseError; 
-                }
-            }
-            
-            if (!parsedSuccessfully) {
-                // This should technically be unreachable if the logic above is correct
-                 throw new Error("Failed to parse JSON using direct or markdown extraction methods.");
-            }
-
-            // If parsing succeeded one way or another:
-            // --- Add Validation for Parsed Structure ---
+            // Semantic validation (check for sections array)
             if (!newSemanticEmail || !Array.isArray(newSemanticEmail.sections)) {
-                console.error("Parsed JSON is missing sections array:", newSemanticEmail);
-                throw new Error("AI returned invalid structure: EmailTemplate must have a sections array.");
+                console.error("Parsed JSON object is missing the required 'sections' array.");
+                throw new Error("AI returned JSON object missing sections array.");
             }
-            // --- End Validation ---
             
             newHtml = await generateHtmlFromSemantic(newSemanticEmail);
             console.log("Generated HTML from new semantic structure.");
 
         } catch (error) {
-            console.error('Error processing JSON response:', error);
-            console.error('Original AI content:', aiContent);
-            // --- Add Backend Logging for Problematic JSON ---
-            console.error("--- Problematic Cleaned JSON (Backend Log) Start ---");
-            console.error(cleanedJson);
-            console.error("--- Problematic Cleaned JSON (Backend Log) End ---");
-            // --- End Logging ---
+            console.error('Error processing JSON response (JSON mode):', error);
+            console.error('Raw AI content received:', aiContent);
             const errorMessage = `Failed to parse or process AI JSON response: ${error.message}`;
-            const errorPayload = {
-                 message: errorMessage,
-                 // Ensure key matches what the outer catch block expects
-                 problematicContent: cleanedJson 
-            };
+            // Return raw content in case of unexpected parse error even with JSON mode
+            const errorPayload = { message: errorMessage, problematicContent: aiContent }; 
             throw new Error(JSON.stringify(errorPayload)); 
         }
     } else { // expectHtmlResponse (Major Edit)
         console.log("Processing HTML response...");
         try {
              newHtml = aiContent; 
-             // --- Add Logging for Raw AI HTML (Truncated) ---
              console.log("--- Raw AI HTML Content Start (First 1000 chars) ---");
              console.log(newHtml?.substring(0, 1000) + (newHtml?.length > 1000 ? "..." : ""));
              console.log("--- Raw AI HTML Content End ---");
-             // --- End Logging ---
+
              newSemanticEmail = parseHtmlToSemantic(newHtml); 
              console.log("Parsed HTML into semantic structure.");
 
              newHtml = await generateHtmlFromSemantic(newSemanticEmail);
              console.log("Regenerated canonical HTML from parsed structure.");
 
-      } catch (error) {
+        } catch (error) {
             console.error('Error processing HTML response:', error);
             console.error('Original AI content:', aiContent);
             throw new Error(`Failed to parse or process AI HTML response: ${error.message}`);

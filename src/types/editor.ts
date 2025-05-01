@@ -2,7 +2,7 @@
 
 export interface EmailElement {
   id: string;
-  type: 'header' | 'text' | 'button' | 'image' | 'divider';
+  type: 'header' | 'text' | 'button' | 'image' | 'divider' | 'spacer';
   content: string;
   styles: Record<string, string>;
   pending?: boolean;
