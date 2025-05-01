@@ -16,74 +16,107 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const overlayContainer = overlayContainerRef.current;
     if (!container || !overlayContainer || !currentHtml || !pendingChanges) return;
 
-    const createdOverlays: HTMLDivElement[] = [];
+    // Function to calculate and apply overlays
+    const calculateAndApplyOverlays = () => {
+        if (!container || !overlayContainer) return; // Guard inside function too
 
-    overlayContainer.innerHTML = '';
-
-    if (Array.isArray(pendingChanges)) {
-      pendingChanges.forEach((change: PendingChange) => {
-        const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
-
-        if (targetElement) {
-          const targetRect = targetElement.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-
-          const overlay = document.createElement('div');
-          overlay.style.position = 'absolute';
-          overlay.style.left = `${targetRect.left - containerRect.left + container.scrollLeft}px`;
-          overlay.style.top = `${targetRect.top - containerRect.top + container.scrollTop}px`;
-          overlay.style.width = `${targetRect.width}px`;
-          overlay.style.height = `${targetRect.height}px`;
-          overlay.style.pointerEvents = 'none';
-          overlay.style.zIndex = '10';
-          overlay.style.boxSizing = 'border-box';
-          overlay.style.borderRadius = '3px';
-
-          switch (change.changeType) {
-            case 'add':
-              overlay.style.border = '2px dashed #22c55e';
-              overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-              break;
-            case 'edit':
-              overlay.style.border = '2px solid #eab308';
-              overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
-              break;
-            case 'delete':
-              overlay.style.border = '2px dashed #ef4444';
-              overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-              targetElement.style.opacity = '0.6';
-              targetElement.style.textDecoration = 'line-through';
-              break;
-          }
-
-          overlayContainer.appendChild(overlay);
-          createdOverlays.push(overlay);
-        } else {
-          console.warn(`Overlay target element not found for ID: ${change.elementId}`);
-        }
-      });
-    } else {
-      console.warn("pendingChanges is not an array or is undefined.");
-    }
-
-    return () => {
-      if (overlayContainer) {
+        // Clear previous overlays 
         overlayContainer.innerHTML = '';
-      }
-      if (Array.isArray(pendingChanges)) {
-        pendingChanges.forEach((change: PendingChange) => {
-          if (change.changeType === 'delete') {
-            const targetElement = container?.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
-            if (targetElement) {
-              targetElement.style.opacity = '';
-              targetElement.style.textDecoration = '';
-            }
-          }
-        });
-      }
+
+        // Reset delete styles that might persist from previous runs
+        if (Array.isArray(pendingChanges)) {
+            pendingChanges.forEach((change: PendingChange) => {
+                if (change.changeType === 'delete') {
+                    const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
+                    if (targetElement) {
+                        targetElement.style.opacity = '1';
+                        targetElement.style.textDecoration = 'none';
+                    }
+                }
+            });
+        }
+
+        // Apply new overlays
+        if (Array.isArray(pendingChanges)) {
+            pendingChanges.forEach((change: PendingChange) => {
+                const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
+
+                if (targetElement) {
+                    const targetRect = targetElement.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'absolute';
+                    overlay.style.left = `${targetRect.left - containerRect.left + container.scrollLeft}px`;
+                    overlay.style.top = `${targetRect.top - containerRect.top + container.scrollTop}px`;
+                    overlay.style.width = `${targetRect.width}px`;
+                    overlay.style.height = `${targetRect.height}px`;
+                    overlay.style.pointerEvents = 'none';
+                    overlay.style.zIndex = '10';
+                    overlay.style.boxSizing = 'border-box';
+                    overlay.style.borderRadius = '3px';
+
+                    switch (change.changeType) {
+                        case 'add':
+                            overlay.style.border = '2px dashed #22c55e';
+                            overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+                            break;
+                        case 'edit':
+                            overlay.style.border = '2px solid #eab308';
+                            overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
+                            break;
+                        case 'delete':
+                            overlay.style.border = '2px dashed #ef4444';
+                            overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                            targetElement.style.opacity = '0.6';
+                            targetElement.style.textDecoration = 'line-through';
+                            break;
+                    }
+
+                    overlayContainer?.appendChild(overlay);
+                } else {
+                    console.warn(`Overlay target element not found for ID: ${change.elementId}`);
+                }
+            });
+        } else {
+            console.warn("pendingChanges is not an array or is undefined.");
+        }
     };
 
-  }, [currentHtml, pendingChanges]);
+    // Initial calculation (deferred slightly)
+    const initialTimeoutId = setTimeout(calculateAndApplyOverlays, 50); // Small delay for initial render
+
+    // Setup ResizeObserver to recalculate on container size changes
+    const observer = new ResizeObserver(() => {
+        console.log("ResizeObserver triggered: Recalculating overlays..."); // Debug log
+        calculateAndApplyOverlays();
+    });
+
+    observer.observe(container);
+
+    // Cleanup function
+    return () => {
+        clearTimeout(initialTimeoutId);
+        observer.disconnect();
+
+        // Clear overlays and styles on cleanup
+        if (overlayContainer) {
+            overlayContainer.innerHTML = '';
+        }
+        if (container && Array.isArray(pendingChanges)) {
+            pendingChanges.forEach((change: PendingChange) => {
+                if (change.changeType === 'delete') {
+                    const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
+                    if (targetElement) {
+                        targetElement.style.opacity = '';
+                        targetElement.style.textDecoration = '';
+                    }
+                }
+            });
+        }
+    };
+
+  }, [currentHtml, pendingChanges]); // Dependencies remain the same
 
   const frameClass = 
     previewDevice === 'mobile'
