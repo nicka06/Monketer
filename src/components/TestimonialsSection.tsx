@@ -1,57 +1,55 @@
-
 const testimonials = [
   {
-    content: "Emailore transformed the way we handle email marketing. Our engagement rates have never been higher!",
-    author: "Sarah Johnson",
-    role: "Marketing Director, TechCorp",
+    id: 1,
+    content: "Monketer transformed the way we handle email marketing. Our engagement rates have never been higher!",
+    name: "Alexandra Chen",
+    title: "Marketing Director, TechFlow Inc."
   },
   {
-    content: "The time saved using Emailore's templates and automation tools has been incredible. What used to take days now takes hours.",
-    author: "Michael Chen",
-    role: "Founder, StartupLabs",
+    id: 2,
+    content: "The time saved using Monketer's templates and automation tools has been incredible. What used to take days now takes hours.",
+    name: "Marcus Johnson",
+    title: "Email Specialist, Retail Giant"
   },
   {
-    content: "The analytics provided by Emailore gave us insights we never had before. We've completely rethought our email strategy.",
-    author: "Jessica Williams",
-    role: "Growth Specialist, InnovateNow",
-  },
+    id: 3,
+    content: "The analytics provided by Monketer gave us insights we never had before. We've completely rethought our email strategy.",
+    name: "Sophia Williams",
+    title: "CMO, Startup Success"
+  }
 ];
 
 const TestimonialsSection = () => {
   return (
-    <div className="bg-emailore-purple-light py-24 sm:py-32">
+    <div className="bg-monketer-purple-light py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            Loved by marketers everywhere
+            Loved by marketers worldwide
           </h2>
           <p className="mt-6 text-lg leading-8 text-gray-600">
-            Don't just take our word for it — hear from the people who've transformed their email marketing with Emailore.
+            Don't just take our word for it — hear from the people who've transformed their email marketing with Monketer.
           </p>
         </div>
-        
-        <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:gap-8 lg:max-w-none lg:grid-cols-3">
-          {testimonials.map((testimonial, index) => (
-            <div 
-              key={index}
-              className="flex flex-col justify-between bg-white rounded-2xl shadow-sm p-6 ring-1 ring-gray-200 hover:shadow-md transition-shadow duration-300"
-            >
-              <blockquote className="text-gray-700">
-                <p className="text-lg leading-relaxed before:content-[open-quote] after:content-[close-quote] before:text-emailore-purple before:text-xl after:text-emailore-purple after:text-xl">
+        <div className="mx-auto mt-16 flow-root max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {testimonials.map((testimonial) => (
+              <div key={testimonial.id} className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
+                <p className="text-lg leading-relaxed before:content-[open-quote] after:content-[close-quote] before:text-monketer-purple before:text-xl after:text-monketer-purple after:text-xl">
                   {testimonial.content}
                 </p>
-              </blockquote>
-              <div className="mt-6 flex items-center">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-emailore-purple to-emailore-purple-dark flex items-center justify-center text-white text-lg font-medium">
-                  {testimonial.author.charAt(0)}
-                </div>
-                <div className="ml-3">
-                  <div className="text-base font-medium text-gray-900">{testimonial.author}</div>
-                  <div className="text-sm text-gray-500">{testimonial.role}</div>
+                <div className="mt-6 flex items-center gap-x-4">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-monketer-purple to-monketer-purple-dark flex items-center justify-center text-white text-lg font-medium">
+                    {testimonial.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold leading-6 tracking-tight text-gray-900">{testimonial.name}</h3>
+                    <p className="text-sm text-gray-600">{testimonial.title}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

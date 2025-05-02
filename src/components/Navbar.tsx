@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -9,20 +8,20 @@ const Navbar = () => {
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-sm z-50 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
+      <div className="w-full px-0">
+        <div className="flex items-center justify-between h-16 relative">
+          <div className="flex items-center pl-6 sm:pl-8">
             <Link to="/" className="flex items-center">
-              <Mail className="h-8 w-8 text-emailore-purple" />
-              <span className="ml-2 text-lg font-semibold text-gray-900">emailore</span>
+              <Mail className="h-8 w-8 text-monketer-purple" />
+              <span className="ml-2 text-lg font-semibold text-gray-900">monketer</span>
             </Link>
           </div>
           
           {/* Mobile menu button */}
-          <div className="flex md:hidden">
+          <div className="flex md:hidden absolute right-6">
             <button
               type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-emailore-purple"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-monketer-purple"
               aria-controls="mobile-menu"
               aria-expanded="false"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -41,11 +40,11 @@ const Navbar = () => {
           </div>
           
           {/* Desktop menu */}
-          <div className="hidden md:flex md:items-center md:space-x-4">
+          <div className="hidden md:flex md:items-center md:space-x-4 absolute right-6 sm:right-8">
             <Button variant="ghost" asChild>
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button className="bg-emailore-purple hover:bg-emailore-purple-dark text-white" asChild>
+            <Button className="bg-monketer-purple hover:bg-monketer-purple-dark text-white" asChild>
               <Link to="/signup">Sign up</Link>
             </Button>
           </div>
@@ -59,7 +58,7 @@ const Navbar = () => {
             <Button variant="ghost" className="w-full justify-center" asChild>
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button className="w-full justify-center bg-emailore-purple hover:bg-emailore-purple-dark text-white" asChild>
+            <Button className="w-full justify-center bg-monketer-purple hover:bg-monketer-purple-dark text-white" asChild>
               <Link to="/signup">Sign up</Link>
             </Button>
           </div>

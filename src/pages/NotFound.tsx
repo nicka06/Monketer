@@ -1,4 +1,3 @@
-
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,12 +30,13 @@ const NotFound = () => {
         </p>
         <Button 
           onClick={handleReturnHome}
-          className="bg-emailore-purple hover:bg-emailore-purple-dark mb-2 w-full"
+          asChild
+          className="bg-monketer-purple hover:bg-monketer-purple-dark mb-2 w-full"
         >
           Return to {user ? "Dashboard" : "Home"}
         </Button>
         {user && (
-          <Link to="/editor" className="text-emailore-purple hover:text-emailore-purple-dark block mt-4">
+          <Link to="/editor" className="text-monketer-purple hover:text-monketer-purple-dark block mt-4">
             Go to Email Editor
           </Link>
         )}
