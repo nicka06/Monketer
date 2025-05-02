@@ -1,6 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { EmailPreviewProps, PendingChange } from '@/types/editor';
 import { cn } from "@/lib/utils";
+import { EmailHtmlRenderer, EmailHtmlRendererRef } from './EmailHtmlRenderer';
+
+// Utility function to wait for the next paint cycle
+function waitForPaintCycle(callback: () => void) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(callback);
+  });
+}
 
 export const EmailPreview: React.FC<EmailPreviewProps> = ({
   currentHtml,
@@ -8,115 +16,128 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   previewMode,
   previewDevice,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const overlayContainerRef = useRef<HTMLDivElement>(null);
+  const htmlRendererRef = useRef<EmailHtmlRendererRef>(null);
 
-  useEffect(() => {
-    const container = containerRef.current;
+  const calculateAndApplyOverlays = useCallback(() => { 
+    const container = htmlRendererRef.current?.getContainer(); 
     const overlayContainer = overlayContainerRef.current;
-    if (!container || !overlayContainer || !currentHtml || !pendingChanges) return;
 
-    // Function to calculate and apply overlays
-    const calculateAndApplyOverlays = () => {
-        if (!container || !overlayContainer) return; // Guard inside function too
+    if (!container || !overlayContainer || !pendingChanges) {
+      console.log("[EmailPreview] calculateAndApplyOverlays skipped: Missing container, overlay, or pendingChanges.");
+      return;
+    }
 
-        // Clear previous overlays 
-        overlayContainer.innerHTML = '';
+    console.log(`[EmailPreview] Running calculateAndApplyOverlays...`);
 
-        // Reset delete styles that might persist from previous runs
-        if (Array.isArray(pendingChanges)) {
-            pendingChanges.forEach((change: PendingChange) => {
-                if (change.changeType === 'delete') {
-                    const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
-                    if (targetElement) {
-                        targetElement.style.opacity = '1';
-                        targetElement.style.textDecoration = 'none';
-                    }
-                }
-            });
+    // Clear existing overlays
+    overlayContainer.innerHTML = '';
+    
+    // Find the iframe inside the container
+    const iframe = container.querySelector('iframe');
+    if (!iframe || !iframe.contentDocument || !iframe.contentWindow) {
+      console.warn("[EmailPreview] Could not access iframe content document.");
+      return;
+    }
+    
+    // Apply styles to elements in the iframe document
+    const iframeDoc = iframe.contentDocument;
+    if (Array.isArray(pendingChanges)) {
+      pendingChanges.forEach((change: PendingChange) => {
+        if (change.changeType === 'delete') {
+          const targetElement = iframeDoc.getElementById(change.elementId);
+          if (targetElement) {
+            targetElement.style.opacity = '1';
+            targetElement.style.textDecoration = 'none';
+          }
         }
-
-        // Apply new overlays
-        if (Array.isArray(pendingChanges)) {
-            pendingChanges.forEach((change: PendingChange) => {
-                const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
-
-                if (targetElement) {
-                    const targetRect = targetElement.getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-
-                    const overlay = document.createElement('div');
-                    overlay.style.position = 'absolute';
-                    overlay.style.left = `${targetRect.left - containerRect.left + container.scrollLeft}px`;
-                    overlay.style.top = `${targetRect.top - containerRect.top + container.scrollTop}px`;
-                    overlay.style.width = `${targetRect.width}px`;
-                    overlay.style.height = `${targetRect.height}px`;
-                    overlay.style.pointerEvents = 'none';
-                    overlay.style.zIndex = '10';
-                    overlay.style.boxSizing = 'border-box';
-                    overlay.style.borderRadius = '3px';
-
-                    switch (change.changeType) {
-                        case 'add':
-                            overlay.style.border = '2px dashed #22c55e';
-                            overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-                            break;
-                        case 'edit':
-                            overlay.style.border = '2px solid #eab308';
-                            overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
-                            break;
-                        case 'delete':
-                            overlay.style.border = '2px dashed #ef4444';
-                            overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                            targetElement.style.opacity = '0.6';
-                            targetElement.style.textDecoration = 'line-through';
-                            break;
-                    }
-
-                    overlayContainer?.appendChild(overlay);
-                } else {
-                    console.warn(`Overlay target element not found for ID: ${change.elementId}`);
-                }
-            });
-        } else {
-            console.warn("pendingChanges is not an array or is undefined.");
+      });
+    }
+    
+    let allFound = true;
+    if (Array.isArray(pendingChanges)) {
+      pendingChanges.forEach((change: PendingChange) => {
+        const targetElement = iframeDoc.getElementById(change.elementId);
+        if (!targetElement) {
+          console.warn(`[EmailPreview] Overlay target element [ID: ${change.elementId}] not found in iframe. Skipping.`);
+          allFound = false;
+          return;
         }
-    };
+        
+        // Get element position relative to iframe
+        const targetRect = targetElement.getBoundingClientRect();
+        const iframeRect = iframe.getBoundingClientRect();
+        
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.style.position = 'absolute';
+        overlay.style.left = `${iframeRect.left + targetRect.left - container.offsetLeft}px`;
+        overlay.style.top = `${iframeRect.top + targetRect.top - container.offsetTop + iframe.contentWindow.scrollY}px`;
+        overlay.style.width = `${targetRect.width}px`;
+        overlay.style.height = `${targetRect.height}px`;
+        overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '10';
+        overlay.style.boxSizing = 'border-box';
+        overlay.style.borderRadius = '3px';
+        
+        // Style based on change type
+        switch (change.changeType) {
+          case 'add': overlay.style.border = '2px dashed #22c55e'; overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)'; break;
+          case 'edit': overlay.style.border = '2px solid #eab308'; overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)'; break;
+          case 'delete': 
+            overlay.style.border = '2px dashed #ef4444'; 
+            overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+            if (targetElement) {
+              targetElement.style.opacity = '0.6';
+              targetElement.style.textDecoration = 'line-through';
+            }
+            break;
+        }
+        
+        overlayContainer?.appendChild(overlay);
+      });
+    }
+    
+    if (allFound) {
+      console.log("[EmailPreview] Overlay calculation complete. All elements found.");
+    } else {
+      console.warn("[EmailPreview] Overlay calculation complete. Some elements were NOT found.");
+    }
+  }, [pendingChanges]); 
 
-    // Initial calculation (deferred slightly)
-    const initialTimeoutId = setTimeout(calculateAndApplyOverlays, 50); // Small delay for initial render
-
-    // Setup ResizeObserver to recalculate on container size changes
-    const observer = new ResizeObserver(() => {
-        console.log("ResizeObserver triggered: Recalculating overlays..."); // Debug log
-        calculateAndApplyOverlays();
+  const handleContentReady = useCallback(() => {
+    console.log("[EmailPreview] handleContentReady called. Waiting for paint cycle...");
+    waitForPaintCycle(() => {
+      console.log("[EmailPreview] Paint cycle finished. Executing calculateAndApplyOverlays.");
+      calculateAndApplyOverlays();
     });
+  }, [calculateAndApplyOverlays]);
 
-    observer.observe(container);
-
-    // Cleanup function
-    return () => {
-        clearTimeout(initialTimeoutId);
-        observer.disconnect();
-
-        // Clear overlays and styles on cleanup
-        if (overlayContainer) {
-            overlayContainer.innerHTML = '';
-        }
-        if (container && Array.isArray(pendingChanges)) {
-            pendingChanges.forEach((change: PendingChange) => {
-                if (change.changeType === 'delete') {
-                    const targetElement = container.querySelector(`[id="${change.elementId}"]`) as HTMLElement;
-                    if (targetElement) {
-                        targetElement.style.opacity = '';
-                        targetElement.style.textDecoration = '';
-                    }
-                }
-            });
-        }
+  // Effect for handling iframe scroll
+  useEffect(() => {
+    const container = htmlRendererRef.current?.getContainer();
+    if (!container) return;
+    
+    const iframe = container.querySelector('iframe');
+    if (!iframe || !iframe.contentWindow) return;
+    
+    const handleIframeScroll = () => {
+      console.log("[EmailPreview] Iframe scroll detected. Waiting for paint cycle...");
+      waitForPaintCycle(() => {
+        console.log("[EmailPreview] Paint cycle after scroll finished. Recalculating overlays.");
+        calculateAndApplyOverlays();
+      });
     };
-
-  }, [currentHtml, pendingChanges]); // Dependencies remain the same
+    
+    // Add scroll event listener to iframe content window
+    iframe.contentWindow.addEventListener('scroll', handleIframeScroll);
+    
+    return () => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.removeEventListener('scroll', handleIframeScroll);
+      }
+    };
+  }, [calculateAndApplyOverlays]);
 
   const frameClass = 
     previewDevice === 'mobile'
@@ -130,16 +151,18 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   return (
     <div className={outerContainerClass}>
       <div className={cn(frameClass, frameBackground, inversionClass)}>
-        <div 
-           ref={containerRef} 
-           className="min-w-[375px] w-full h-full"
-           dangerouslySetInnerHTML={{ __html: currentHtml || '<div class="p-4 text-center text-gray-500">No preview available. Use the AI to generate content.</div>' }}
+        <EmailHtmlRenderer
+          ref={htmlRendererRef}
+          html={currentHtml}
+          onContentReady={handleContentReady}
+          className="min-w-[375px] w-full h-full" 
         />
         <div 
           ref={overlayContainerRef}
           className="absolute top-0 left-0 w-full h-full pointer-events-none"
           style={{ zIndex: 5 }}
-        ></div>
+        >
+        </div>
       </div>
     </div>
   );

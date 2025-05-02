@@ -12,6 +12,7 @@ import {
 } from '../_shared/types.ts';
 import { generateHtmlFromSemantic, parseHtmlToSemantic } from '../_shared/html-utils.ts'; // Need both generation and parsing
 import { diffSemanticEmails } from '../_shared/diff-utils.ts'; // Import from shared file
+import { normalizeTemplate } from '../_shared/normalize.ts'; // Import new normalizeTemplate
 
 // Type alias for diff result
 type DiffResult = Omit<PendingChangeInput, 'project_id' | 'status'>;
@@ -74,6 +75,17 @@ async function getProjectData(supabase: any, projectId: string): Promise<{ oldSe
              console.warn(`Unexpected type for semantic_email for ${projectId}: ${typeof rawSemantic}`);
              throw new Error(`Unexpected data type for semantic_email for project ID: ${projectId}`);
         }
+
+        // Once we have the parsed oldSemanticEmail, normalize it using the new function
+        if (oldSemanticEmail) {
+            try {
+                oldSemanticEmail = normalizeTemplate(oldSemanticEmail);
+                console.log(`Normalized template for project ${projectId} using normalizeTemplate.`);
+            } catch (normError) {
+                console.error(`Error normalizing template for project ${projectId}:`, normError);
+                throw new Error(`Failed to normalize template for project ID ${projectId}: ${normError.message}`);
+            }
+        }
     } else {
         console.log(`semantic_email for ${projectId} is null or empty. Proceeding with null.`);
         // It's okay for it to be null if it's a brand new project, 
@@ -105,10 +117,10 @@ async function updateProject(supabase: any, projectId: string, newSemanticEmail:
     console.log(`Project ${projectId} updated successfully.`);
 }
 
-async function savePendingChanges(supabase: any, projectId: string, changes: DiffResult[]): Promise<void> {
+async function savePendingChanges(supabase: any, projectId: string, changes: DiffResult[]): Promise<PendingChangeInput[]> {
     if (changes.length === 0) {
         console.log("No pending changes to save.");
-        return;
+        return [];
     }
     console.log(`Saving ${changes.length} pending changes for project ${projectId}...`);
 
@@ -124,7 +136,7 @@ async function savePendingChanges(supabase: any, projectId: string, changes: Dif
     }
      console.log(`Previous pending changes cleared for project ${projectId}.`);
 
-    const changesToInsert = changes.map(change => ({
+    const changesToInsert: PendingChangeInput[] = changes.map(change => ({
         ...change,
         project_id: projectId,
         status: 'pending' 
@@ -139,6 +151,7 @@ async function savePendingChanges(supabase: any, projectId: string, changes: Dif
         throw new Error(`Failed to save pending changes: ${insertError.message}`);
     }
     console.log("Pending changes saved successfully.");
+    return changesToInsert;
 }
 
 // --- Main Server Logic --- 
@@ -244,7 +257,7 @@ serve(async (req) => {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openAIApiKey}`,
+          'Authorization': `Bearer ${openAIApiKey}`,
         },
         body: JSON.stringify(apiRequestBody), // Use the fully constructed request body
       });
@@ -266,6 +279,7 @@ serve(async (req) => {
     // --- Process AI Response --- 
     let newSemanticEmail: EmailTemplate;
     let newHtml: string;
+    let finalPendingChanges: PendingChangeInput[] = []; // Initialize pending changes array
 
     if (expectJsonResponse) {
         console.log("Processing JSON response (JSON mode enabled)...");
@@ -278,14 +292,32 @@ serve(async (req) => {
             newSemanticEmail = JSON.parse(aiContent);
             console.log("Direct JSON parse successful (JSON mode).");
 
-            // Semantic validation (check for sections array)
+            // Normalize the parsed JSON structure
+            newSemanticEmail = normalizeTemplate(newSemanticEmail);
+            console.log("Normalized AI-generated template with default styles applied.");
+
+            // Semantic validation 
             if (!newSemanticEmail || !Array.isArray(newSemanticEmail.sections)) {
-                console.error("Parsed JSON object is missing the required 'sections' array.");
+                console.error("Parsed JSON object is missing the required 'sections' array even after normalization.");
                 throw new Error("AI returned JSON object missing sections array.");
             }
             
+            // Generate HTML from the normalized semantic structure
             newHtml = await generateHtmlFromSemantic(newSemanticEmail);
-            console.log("Generated HTML from new semantic structure.");
+            console.log("Generated HTML from normalized new semantic structure.");
+
+            // --- Update Database and Generate Diffs ONLY for edit mode ---
+            // Ensure oldSemanticEmail is also potentially normalized before diff? 
+            // No, diff needs the *original* state. But maybe normalize *within* the diff function.
+            await updateProject(supabase, projectId, newSemanticEmail, newHtml);
+            if (!oldSemanticEmail || !Array.isArray(oldSemanticEmail.sections)) {
+                console.error("Validation Failed: oldSemanticEmail is missing or invalid before diff.");
+                throw new Error("Internal Error: Could not validate existing structure before diffing.");
+            }
+            // Diff function will handle normalization of its inputs/outputs internally
+            const semanticChanges = diffSemanticEmails(oldSemanticEmail, newSemanticEmail);
+            finalPendingChanges = await savePendingChanges(supabase, projectId, semanticChanges);
+            // --- End DB Update/Diff for edit mode ---
 
         } catch (error) {
             console.error('Error processing JSON response (JSON mode):', error);
@@ -296,7 +328,7 @@ serve(async (req) => {
             throw new Error(JSON.stringify(errorPayload)); 
         }
     } else { // expectHtmlResponse (Major Edit)
-        console.log("Processing HTML response...");
+        console.log("Processing HTML response (Major Edit mode)...");
         try {
              newHtml = aiContent; 
              console.log("--- Raw AI HTML Content Start (First 1000 chars) ---");
@@ -306,36 +338,35 @@ serve(async (req) => {
              newSemanticEmail = parseHtmlToSemantic(newHtml); 
              console.log("Parsed HTML into semantic structure.");
 
-             newHtml = await generateHtmlFromSemantic(newSemanticEmail);
-             console.log("Regenerated canonical HTML from parsed structure.");
+             // parseHtmlToSemantic already includes normalization, but we'll be explicit for clarity
+             newSemanticEmail = normalizeTemplate(newSemanticEmail);
+             console.log("Normalized parsed template with default styles applied.");
 
-        } catch (error) {
+             // Regenerate HTML from the normalized structure
+             newHtml = await generateHtmlFromSemantic(newSemanticEmail); 
+             console.log("Regenerated canonical HTML from normalized parsed structure.");
+
+             // Update DB with the *normalized* semantic structure
+             await updateProject(supabase, projectId, newSemanticEmail, newHtml);
+             console.log("Skipping diff calculation and pending changes save for Major Edit mode.");
+             finalPendingChanges = []; // Ensure pending changes are empty for major edits
+             // --- End DB Update for major mode --- 
+
+      } catch (error) {
             console.error('Error processing HTML response:', error);
             console.error('Original AI content:', aiContent);
             throw new Error(`Failed to parse or process AI HTML response: ${error.message}`);
         }
     }
 
-    // --- Update Database and Generate Diffs ---
-    await updateProject(supabase, projectId, newSemanticEmail, newHtml);
-    
-    // --- Add Validation for oldSemanticEmail before diffing ---
-    if (!oldSemanticEmail || !Array.isArray(oldSemanticEmail.sections)) {
-        console.error("Validation Failed: oldSemanticEmail is missing or its sections property is not an array before calling diff.", oldSemanticEmail);
-        throw new Error("Internal Error: Could not validate existing email structure before diffing.");
-      }
-    // --- End Validation ---
-    
-    const semanticChanges = diffSemanticEmails(oldSemanticEmail, newSemanticEmail);
-    await savePendingChanges(supabase, projectId, semanticChanges);
-
-    // --- Return Response --- 
+    // --- Return Response --- (Uses finalPendingChanges)
     console.log("Change generation successful. Returning new state.");
       return new Response(
         JSON.stringify({
             message: "Email updated successfully.",
             newSemanticEmail: newSemanticEmail,
-            newHtml: newHtml
+            newHtml: newHtml,
+            newPendingChanges: finalPendingChanges // Use the final array
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

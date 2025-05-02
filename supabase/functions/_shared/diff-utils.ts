@@ -4,6 +4,7 @@ import {
     EmailElement,
     PendingChangeInput,
 } from './types.ts'; // Assuming types.ts is in the same _shared directory
+import { normalizeElement, normalizeTemplate } from './normalize.ts'; // Import from new normalize.ts file
 
 // Type for the object returned by the diff function (matches structure needed for insertion)
 // Duplicated from generate-email-changes - consider consolidating types
@@ -36,17 +37,23 @@ export function diffSemanticEmails(
     newSemantic: EmailTemplate
 ): Array<DiffResult> {
     console.log("Starting semantic diff...");
+    
+    // Normalize both templates first to ensure consistent structures
+    let normalizedNewSemantic = normalizeTemplate(newSemantic);
+    let normalizedOldSemantic = oldSemantic ? normalizeTemplate(oldSemantic) : null;
+    
+    console.log("Templates normalized with default styles applied.");
+    
     const changes: Array<DiffResult> = [];
     
     // Handle cases where oldSemantic might be null (e.g., initial creation)
-    if (!oldSemantic) {
+    if (!normalizedOldSemantic) {
         console.log("Old semantic is null, treating all new elements as additions.");
-        newSemantic.sections?.forEach(section => {
-            // Consider adding section add changes?
+        normalizedNewSemantic.sections?.forEach(section => {
             section.elements?.forEach(element => {
-                 // For adds, include the target section ID in new_content
+                 // Include the target section ID in new_content
                  const newContentWithTarget = { 
-                     ...element, 
+                     ...element, // Already normalized by normalizeTemplate
                      targetSectionId: section.id 
                  };
                  changes.push({ 
@@ -62,13 +69,13 @@ export function diffSemanticEmails(
     }
 
     // --- Create maps for efficient lookup --- 
-    const oldSectionsMap = new Map(oldSemantic.sections?.map(s => [s.id, s]));
+    const oldSectionsMap = new Map(normalizedOldSemantic.sections?.map(s => [s.id, s]));
     const oldElementsMap = new Map<string, { element: EmailElement; sectionId: string }>();
-    oldSemantic.sections?.forEach(s => s.elements?.forEach(e => oldElementsMap.set(e.id, { element: e, sectionId: s.id })));
+    normalizedOldSemantic.sections?.forEach(s => s.elements?.forEach(e => oldElementsMap.set(e.id, { element: e, sectionId: s.id })));
 
-    const newSectionsMap = new Map(newSemantic.sections?.map(s => [s.id, s]));
+    const newSectionsMap = new Map(normalizedNewSemantic.sections?.map(s => [s.id, s]));
     const newElementsMap = new Map<string, { element: EmailElement; sectionId: string }>();
-    newSemantic.sections?.forEach(s => s.elements?.forEach(e => newElementsMap.set(e.id, { element: e, sectionId: s.id })));
+    normalizedNewSemantic.sections?.forEach(s => s.elements?.forEach(e => newElementsMap.set(e.id, { element: e, sectionId: s.id })));
 
     // --- Detect Added and Edited Elements --- 
     newElementsMap.forEach(({ element: newElement, sectionId: newSectionId }, elementId) => {
@@ -77,13 +84,13 @@ export function diffSemanticEmails(
         if (!oldEntry) {
              // Element Added
              const newContentWithTarget = { 
-                 ...newElement, 
+                 ...newElement, // Already normalized by normalizeTemplate
                  targetSectionId: newSectionId 
              };
             changes.push({ 
                 element_id: elementId, 
                 change_type: 'add', 
-                new_content: newContentWithTarget, 
+                new_content: newContentWithTarget,
                 old_content: null 
             });
             console.log(` Diff: Added element ${elementId} to section ${newSectionId}`);
@@ -93,46 +100,39 @@ export function diffSemanticEmails(
             let hasChanged = false;
             const changedProps: Partial<EmailElement> = {};
 
-            // Check content
+            // Compare elements (both already normalized)
             if (oldElement.content !== newElement.content) {
                 changedProps.content = newElement.content;
                 hasChanged = true;
             }
-            // Check type (less likely to change, but possible)
             if (oldElement.type !== newElement.type) {
                 changedProps.type = newElement.type;
                 hasChanged = true;
             }
-            // Check styles (using helper function)
             if (!areStylesEqual(oldElement.styles, newElement.styles)) {
-                changedProps.styles = newElement.styles; // Include the entire new styles object
+                changedProps.styles = newElement.styles;
                 hasChanged = true;
             }
-            // Check if moved section (more complex, requires reordering logic - basic check for now)
             if (oldEntry.sectionId !== newSectionId) {
-                // This is complex. For now, we might treat it as a delete+add, 
-                // or just record an 'edit' with the section change? 
-                // Let's log it for now and potentially enhance later.
                  console.warn(` Element ${elementId} moved from section ${oldEntry.sectionId} to ${newSectionId}. Diff currently treats this as edit.`);
-                 // We need to decide how to represent this move in the diff.
-                 // Storing the old section ID might be useful for revert.
-                 // changedProps.sectionId = newSectionId; // REMOVED - Non-standard property, causes type error
                  hasChanged = true;
             }
 
             if (hasChanged) {
+                 // Prepare old content for storage (already normalized)
+                 const oldContentForStorage = {
+                     id: oldElement.id,
+                     type: oldElement.type,
+                     content: oldElement.content,
+                     styles: oldElement.styles,
+                     // Potentially add sectionId: oldEntry.sectionId here if needed for revert
+                 };
+
                 changes.push({ 
                     element_id: elementId, 
                     change_type: 'edit', 
-                    // Store only the changed properties in new_content for edits?
-                    // Or the full new element? Full element is safer for apply logic.
-                    new_content: newElement, 
-                    old_content: { // Store relevant old parts for potential revert
-                        content: oldElement.content,
-                        type: oldElement.type,
-                        styles: oldElement.styles,
-                         // Potentially add sectionId: oldEntry.sectionId here if needed for revert
-                    }
+                    new_content: newElement, // Already normalized
+                    old_content: oldContentForStorage // Already normalized
                 });
                 console.log(` Diff: Edited element ${elementId}`);
             }
@@ -143,16 +143,16 @@ export function diffSemanticEmails(
     oldElementsMap.forEach(({ element: oldElement, sectionId: oldSectionId }, elementId) => {
         if (!newElementsMap.has(elementId)) {
             // Element Deleted
-            // Add originalSectionId to old_content for revert logic
+            // Add originalSectionId to the old_content for revert logic
             const oldContentWithSection = {
-                ...oldElement,
+                ...oldElement, // Already normalized by normalizeTemplate
                 originalSectionId: oldSectionId
             };
             changes.push({ 
                 element_id: elementId, 
                 change_type: 'delete', 
                 new_content: null, 
-                old_content: oldContentWithSection 
+                old_content: oldContentWithSection
             });
             console.log(` Diff: Deleted element ${elementId} from section ${oldSectionId}`);
         }

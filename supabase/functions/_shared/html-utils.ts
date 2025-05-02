@@ -5,6 +5,7 @@ import { DOMParser } from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts';
 // Remove Deno std lib UUID import - use crypto.randomUUID() instead
 // import { v4 } from "https://deno.land/std@0.168.0/uuid/mod.ts"; 
 import { cleanUuid } from '@/lib/uuid-utils.ts'; // Import using import map
+import { normalizeElement, normalizeTemplate } from './normalize.ts';
 
 // Helper to convert camelCase style keys to kebab-case
 function camelToKebab(str: string): string {
@@ -54,6 +55,10 @@ function kebabToCamel(str: string): string {
 export async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Promise<string> {
     console.log("Generating HTML from semantic structure...");
 
+    // First, normalize the template to ensure all elements have complete style definitions
+    const normalizedTemplate = normalizeTemplate(semanticEmail);
+    console.log("Template normalized with default styles applied.");
+
     // Basic Email Wrapper - Using tables for better email client compatibility
     let html = `<!DOCTYPE html>
 <html lang="en">
@@ -69,7 +74,7 @@ export async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Pr
         img { border: 0; -ms-interpolation-mode: bicubic; max-width: 100%; }
         a { text-decoration: none; color: inherit; }
         /* Add specific global styles from semanticEmail.styles if needed */
-        /* Example: body { ${generateStyleString(semanticEmail.styles?.global || {})} } */
+        /* Example: body { ${generateStyleString(normalizedTemplate.styles?.global || {})} } */
     </style>
 </head>
 <body style="margin:0; padding:0; word-spacing:normal;">
@@ -80,8 +85,8 @@ export async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Pr
                 <table role="presentation" style="width:602px; max-width: 602px; border-collapse:collapse; border:1px solid #cccccc; border-spacing:0; text-align:left;">
 `;
 
-    // Iterate through sections
-    semanticEmail?.sections?.forEach((section: EmailSection) => {
+    // Iterate through sections using normalized template
+    normalizedTemplate?.sections?.forEach((section: EmailSection) => {
         // Section wrapper (using table row/cell)
         html += `
                     <!-- Section Start: ${section.id} -->
@@ -112,12 +117,12 @@ export async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Pr
                     html += `<p id="${elementId}" style="margin:0; ${elementStyle}">${element.content || ''}</p>`;
                     break;
                 case 'button':
-                    // Buttons are tricky in email, often simulated with styled links in tables
+                    // Now we can use the styles directly without fallbacks because normalization ensures they exist
                     html += `
                                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
                                             <tr>
-                                                <td id="${elementId}" style="${elementStyle} border-radius: 5px; text-align: center;" bgcolor="${element.styles?.backgroundColor || '#5cb85c'}">
-                                                    <a href="${element.styles?.href || '#'}" target="_blank" style="display: inline-block; color: ${element.styles?.color || '#ffffff'}; background: ${element.styles?.backgroundColor || '#5cb85c'}; border: solid 1px ${element.styles?.borderColor || element.styles?.backgroundColor || '#5cb85c'}; border-radius: 5px; box-sizing: border-box; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-transform: capitalize; border-color: ${element.styles?.borderColor || element.styles?.backgroundColor || '#5cb85c'}; ">
+                                                <td id="${elementId}" style="${elementStyle} border-radius: 5px; text-align: center;" bgcolor="${element.styles?.backgroundColor}">
+                                                    <a href="${element.styles?.href || '#'}" target="_blank" style="display: inline-block; color: ${element.styles?.color}; background: ${element.styles?.backgroundColor}; border: solid 1px ${element.styles?.borderColor || element.styles?.backgroundColor}; border-radius: 5px; box-sizing: border-box; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-transform: capitalize; border-color: ${element.styles?.borderColor || element.styles?.backgroundColor}; ">
                                                         ${element.content || 'Button Text'}
                                                     </a>
                                                 </td>
@@ -126,17 +131,17 @@ export async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Pr
 `;
                     break;
                 case 'image':
-                    html += `<img id="${elementId}" src="${element.content || 'placeholder.svg'}" alt="${element.styles?.alt || 'Image'}" width="${element.styles?.width || '100%'}" style="height: auto; display: block; ${elementStyle}" />`;
+                    html += `<img id="${elementId}" src="${element.content || 'placeholder.svg'}" alt="${element.styles?.alt || 'Image'}" width="${element.styles?.width}" style="height: auto; display: block; ${elementStyle}" />`;
                     break;
                 case 'divider':
-                    html += `<hr id="${elementId}" style="border: none; border-top: 1px solid ${element.styles?.color || '#cccccc'}; margin: 10px 0; ${elementStyle}" />`;
+                    html += `<hr id="${elementId}" style="border: none; border-top: 1px solid ${element.styles?.backgroundColor}; margin: 10px 0; ${elementStyle}" />`;
                     break;
                 case 'spacer':
                     // Use a div with height for spacer. Ensure line-height/font-size are set for outlook compatibility
-                    html += `<div id="${elementId}" style="height: ${element.styles?.height || '20px'}; font-size: 1px; line-height: 1px; ${elementStyle}">&nbsp;</div>`; // Added &nbsp; for some clients
+                    html += `<div id="${elementId}" style="height: ${element.styles?.height}; font-size: 1px; line-height: 1px; ${elementStyle}">&nbsp;</div>`; // Added &nbsp; for some clients
                     break;
                 default:
-                    html += `<div id="${elementId}" style="${elementStyle}">Unsupported element type: ${element.type} - Content: ${element.content || ''}</div>`;
+                    html += `<div id="${elementId}" style="${elementStyle}">Unsupported element: ${element.type}</div>`;
             }
 
             html += `                                        <!-- Element End: ${elementId} -->
@@ -188,8 +193,7 @@ function styleObjectToString(styles: Record<string, string>): string {
 
 /**
  * Parses an HTML string into a semantic EmailTemplate structure.
- * NOTE: This is a basic implementation and needs rules/heuristics 
- * to reliably map HTML elements back to the semantic model.
+ * This version uses normalization to ensure consistent element structure.
  */
 export function parseHtmlToSemantic(htmlString: string): EmailTemplate {
     console.log("Starting HTML parsing...");
@@ -421,16 +425,20 @@ export function parseHtmlToSemantic(htmlString: string): EmailTemplate {
     }); // End of section processing
 
     console.log(`HTML parsing finished. Found ${sections.length} sections.`);
-    // Construct the final EmailTemplate object
-    const semanticEmail: EmailTemplate = {
+    // Create the raw template before normalization
+    const rawTemplate: EmailTemplate = { 
         id: crypto.randomUUID(), 
-        name: templateName,
-        sections: sections,
-        version: 1,
-        styles: globalStyles, 
+        name: templateName, 
+        sections: sections, 
+        version: 1, 
+        styles: globalStyles 
     };
 
-    return semanticEmail;
+    // Normalize the template before returning
+    const normalizedTemplate = normalizeTemplate(rawTemplate);
+    console.log("Template normalized with default styles applied.");
+    
+    return normalizedTemplate;
 }
 
 /**
