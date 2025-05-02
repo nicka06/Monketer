@@ -125,6 +125,11 @@ const Editor = () => {
     try {
       const fetchedResult = await getProject(id);
       if (fetchedResult && fetchedResult.project) {
+        // --- Add Logging for Initial Load --- 
+        console.log("[fetchAndSetProject] Fetched Project HTML (first 500 chars):", fetchedResult.project.current_html?.substring(0, 500));
+        console.log("[fetchAndSetProject] Fetched Pending Changes:", JSON.stringify(fetchedResult.pendingChanges || [], null, 2));
+        // --- End Logging --- 
+
         setProjectData(fetchedResult.project);
         setProjectTitle(fetchedResult.project.name);
         setActualProjectId(fetchedResult.project.id);
@@ -351,15 +356,26 @@ const Editor = () => {
       
       // --- Process Successful Response --- 
       const result = await response.json();
-      console.log("[handleSendMessage] Success response body:", result);
+      console.log("[handleSendMessage] Success response body:", JSON.stringify(result)); // Log the full result
 
-      const { message: aiResponseMessage, newSemanticEmail, newHtml } = result;
+      // Expect backend to return new changes directly
+      const { message: aiResponseMessage, newSemanticEmail, newHtml, newPendingChanges } = result;
+
+      // --- Add detailed logging --- 
+      console.log("[handleSendMessage] Received newHtml (first 500 chars):", newHtml?.substring(0, 500));
+      console.log("[handleSendMessage] Received newPendingChanges:", JSON.stringify(newPendingChanges, null, 2));
+      // --- End detailed logging ---
 
       if (!newSemanticEmail || !newHtml) {
         throw new Error("Backend response missing newSemanticEmail or newHtml.");
       }
       
-      await loadPendingChanges(currentProjectId);
+      // Remove the separate call to load pending changes
+      // await loadPendingChanges(currentProjectId); 
+      
+      // Set pending changes directly from the response
+      setPendingChanges(newPendingChanges || []);
+      console.log("[handleSendMessage] Pending changes set from direct response.");
       
       setProjectData(prevData => {
         if (!prevData) {
@@ -731,7 +747,7 @@ const Editor = () => {
             </div>
             
             {/* Preview Content Area */}
-            <div className="p-6 flex-grow overflow-y-auto">
+            <div className="p-6 flex-grow overflow-y-auto relative">
               {!hasCode && !projectData?.current_html ? (
                 <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center h-full flex flex-col justify-center">
                   <div>
@@ -748,7 +764,7 @@ const Editor = () => {
                   )}
                 </div>
               ) : (
-                <>
+                <div className="relative">
                   {/* Use projectData.current_html directly */}
                     <EmailPreview
                     currentHtml={projectData?.current_html || null}
@@ -758,13 +774,13 @@ const Editor = () => {
                   />
                    {isLoading && ( // Show progress overlay during any loading state
                      <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-20">
-                        <div className="text-center">
+                        <div className="bg-white p-4 rounded-lg shadow-md text-center">
                             <p className="text-sm text-gray-500 mb-2">Processing...</p>
                             <Progress value={progress} className="h-2 w-32" />
                         </div>
                      </div>
                   )}
-                </>
+                </div>
               )}
             </div>
 
