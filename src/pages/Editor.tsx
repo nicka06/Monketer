@@ -620,7 +620,7 @@ const Editor = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
       {/* Top navigation bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 flex-shrink-0">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 flex-shrink-0 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center">
             <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
@@ -658,17 +658,24 @@ const Editor = () => {
             )}
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={handleNavigateToSendPage} disabled={!hasCode || isLoadingProject}>
-              <Mail className="mr-2 h-4 w-4" />
-              Send Preview
-            </Button>
+          <div className="flex items-center">
             <Button variant="ghost" size="icon">
               <Settings className="h-5 w-5" />
               <span className="sr-only">Settings</span>
             </Button>
           </div>
         </div>
+        
+        {/* Absolutely positioned Send Preview button */}
+        <Button 
+          variant="outline" 
+          onClick={handleNavigateToSendPage} 
+          disabled={!hasCode || isLoadingProject} 
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded px-4 border mr-2"
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          Send Preview
+        </Button>
       </header>
 
       {/* Main content with resizable panels - set to flex-grow to take remaining height */}
@@ -681,10 +688,10 @@ const Editor = () => {
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="overflow-auto bg-neutral-100 dark:bg-neutral-950 flex flex-col relative"
+            className="bg-neutral-100 dark:bg-neutral-950 overflow-auto"
           >
             {/* Preview Controls Header */}
-            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center flex-shrink-0">
+            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
               {/* Left side (Placeholder or future use) */}
               <div>
                 {/* Conditionally render Accept/Reject buttons - REMOVED FROM HERE */}
@@ -747,9 +754,9 @@ const Editor = () => {
             </div>
             
             {/* Preview Content Area */}
-            <div className="p-6 flex-grow overflow-y-auto relative">
+            <div className="min-h-[calc(100%-50px)]">
               {!hasCode && !projectData?.current_html ? (
-                <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 text-center h-full flex flex-col justify-center">
+                <div className="bg-white m-6 p-8 rounded-lg shadow-sm border border-gray-100 text-center h-full flex flex-col justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
                   <div>
                   <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
                   <p className="text-gray-500 mb-6">

@@ -141,21 +141,24 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
 
   const frameClass = 
     previewDevice === 'mobile'
-      ? 'w-[375px] h-full max-h-[calc(100vh-6rem)] border border-gray-300 dark:border-gray-700 rounded-xl shadow-lg overflow-auto overflow-x-auto relative'
-      : 'max-w-[650px] w-full mx-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden relative';
+      ? 'w-[375px] mx-auto rounded-xl overflow-hidden'
+      : 'max-w-[650px] w-full mx-auto rounded-xl overflow-hidden';
       
   const frameBackground = 'bg-white';
   const inversionClass = previewMode === 'dark' ? 'filter invert hue-rotate-180' : '';
-  const outerContainerClass = "flex justify-center py-6"; 
+  const outerContainerClass = "flex justify-center pt-4 pb-20"; 
 
   return (
     <div className={outerContainerClass}>
-      <div className={cn(frameClass, frameBackground, inversionClass)}>
+      <div 
+        className={cn(frameClass, frameBackground, inversionClass)}
+        style={{ boxShadow: 'none' }}
+      >
         <EmailHtmlRenderer
           ref={htmlRendererRef}
           html={currentHtml}
           onContentReady={handleContentReady}
-          className="min-w-[375px] w-full h-full" 
+          className="w-full"
         />
         <div 
           ref={overlayContainerRef}
