@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -45,14 +44,14 @@ const Signup = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Link to="/" className="flex items-center">
-            <Mail className="h-10 w-10 text-emailore-purple" />
-            <span className="ml-2 text-2xl font-semibold text-gray-900">emailore</span>
+            <Mail className="h-10 w-10 text-monketer-purple" />
+            <span className="ml-2 text-2xl font-semibold text-gray-900">monketer</span>
           </Link>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create your account</h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Or{" "}
-          <Link to="/login" className="font-medium text-emailore-purple hover:text-emailore-purple-dark">
+          <Link to="/login" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
             sign in to an existing account
           </Link>
         </p>
@@ -72,7 +71,7 @@ const Signup = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
@@ -91,7 +90,7 @@ const Signup = () => {
                   type="password"
                   autoComplete="new-password"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
@@ -105,15 +104,15 @@ const Signup = () => {
                 name="terms"
                 type="checkbox"
                 required
-                className="h-4 w-4 text-emailore-purple focus:ring-emailore-purple border-gray-300 rounded"
+                className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
               />
               <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
                 I agree to the{" "}
-                <a href="#" className="font-medium text-emailore-purple hover:text-emailore-purple-dark">
+                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
                   Terms of Service
                 </a>{" "}
                 and{" "}
-                <a href="#" className="font-medium text-emailore-purple hover:text-emailore-purple-dark">
+                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
                   Privacy Policy
                 </a>
               </label>
@@ -122,7 +121,7 @@ const Signup = () => {
             <div>
               <Button 
                 type="submit"
-                className="w-full bg-emailore-purple hover:bg-emailore-purple-dark text-white"
+                className="w-full bg-monketer-purple hover:bg-monketer-purple-dark text-white"
                 disabled={loading}
               >
                 {loading ? 'Creating account...' : 'Sign up'}

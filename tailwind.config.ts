@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -62,6 +61,11 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				monketer: {
+					purple: "#9b87f5",
+					"purple-dark": "#7E69AB",
+					"purple-light": "#E5DEFF"
 				},
 				emailore: {
 					purple: "#9b87f5",

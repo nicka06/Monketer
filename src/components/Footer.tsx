@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 
 const footerNavigation = {
@@ -34,8 +33,8 @@ const Footer = () => {
       <div className="mx-auto max-w-7xl px-6 pb-8 pt-16 sm:pt-24 lg:px-8 lg:pt-20">
         <div className="xl:grid xl:grid-cols-3 xl:gap-8">
           <div className="space-y-8">
-            <Link to="/" className="text-emailore-purple text-3xl font-bold tracking-tight">
-              emailore
+            <Link to="/" className="text-monketer-purple text-3xl font-bold tracking-tight">
+              monketer
             </Link>
             <p className="text-sm leading-6 text-gray-300">
               Create emails that captivate, convert, and make your audience say "wow".
@@ -97,7 +96,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="mt-16 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
-          <p className="text-xs leading-5 text-gray-400">&copy; {new Date().getFullYear()} Emailore. All rights reserved.</p>
+          <p className="text-xs leading-5 text-gray-400">&copy; {new Date().getFullYear()} Monketer. All rights reserved.</p>
         </div>
       </div>
     </footer>

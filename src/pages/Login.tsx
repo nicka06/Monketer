@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -30,15 +29,15 @@ const Login = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Link to="/" className="flex items-center">
-            <Mail className="h-10 w-10 text-emailore-purple" />
-            <span className="ml-2 text-2xl font-semibold text-gray-900">emailore</span>
+            <Mail className="h-10 w-10 text-monketer-purple" />
+            <span className="ml-2 text-2xl font-semibold text-gray-900">monketer</span>
           </Link>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{" "}
-          <Link to="/signup" className="font-medium text-emailore-purple hover:text-emailore-purple-dark">
-            create a new account
+        <h2 className="mt-10 text-2xl font-bold leading-9 tracking-tight text-gray-900">Sign in to your account</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          Don't have an account?{' '}
+          <Link to="/signup" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
+            Sign up
           </Link>
         </p>
       </div>
@@ -57,7 +56,7 @@ const Login = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
@@ -76,7 +75,7 @@ const Login = () => {
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-emailore-purple focus:border-emailore-purple sm:text-sm"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
@@ -90,7 +89,7 @@ const Login = () => {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-emailore-purple focus:ring-emailore-purple border-gray-300 rounded"
+                  className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
                   Remember me
@@ -98,7 +97,7 @@ const Login = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-emailore-purple hover:text-emailore-purple-dark">
+                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
                   Forgot your password?
                 </a>
               </div>
@@ -107,7 +106,7 @@ const Login = () => {
             <div>
               <Button 
                 type="submit"
-                className="w-full bg-emailore-purple hover:bg-emailore-purple-dark text-white"
+                className="w-full bg-monketer-purple hover:bg-monketer-purple-dark text-white"
                 disabled={loading}
               >
                 {loading ? 'Signing in...' : 'Sign in'}
