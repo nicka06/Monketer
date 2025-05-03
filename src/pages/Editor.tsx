@@ -315,7 +315,7 @@ const Editor = () => {
       }
       
       setProgress(50);
-      
+        
       // --- Prepare Payload for Edge Function --- 
       const payload = {
         prompt: message,
@@ -324,7 +324,7 @@ const Editor = () => {
         projectId: currentProjectId 
       };
       console.log("Sending payload to generate-email-changes:", payload);
-      
+        
       // --- Call Edge Function --- 
       response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
         method: 'POST',
@@ -537,7 +537,7 @@ const Editor = () => {
       setTimeout(() => setProgress(0), 500);
     }
   };
-      
+
   // Handle rejecting all pending changes
   const handleRejectAll = async () => {
     if (!actualProjectId) {

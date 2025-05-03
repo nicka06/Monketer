@@ -45,11 +45,11 @@ const TestimonialsSection = () => {
                   <div>
                     <h3 className="text-base font-semibold leading-6 tracking-tight text-gray-900">{testimonial.name}</h3>
                     <p className="text-sm text-gray-600">{testimonial.title}</p>
-                  </div>
+                </div>
                 </div>
               </div>
             ))}
-          </div>
+            </div>
         </div>
       </div>
     </div>

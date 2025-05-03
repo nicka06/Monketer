@@ -20,8 +20,8 @@ const footerNavigation = {
     { name: 'Status', href: '#' },
   ],
   legal: [
-    { name: 'Privacy Policy', href: '#' },
-    { name: 'Terms of Service', href: '#' },
+    { name: 'Privacy Policy', href: '/privacy-policy' },
+    { name: 'Terms of Service', href: '/terms-of-service' },
     { name: 'Cookie Policy', href: '#' },
   ],
 };
@@ -47,9 +47,9 @@ const Footer = () => {
                 <ul role="list" className="mt-6 space-y-4">
                   {footerNavigation.product.map((item) => (
                     <li key={item.name}>
-                      <a href={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
+                      <Link to={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
                         {item.name}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -59,9 +59,9 @@ const Footer = () => {
                 <ul role="list" className="mt-6 space-y-4">
                   {footerNavigation.company.map((item) => (
                     <li key={item.name}>
-                      <a href={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
+                      <Link to={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
                         {item.name}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -73,9 +73,9 @@ const Footer = () => {
                 <ul role="list" className="mt-6 space-y-4">
                   {footerNavigation.support.map((item) => (
                     <li key={item.name}>
-                      <a href={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
+                      <Link to={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
                         {item.name}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -85,9 +85,9 @@ const Footer = () => {
                 <ul role="list" className="mt-6 space-y-4">
                   {footerNavigation.legal.map((item) => (
                     <li key={item.name}>
-                      <a href={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
+                      <Link to={item.href} className="text-sm leading-6 text-gray-300 hover:text-white">
                         {item.name}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
