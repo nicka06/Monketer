@@ -71,9 +71,9 @@ const HeroSection = () => {
                 />
                 <div className="flex justify-center mt-4">
                   <Button type="submit" className="w-auto flex items-center justify-center bg-monketer-purple hover:bg-monketer-purple-dark transition-colors group px-8">
-                    Generate Email
-                    <ArrowRight className="ml-2 h-4 w-4 inline-block transition-all group-hover:translate-x-1" />
-                  </Button>
+                  Generate Email
+                  <ArrowRight className="ml-2 h-4 w-4 inline-block transition-all group-hover:translate-x-1" />
+                </Button>
                 </div>
               </div>
             </div>

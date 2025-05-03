@@ -148,7 +148,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   const inversionClass = previewMode === 'dark' ? 'filter invert hue-rotate-180' : '';
   const outerContainerClass = "flex justify-center pt-4 pb-20"; 
 
-  return (
+    return (
     <div className={outerContainerClass}>
       <div 
         className={cn(frameClass, frameBackground, inversionClass)}
@@ -165,7 +165,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
           className="absolute top-0 left-0 w-full h-full pointer-events-none"
           style={{ zIndex: 5 }}
         >
-        </div>
+      </div>
       </div>
     </div>
   );
