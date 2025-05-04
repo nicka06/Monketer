@@ -1,0 +1,194 @@
+# Email Element Structure Integration Plan
+
+## Phase 1: Preparation (1-2 days)
+
+### 1. Database Setup
+- [X] Add `semantic_email_v2` column (JSONB, NOT NULL) to `projects` table
+- [X] Add GIN index to `semantic_email_v2` column
+- [/] Set up database constraints (`NOT NULL` confirmed, further checks deferred to app logic)
+
+### 2. Type Definitions (V2)
+- [X] Create new types directory (`src/types/v2/`)
+- [X] Define `EmailElement` base interface and `ElementType`
+- [X] Define `EmailSection` interface
+- [X] Define `EmailTemplate` interface
+- [X] Define all element-specific properties interfaces (Header, Text, Button, etc.)
+- [X] Define `EmailElement` as a discriminated union
+- [X] Create type guards and basic validators (`validators.ts`)
+- [X] Create `index.ts` to export all V2 types
+- [X] Define Diff types (`diffs.ts`) and export
+
+### 3. Diff Types (V2)
+- [X] Create `DifferV2` class structure (`src/services/v2/differ.ts`)
+- [X] Install `lodash` for deep comparison
+- [X] Implement `diffProperties` helper (handles nesting)
+- [X] Implement `diffElements` method (ID-based, handles add/remove/modify/move)
+- [X] Implement `diffSections` method (ID-based, uses helpers)
+- [X] Implement `diffTemplates` method (handles name, global styles, sections)
+- [/] Add change tracking (Implicitly done via `TemplateDiffResult` output)
+- [ ] ~~Add conflict resolution~~ (Defer - Out of scope for basic differ)
+- [ ] ~~Add merge capabilities~~ (Defer - Separate utility needed)
+
+## Phase 2: Core Implementation (3-5 days)
+
+### 1. HTML Generation (V2 Semantic to HTML)
+- [X] Create `HtmlGeneratorV2` class structure (`src/services/v2/htmlGenerator.ts`)
+- [X] Implement `generateElementHtml` for basic types
+- [X] Implement `generateSectionHtml`
+- [X] Implement `generate` method for full template HTML
+- [X] Add foundational email client compatibility (resets, Outlook comments)
+- [X] Implement style handling helpers (`generateStyleString`, etc.)
+- [X] Add basic responsive structure (`@media` query)
+
+### 2. Semantic Parsing (HTML to V2 Semantic)
+- [X] Create `SemanticParserV2` class structure (`src/services/v2/semanticParser.ts`)
+- [X] Install `jsdom` for server-side DOM parsing
+- [X] Implement HTML-to-semantic section parsing (`parseSections`, `parseSection`, `extractSectionStyles`)
+- [X] Implement HTML-to-semantic element parsing (`parseElements`, `parseElement`, `determineElementType`)
+- [X] Implement property and layout extraction (`extractLayoutStyles`, `extractElementProperties`)
+- [X] Implement content extraction (`extractElementContent`)
+- [X] Add error handling (resilient parsing for sections/elements)
+- [X] Add validation (within property extraction)
+- [X] Add basic fallback handling (defaults during parsing)
+
+### 3. Diffing System (V2 vs V2)
+- [X] Create `DifferV2` class structure (`src/services/v2/differ.ts`)
+- [X] Install `lodash` for deep comparison
+- [X] Implement `diffProperties` helper (handles nesting)
+- [X] Implement `diffElements` method (ID-based, handles add/remove/modify/move)
+- [X] Implement `diffSections` method (ID-based, uses helpers)
+- [X] Implement `diffTemplates` method (handles name, global styles, sections)
+- [/] Add change tracking (Implicitly done via `TemplateDiffResult` output)
+- [ ] ~~Add conflict resolution~~ (Defer - Out of scope for basic differ)
+- [ ] ~~Add merge capabilities~~ (Defer - Separate utility needed)
+
+### 4. AI Integration
+- [X] Update AI system prompt to request V2 JSON format: `{ newTemplate: V2Structure, explanation: string }`
+- [X] Include V2 type definitions (condensed) in the system prompt
+- [X] Refine 'major' vs 'edit' mode instructions (creative freedom vs strict adherence)
+- [X] Ensure OpenAI API call uses `response_format: { type: "json_object" }`
+- [X] Update edge function response parsing to extract `newTemplate` and `explanation`
+- [ ] ~~Add element-specific prompts~~ (Defer - Sending full type list for now)
+- [ ] Add validation for the structure of the AI JSON response
+- [ ] Add error handling for AI call failures / invalid responses
+- [ ] Add retry mechanisms for AI calls (optional enhancement)
+
+### 5. Refactoring V1->V2 Integration Points (NEW STEP)
+- [ ] Update `getProjectData` in edge function to read from `semantic_email_v2` and return V2 `EmailTemplate`
+- [ ] Update `updateProject` in edge function to write to `semantic_email_v2` (V2 `EmailTemplate`)
+- [ ] Replace `normalizeTemplate` call in edge function with V2 equivalent or ensure it works with V2 (if needed)
+- [ ] Replace `generateHtmlFromSemantic` call in edge function with instantiation and call to `HtmlGeneratorV2.generate`
+- [ ] Replace `parseHtmlToSemantic` call in edge function (if used) with instantiation and call to `SemanticParserV2.parse`
+- [ ] Replace `diffSemanticEmails` call in edge function with instantiation and call to `DifferV2.diffTemplates`
+- [ ] Review and update any other backend code still using old V1 types/logic (e.g., saving pending changes format)
+
+## Phase 3: UI Updates (In Progress - Estimated 3-5 days total)
+
+### 1. State Management
+- [X] Update `Project` type definition (`src/types/editor.ts`)
+- [X] Update `projectData` state in `Editor.tsx`
+- [X] Update service calls in `Editor.tsx` (`getProject`, `handleSendMessage`, `handleNavigateToSendPage`) to use/expect V2 data
+- [ ] Update `accept/rejectPendingChange` logic if needed (currently uses separate edge function, but relies on `fetchAndSetProject` which gets V2)
+
+### 2. Editor Components (ON HOLD)
+- [ ] **(ON HOLD)** Define editing trigger mechanism (e.g., click on preview, tree view selection)
+- [ ] **(ON HOLD)** Create `ElementEditorPanel` component (or similar)
+- [ ] **(ON HOLD)** Implement logic to display panel based on selected element/section
+- [ ] **(ON HOLD)** Dynamically generate form fields in panel based on V2 element `type`, `properties`, and `layout`
+- [ ] **(ON HOLD)** Implement state update logic in `Editor.tsx` to modify `projectData.semantic_email_v2` based on editor panel changes
+- [ ] **(ON HOLD)** Implement client-side preview update (re-run `HtmlGeneratorV2` or similar) upon direct edits in the panel
+- [ ] **(ON HOLD)** Optional: Integrate direct edits with diffing/pending changes system (deferred?)
+- [ ] **(ON HOLD)** Create `SectionEditorPanel` component (similar logic)
+
+### 3. Preview Components
+- [ ] Ensure `EmailPreview` renders HTML generated by `HtmlGeneratorV2` (Verified - uses `current_html`)
+- [ ] Add responsive preview (using media queries if applicable)
+- [ ] Add device preview toggle (Done)
+- [ ] Add theme preview toggle (Done - light/dark)
+- [ ] Add change highlighting based on V2 `TemplateDiffResult` (Deferred? Currently uses V1 `pendingChanges`)
+- [ ] Add interaction support for editing trigger **(ON HOLD - Depends on Editor Components)**
+
+## Phase 4: Testing (NEXT FOCUS - Validation)
+
+- [ ] **Validate V2 AI Flow End-to-End:**
+    - [ ] Test `generate-email-changes` function (API call -> AI -> Parse -> Validate -> DB Update -> Response)
+    - [ ] Verify AI consistently returns valid V2 JSON structure.
+    - [ ] Verify AI adheres to 'major' vs 'edit' mode instructions with V2 structure.
+    - [ ] Verify AI uses chat history context effectively.
+    - [ ] Verify `HtmlGeneratorV2` output (`current_html`) matches AI's V2 structure.
+    - [ ] Verify V2->V1 diff mapping for `pending_changes` storage.
+- [ ] Unit Tests (Services, Components)
+- [ ] Integration Tests (Full V2 Flow)
+- [ ] E2E Tests (User Flows)
+
+## Phase 5: Deployment (1 day)
+
+### 1. Staging Deployment
+- [ ] Deploy new code (including updated edge function)
+- [ ] Verify functionality (create/edit emails)
+- [ ] Test performance
+- [ ] Test compatibility
+- [ ] Gather feedback
+
+### 2. Production Deployment
+- [ ] Deploy new code
+- [ ] Verify functionality
+- [ ] Monitor performance
+- [ ] Monitor errors
+
+## Phase 6: Monitoring (Ongoing)
+
+### 1. Error Tracking
+- [ ] Set up error tracking (frontend & edge function)
+- [ ] Set up alerts for critical errors
+- [ ] Set up logging (frontend & edge function)
+- [ ] Set up reporting / dashboards
+
+### 2. Performance Monitoring
+- [ ] Set up metrics (load times, API response times)
+- [ ] Set up alerts for performance degradation
+- [ ] Set up logging
+- [ ] Set up reporting / dashboards
+
+## Timeline
+- Phase 1: Done (approx)
+- Phase 2: In Progress (Estimate: 3-5 days total)
+- Phase 3: In Progress (Estimated 3-5 days total)
+- Phase 4: 2-3 days
+- Phase 5: 1 day
+- Phase 6: Ongoing
+
+Total: 8-12 days remaining (approx)
+
+## Risk Mitigation
+
+### 1. Performance Optimization
+- [ ] Monitor metrics
+- [ ] Implement caching (if needed)
+- [ ] Optimize queries (DB access)
+- [ ] Add indexes (Done)
+- [ ] Monitor load
+
+### 2. Compatibility Assurance
+- [ ] Test email clients (Manual or using tools like Email on Acid/Litmus)
+- [ ] Implement fallbacks (within Generator/Parser)
+- [ ] Monitor rendering
+- [ ] Test devices / browsers
+
+### 3. User Impact Minimization
+- [ ] Schedule deployment off-peak
+- [ ] Provide communication
+- [ ] Offer support
+- [ ] Monitor feedback
+- [ ] Update documentation
+
+## Documentation
+- [ ] Update API documentation (if applicable)
+- [ ] Update user documentation (if UI changes)
+- [ ] Update developer documentation (new types, services)
+- [ ] Update troubleshooting guide
+- [ ] Update FAQ
+
+## Training (If applicable)
+- [ ] Train developers on new structure/services
+- [ ] Train support staff on potential issues

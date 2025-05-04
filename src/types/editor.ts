@@ -1,3 +1,5 @@
+import { EmailTemplate as EmailTemplateV2 } from '@/types/v2'; // Import V2 Template
+
 // Types for email content and pending changes
 
 export interface EmailElement {
@@ -51,6 +53,7 @@ export interface Project {
   isArchived: boolean;
   current_html: string | null;
   semantic_email: EmailTemplate | null;
+  semantic_email_v2: EmailTemplateV2 | null;
   version: number;
 }
 

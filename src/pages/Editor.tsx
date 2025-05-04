@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
+import { EmailTemplate as EmailTemplateV2 } from '@/types/v2';
 import { 
   getProject, 
   saveChatMessage, 
@@ -13,7 +14,7 @@ import {
   createProject, 
   getProjectByNameAndUsername, 
   savePendingChange,
-  exportEmailAsHtml,
+  exportEmailAsHtmlV2,
   updateProject,
 } from '@/services/projectService';
 import { useAuth } from '@/hooks/useAuth';
@@ -81,8 +82,8 @@ const Editor = () => {
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [isMobileView, setIsMobileView] = useState(false); // State for mobile switch
   
-  // Add state for selected mode
-  const [selectedMode, setSelectedMode] = useState<InteractionMode>('edit'); 
+  // Add state for selected mode and set initial value to 'major'
+  const [selectedMode, setSelectedMode] = useState<InteractionMode>('major'); 
   
   // Load username for current user
   useEffect(() => {
@@ -161,6 +162,7 @@ const Editor = () => {
       setPendingChanges([]);
       setHasCode(false);
       setActualProjectId(null);
+      setSelectedMode('major'); // Reset mode to major when loading new project
         
       try {
         // Case 1: Using the /editor/:projectId route
@@ -266,27 +268,20 @@ const Editor = () => {
 
   // handleSendMessage now matches ChatInterface prop expectations
   const handleSendMessage = async (message: string, mode: InteractionMode) => {
-    console.log(`[handleSendMessage] Mode: ${mode}, ProjectID: ${actualProjectId}`);
-    if (!user) {
-      toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
-        return;
-      }
-      
+      setIsLoading(true);
+    setProgress(0);
+    let response;
     let currentProjectId = actualProjectId;
-
-    // --- Prepare User Message & Update UI Optimistically ---
     const newUserMessage: ChatMessage = {
       id: generateId(),
-      project_id: currentProjectId || 'pending_creation',
+      project_id: currentProjectId || 'unknown',
       role: 'user',
         content: message,
         timestamp: new Date(),
     };
-    setChatMessages(prev => [...prev, newUserMessage]);
-    setIsLoading(true);
-    setProgress(30);
 
-    let response: Response | null = null; 
+    // --- Add User Message to State Immediately --- 
+    setChatMessages(prev => [...prev, newUserMessage]);
 
     try {
       // --- Ensure Project Exists --- 
@@ -308,6 +303,9 @@ const Editor = () => {
         console.log("New project created with ID:", currentProjectId);
         setHasCode(!!newProject.current_html);
         setPendingChanges([]);
+        
+        // Force the first message to be a major edit
+        mode = 'major';
       }
       
       if (!currentProjectId) {
@@ -358,56 +356,50 @@ const Editor = () => {
       const result = await response.json();
       console.log("[handleSendMessage] Success response body:", JSON.stringify(result)); // Log the full result
 
-      // Expect backend to return new changes directly
-      const { message: aiResponseMessage, newSemanticEmail, newHtml, newPendingChanges } = result;
+      // Expect backend to return V2 template
+      const { message: aiResponseMessage, newSemanticEmail: newSemanticEmailV2, newHtml, newPendingChanges } = result;
 
       // --- Add detailed logging --- 
       console.log("[handleSendMessage] Received newHtml (first 500 chars):", newHtml?.substring(0, 500));
       console.log("[handleSendMessage] Received newPendingChanges:", JSON.stringify(newPendingChanges, null, 2));
       // --- End detailed logging ---
 
-      if (!newSemanticEmail || !newHtml) {
-        throw new Error("Backend response missing newSemanticEmail or newHtml.");
+      if (!newSemanticEmailV2 || !newHtml) {
+        throw new Error("Backend response missing newSemanticEmailV2 or newHtml.");
       }
       
-      // Remove the separate call to load pending changes
-      // await loadPendingChanges(currentProjectId); 
-      
-      // Set pending changes directly from the response
       setPendingChanges(newPendingChanges || []);
       console.log("[handleSendMessage] Pending changes set from direct response.");
       
+      // --- Update Project Data State with V2 structure ---
       setProjectData(prevData => {
-        if (!prevData) {
-          console.error("[handleSendMessage] Project data was null before update despite having project ID. Reconstructing.");
-          return { 
+        const baseData = prevData ?? {
             id: currentProjectId!, 
             name: projectTitle || "Untitled Document", 
-            semantic_email: newSemanticEmail, 
-            current_html: newHtml,
-            lastEditedAt: new Date(),
             createdAt: new Date(),
             isArchived: false, 
-            version: newSemanticEmail.version || 1 
-          } as Project;
-        }
+            // Add default version if creating baseData inline
+            version: 2 
+        };
         return {
-          ...prevData,
-          semantic_email: newSemanticEmail,
+          ...baseData,
+          semantic_email: null, // Nullify V1 field
+          semantic_email_v2: newSemanticEmailV2, // Store V2 template
           current_html: newHtml,
           lastEditedAt: new Date(),
-          version: newSemanticEmail.version || prevData.version,
+          // Safely access prevData version, fallback to V2 template version or default
+          version: newSemanticEmailV2.version || prevData?.version || 2, 
         };
       });
       setHasCode(true);
-      console.log("[handleSendMessage] Project data and related states updated.");
+      console.log("[handleSendMessage] Project data and related states updated with V2 structure.");
 
       const assistantMessage: ChatMessage = {
             id: generateId(),
         project_id: currentProjectId,
         role: 'assistant',
         content: aiResponseMessage || 'Email updated.',
-        timestamp: new Date(),
+            timestamp: new Date(),
       };
       setChatMessages(prev => [...prev, assistantMessage]);
       
@@ -450,7 +442,7 @@ const Editor = () => {
     }
   };
 
-  // Function to navigate to the send page
+  // Function to navigate to the send page (Updated for V2)
   const handleNavigateToSendPage = async () => {
     if (!projectData?.current_html) {
       toast({
@@ -461,17 +453,27 @@ const Editor = () => {
       return;
     }
     
+    // Use the V2 semantic template for export
+    if (!projectData.semantic_email_v2) {
+        toast({
+            title: "Cannot Send",
+            description: "Missing email structure data (V2). Please try generating again.",
+            variant: "destructive",
+        });
+        return;
+    }
+
     try {
-      // Pass the semantic email object, not the HTML string
-      const currentHtml = await exportEmailAsHtml(projectData.semantic_email); 
+      // Pass the V2 semantic email object
+      const currentHtml = await exportEmailAsHtmlV2(projectData.semantic_email_v2); 
       
       sessionStorage.setItem('emailHtmlToSend', currentHtml);
-      console.log("Stored current email HTML in sessionStorage.");
+      console.log("Stored current V2 email HTML in sessionStorage.");
 
       navigate('/send-email');
 
     } catch (error) {
-      console.error("Error preparing email for sending:", error);
+      console.error("Error preparing V2 email for sending:", error);
       toast({
         title: "Error",
         description: "Could not prepare email content for sending.",
@@ -836,7 +838,13 @@ const Editor = () => {
                 isLoading={isLoading}
                 initialInputValue={initialInputValue} 
                 selectedMode={selectedMode}
-                onModeChange={(mode) => !isLoading && setSelectedMode(mode)}
+                onModeChange={(mode) => {
+                  // Only allow mode changes if there are messages
+                  if (chatMessages.length > 0 && !isLoading) {
+                    setSelectedMode(mode);
+                  }
+                }}
+                isModeLocked={chatMessages.length === 0}
               />
             </div>
           </ResizablePanel>

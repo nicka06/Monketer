@@ -20,6 +20,7 @@ interface ChatInterfaceProps {
   // Add props for mode control
   selectedMode: InteractionMode;
   onModeChange: (mode: InteractionMode) => void;
+  isModeLocked: boolean; // Add new prop
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -29,6 +30,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   initialInputValue,
   selectedMode, // Receive mode state
   onModeChange, // Receive mode change handler
+  isModeLocked, // Add new prop
 }) => {
   const [input, setInput] = useState(initialInputValue || '');
   const [displayCount, setDisplayCount] = useState(5);
@@ -112,14 +114,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <Avatar className="h-6 w-6">
-                    {isUserMessage(message) ? 'U' : 'A'}
-                  </Avatar>
-                  <span className="text-xs opacity-70">
-                    {isUserMessage(message) ? 'You' : 'Assistant'}
-                  </span>
-                </div>
+                <span className="text-xs opacity-70 font-medium block mb-1">
+                  {isUserMessage(message) ? 'User' : 'Monketer'}
+                </span>
                 <div className="text-sm whitespace-pre-wrap">
                   {message.content}
                 </div>
@@ -155,18 +152,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               onValueChange={(value) => onModeChange(value as InteractionMode)} 
               className="flex items-center space-x-4"
               aria-label="Interaction Mode"
-              disabled={isLoading} // Disable during loading
+              disabled={isLoading || isModeLocked} // Add isModeLocked to disabled condition
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="ask" id="mode-ask" disabled={isLoading}/>
+                <RadioGroupItem value="ask" id="mode-ask" disabled={isLoading || isModeLocked}/>
                 <Label htmlFor="mode-ask" className="text-xs">Ask</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="edit" id="mode-edit" disabled={isLoading}/>
+                <RadioGroupItem value="edit" id="mode-edit" disabled={isLoading || isModeLocked}/>
                 <Label htmlFor="mode-edit" className="text-xs">Edit</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="major" id="mode-major" disabled={isLoading}/>
+                <RadioGroupItem value="major" id="mode-major" disabled={isLoading || isModeLocked}/>
                 <Label htmlFor="mode-major" className="text-xs">Major Edit</Label>
               </div>
             </RadioGroup>
