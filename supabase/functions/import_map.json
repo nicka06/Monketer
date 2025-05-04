@@ -1,5 +1,8 @@
 {
   "imports": {
-    "@/": "../../src/"
+    "@/": "../../src/",
+    "@/types/v2/": "../../src/types/v2/",
+    "@/services/v2/": "../../src/services/v2/",
+    "shared/": "./_shared/"
   }
 } 

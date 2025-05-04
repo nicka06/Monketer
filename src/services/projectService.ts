@@ -4,6 +4,9 @@ import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement, Email
 import { cleanUuid } from '@/lib/uuid-utils'; // Import from new location
 // import { SupabaseClient } from '@supabase/supabase-js'; // No longer needed as parameter
 import { generateId } from '@/lib/uuid'; // Used for default template
+// Import V2 types and services
+import { EmailTemplate as EmailTemplateV2 } from '@/types/v2';
+import { HtmlGeneratorV2 } from '@/services/v2/htmlGenerator'; // Import V2 Generator
 
 // --- Default Email Template --- 
 const defaultSemanticTemplate: EmailTemplate = {
@@ -32,6 +35,57 @@ const defaultSemanticTemplate: EmailTemplate = {
     ],
     styles: { globalCss: 'body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f4f4f4; }', fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto' },
     version: 1,
+};
+
+// --- Default V2 Email Template --- 
+const defaultSemanticTemplateV2: EmailTemplateV2 = {
+    id: generateId(), // Project ID will likely overwrite this
+    name: 'New Email',
+    version: 2,
+    globalStyles: {
+        bodyBackgroundColor: '#f4f4f4',
+        contentWidth: '600px',
+        bodyFontFamily: 'Arial, sans-serif'
+    },
+    sections: [
+        {
+            id: generateId(),
+            styles: { 
+                backgroundColor: '#ffffff',
+                padding: { top: '20px', bottom: '20px', left: '20px', right: '20px' } 
+            },
+            elements: [
+                {
+                    id: generateId(),
+                    type: 'header',
+                    content: 'Welcome to your new email',
+                    properties: { 
+                        level: 'h1', 
+                        text: 'Welcome to your new email',
+                        typography: {
+                            color: '#333333',
+                            fontSize: '28px',
+                            fontWeight: 'bold' 
+                        }
+                    },
+                    layout: { align: 'center', padding: { bottom: '10px' } }
+                },
+                {
+                    id: generateId(),
+                    type: 'text',
+                    content: 'This is a starter template. Use the AI to help you create amazing emails.',
+                    properties: { 
+                        text: 'This is a starter template. Use the AI to help you create amazing emails.',
+                        typography: {
+                            color: '#555555',
+                            fontSize: '16px' 
+                        }
+                    },
+                    layout: { align: 'center', padding: { top: '10px' } }
+                }
+            ]
+        }
+    ]
 };
 
 // --- Simple Client-Side HTML Generator (Matches basic structure of backend) ---
@@ -132,10 +186,11 @@ export const createProject = async (name: string): Promise<Project | null> => {
       .insert({
                 name: name,
                 user_id: userId,
-                semantic_email: defaultSemanticTemplate as any, // Use the default template
-                current_html: defaultHtml, // Use the generated HTML
+                semantic_email: defaultSemanticTemplate as any, // V1 template
+                semantic_email_v2: defaultSemanticTemplateV2 as any, // Add V2 default
+                current_html: defaultHtml, // TODO: Consider generating V2 HTML here?
                 last_edited_at: new Date(),
-                version: 1
+                version: 2 // Set version to 2 for new projects
       })
       .select()
       .single();
@@ -420,6 +475,7 @@ export async function getProject(projectId: string) {
         is_archived,
         current_html,
         semantic_email,
+        semantic_email_v2,
         version
       `)
       .eq('id', projectId)
@@ -447,16 +503,17 @@ export async function getProject(projectId: string) {
 
     if (changesError) handleSupabaseError(changesError);
 
-    // Convert project data to our app schema
+    // Map project data
     const project: Project = {
       id: data.id,
       name: data.name,
       lastEditedAt: new Date(data.last_edited_at),
       createdAt: new Date(data.created_at),
       isArchived: data.is_archived,
-      current_html: data.current_html, // Include current_html
-      semantic_email: data.semantic_email as EmailTemplate | null, // Cast and include semantic_email
-      version: data.version // Include version
+      current_html: data.current_html,
+      semantic_email: null, // V1 is null
+      semantic_email_v2: data.semantic_email_v2 as EmailTemplateV2 | null, // Add missing field
+      version: data.version
     };
 
     // Convert chat messages
@@ -595,14 +652,15 @@ export async function rejectPendingChange(changeId: string) {
   }
 }
 
-// Export the email as HTML
-export async function exportEmailAsHtml(template: EmailTemplate): Promise<string> {
-  try {
-    return generateBasicHtml(template);
-  } catch (error) {
-    console.error("Error exporting email as HTML:", error);
-    return `<p>Error generating HTML: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
-  }
+// Export the email as HTML (Updated for V2)
+export async function exportEmailAsHtmlV2(template: EmailTemplateV2): Promise<string> {
+    try {
+        const htmlGenerator = new HtmlGeneratorV2();
+        return htmlGenerator.generate(template);
+    } catch (error) {
+        console.error("Error exporting V2 email as HTML:", error);
+        return `<p>Error generating HTML: ${error instanceof Error ? error.message : 'Unknown error'}</p>`;
+    }
 }
 
 // Fetch pending changes for a project
