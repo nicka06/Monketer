@@ -1,4 +1,4 @@
-import { EmailTemplate as EmailTemplateV2 } from '@/types/v2'; // Import V2 Template
+import { EmailTemplate as EmailTemplateV2 } from '@/types/v2/template';
 
 // Types for email content and pending changes
 
@@ -31,9 +31,9 @@ export interface PendingChange {
   id: string;
   elementId: string;
   changeType: 'add' | 'edit' | 'delete';
-  oldContent?: any;
-  newContent?: any;
-  status: 'pending' | 'accepted' | 'rejected';
+  oldContent: any;
+  newContent: any;
+  status: 'pending' | 'applied' | 'rejected';
 }
 
 export interface ChatMessage {
@@ -63,4 +63,6 @@ export interface EmailPreviewProps {
   pendingChanges: PendingChange[];
   previewMode: 'light' | 'dark';
   previewDevice: 'desktop' | 'mobile';
+  semanticTemplate: EmailTemplateV2 | null;
+  onPlaceholderActivate: (context: { elementId: string; path: string; type: 'image' | 'link' | 'text' }) => void;
 }

@@ -7,14 +7,15 @@ import {
   EmailGlobalStyles,
   EmailSectionStyles,
   EmailElementLayout,
+  EmailElementProperties,
   HeaderElementProperties,
   TextElementProperties,
   ButtonElementProperties,
   ImageElementProperties,
   DividerElementProperties,
   SpacerElementProperties,
-} from 'shared/types/v2/index.ts';
-import { generateId } from 'shared/lib/uuid.ts';
+} from '../../types/v2/index.ts';
+import { generateId } from '../../lib/uuid.ts';
 
 // Helper function to parse inline style strings into an object
 function parseStyleString(styleString: string | null): Record<string, string> {

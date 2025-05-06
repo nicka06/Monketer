@@ -1,4 +1,6 @@
 import { EmailTemplate, EmailSection, EmailElement, ElementType, EmailGlobalStyles, EmailSectionStyles, EmailElementLayout, EmailElementProperties, HeaderElementProperties, TextElementProperties, ButtonElementProperties, ImageElementProperties, DividerElementProperties, SpacerElementProperties } from '../../types/v2';
+import { SubtextElementProperties, QuoteElementProperties, CodeElementProperties, ListElementProperties } from '../../types/v2';
+import { IconElementProperties, NavElementProperties, SocialElementProperties, AppStoreBadgeElementProperties, UnsubscribeElementProperties, PreferencesElementProperties, PreviewTextElementProperties, ContainerElementProperties, BoxElementProperties } from '../../types/v2';
 import { JSDOM } from 'jsdom'; // We'll need a DOM parser library
 
 // Helper function to generate IDs (replace with your actual implementation)
@@ -286,32 +288,108 @@ export class SemanticParserV2 {
   }
 
   /**
-   * Determines the ElementType based on the content of a cell.
-   * Corrected logic for links containing images.
-   * @param contentElement The core element within the cell (e.g., p, h2, img, a)
-   * @returns The determined ElementType or a default.
+   * Determines the ElementType based on the primary content element within the wrapper.
+   * @param contentElement The main DOM element representing the content (e.g., p, h1, img, table).
+   * @returns The determined ElementType.
    */
   private determineElementType(contentElement: Element | null): ElementType {
-      if (!contentElement) return 'text';
-      
-      const tagName = contentElement.tagName;
-      switch(tagName) {
-          case 'H1': case 'H2': case 'H3': case 'H4': case 'H5': case 'H6': return 'header';
-          case 'P': return 'text';
-          case 'A': 
-              // It's an Anchor tag. Check if its ONLY child is an IMG
-              const firstChild = contentElement.firstElementChild;
-              if (contentElement.children.length === 1 && firstChild?.tagName === 'IMG') {
-                  return 'image'; // Treat as image if link only contains an image
-              }
-              return 'button'; // Otherwise, treat as button
-          case 'IMG': return 'image';
-          case 'HR': return 'divider';
-          case 'TABLE': 
-              console.warn('Found unexpected TABLE element type during determination (might be spacer, handled earlier).')
-              return 'text';
-          default: return 'text';
-      }
+    if (!contentElement) return 'text'; // Default or throw error?
+
+    const tagName = contentElement.tagName.toLowerCase();
+
+    switch (tagName) {
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+        return 'header';
+      case 'p':
+        // (+) TODO: Need better way to distinguish text vs subtext (e.g., check styles?)
+        // For now, assume basic text. Subtext might need specific class or style.
+        return 'text'; // Or potentially 'subtext' based on styles?
+      case 'a': // Buttons are often links styled as blocks
+        if (contentElement.querySelector('img')) return 'image'; // Image link
+        // Basic check for button styling (can be improved)
+        const styles = parseStyleString(contentElement.getAttribute('style'));
+        if (styles.display?.includes('inline-block') || styles.backgroundColor) {
+            return 'button';
+        }
+        return 'text'; // Could be a simple text link
+      case 'img':
+        return 'image';
+      case 'hr':
+        return 'divider';
+      case 'table':
+        // Check if it's a spacer table
+        if (contentElement.querySelector('td[style*="height:"]')) {
+          return 'spacer';
+        }
+        // (+) Check if it looks like a quote table
+        if (parseStyleString(contentElement.getAttribute('style')).borderLeft) {
+          return 'quote';
+        }
+        // Could be other tables (layout, nav, etc.) - needs more checks
+        // For now, fallback or add specific checks
+        break;
+      // (+) Add cases for new types based on common structures
+      case 'div':
+        // Check if it contains code structure
+        if (contentElement.querySelector('pre > code')) {
+          return 'code';
+        }
+        // Could be a container/box? Needs specific checks.
+        break;
+      case 'ol':
+      case 'ul':
+        return 'list';
+    }
+
+    // (+) Check for specific structures for other types
+    if (tagName === 'div' && (contentElement as HTMLElement).style.display === 'none') {
+        return 'previewText';
+    }
+    // Check for nav structure (p > a + a...)
+    if (tagName === 'p' && contentElement.querySelectorAll('a').length > 1) {
+        // Distinguish between nav and social? Check if links contain images?
+        const firstLinkContent = contentElement.querySelector('a')?.innerHTML;
+        if (firstLinkContent?.includes('<img')) {
+            return 'social'; // Assuming social links contain images
+        } else {
+            return 'nav'; // Assuming nav links contain text
+        }
+    }
+    // Check for single link paragraph (unsubscribe/preferences)
+    if (tagName === 'p' && contentElement.querySelectorAll('a').length === 1) {
+         const linkText = contentElement.querySelector('a')?.textContent?.toLowerCase();
+         if (linkText?.includes('unsubscribe')) return 'unsubscribe';
+         if (linkText?.includes('preference')) return 'preferences';
+         // Could still be other single links - might need better classification
+    }
+
+    // (+) Icon / AppBadge (img or a > img)
+    if ((tagName === 'img' || tagName === 'a') && contentElement.querySelector('img')) {
+        const imgElement = tagName === 'img' ? contentElement : contentElement.querySelector('img');
+        // Simple check: if width is small, assume icon?
+        const width = parseInt(imgElement?.getAttribute('width') || '50');
+        if (width <= 48) { // Arbitrary threshold for icon size
+            return 'icon';
+        }
+        // TODO: Better check for AppStoreBadge? Look at src/alt?
+        if (imgElement?.getAttribute('src')?.includes('-badge')) { // Check placeholder src
+            return 'appStoreBadge';
+        }
+        // Falls back to 'image' if not icon/badge
+        return 'image';
+    }
+
+     // (+) Container/Box are currently tricky to identify from content element alone
+     // They might be identified by the wrapper TD styles or lack of other content?
+     // Placeholder comments might be parsed if needed.
+
+    console.warn(`[SemanticParserV2] Could not determine element type for tag: ${tagName}. Defaulting to 'text'. Element:`, contentElement.outerHTML);
+    return 'text'; // Fallback type
   }
   
   /**
@@ -348,178 +426,396 @@ export class SemanticParserV2 {
    }
    
    /**
-    * Extracts type-specific properties AND performs basic validation.
-    * @param contentElement The core element (p, h2, img, a etc.)
+    * Extracts and validates properties specific to an element type.
+    * @param contentElement The primary content DOM element (e.g., p, img, a).
     * @param type The determined ElementType.
-    * @returns EmailElementProperties object if valid, otherwise null.
+    * @returns A properties object or null if invalid.
     */
    private extractAndValidateElementProperties(contentElement: Element | null, type: ElementType): EmailElementProperties | null {
-       if (!contentElement && type !== 'spacer') { // Spacer might be an empty cell
-           console.warn(`[SemanticParserV2] Content element is null for non-spacer type ${type}.`);
-           return null;
-       }
-       
-       let properties: EmailElementProperties | null = null;
-       try {
-            const styles = parseStyleString(contentElement?.getAttribute('style'));
+       if (!contentElement) return {}; // Return empty for safety, or null?
+       const styles = parseStyleString(contentElement.getAttribute('style'));
+       let properties: EmailElementProperties | null = {};
 
-            switch(type) {
-                case 'header':
-                    const headerProps: HeaderElementProperties = {
-                        level: contentElement!.tagName.toLowerCase() as any, // ! safe due to check above
-                        typography: {
-                            fontFamily: styles.fontFamily,
-                            fontSize: styles.fontSize,
-                            fontWeight: styles.fontWeight,
-                            fontStyle: safeCast(styles.fontStyle, ['italic', 'normal']),
-                            color: styles.color,
-                            textAlign: styles.textAlign as any,
-                            lineHeight: styles.lineHeight
-                        }
-                    };
-                    if (!headerProps.level || !['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headerProps.level)) {
-                         throw new Error('Invalid or missing header level');
-                    }
-                    properties = headerProps;
-                    break;
-                case 'text':
-                    const textProps: TextElementProperties = { 
-                         typography: {
-                             fontFamily: styles.fontFamily,
-                             fontSize: styles.fontSize,
-                             fontWeight: styles.fontWeight,
-                             fontStyle: safeCast(styles.fontStyle, ['italic', 'normal']),
-                             color: styles.color,
-                             textAlign: styles.textAlign as any,
-                             lineHeight: styles.lineHeight
-                         }
-                    };
-                    // Add any text-specific validation if needed (e.g., font size format)
-                    properties = textProps;
-                    break;
-                case 'button':
-                    const buttonLink = contentElement as HTMLAnchorElement;
-                    const buttonStyles = parseStyleString(buttonLink.getAttribute('style'));
-                    const buttonProps: ButtonElementProperties = {
-                        button: {
-                            href: buttonLink.getAttribute('href') || '',
-                            target: safeCast(buttonLink.getAttribute('target') || '_blank', ['_blank', '_self']),
-                            backgroundColor: buttonStyles.backgroundColor,
-                            textColor: buttonStyles.color,
-                            borderRadius: buttonStyles.borderRadius,
-                            border: buttonStyles.border,
-                        },
-                        typography: {
-                            fontFamily: buttonStyles.fontFamily,
-                            fontSize: buttonStyles.fontSize,
-                            fontWeight: buttonStyles.fontWeight
-                        }
-                    };
-                    if (!buttonProps.button.href) {
-                        throw new Error('Button href is missing or empty');
-                    }
-                    // Add basic URL format check (example)
-                    if (!buttonProps.button.href.startsWith('http') && !buttonProps.button.href.startsWith('mailto:') && buttonProps.button.href !== '#') {
-                        console.warn(`[SemanticParserV2] Button href "${buttonProps.button.href}" might be invalid.`);
-                    }
-                    properties = buttonProps;
-                    break;
-                case 'image':
-                    // ... (logic to find imgElement, linkHref, linkTarget) ...
-                    let imgElement: HTMLImageElement | null = null;
-                    if (contentElement?.tagName === 'A') imgElement = contentElement.querySelector('img');
-                    else if (contentElement?.tagName === 'IMG') imgElement = contentElement as HTMLImageElement;
-                    
-                    if (!imgElement) throw new Error('Image tag not found for image element');
-
-                    const imgStyles = parseStyleString(imgElement.getAttribute('style'));
-                    const imageProps: ImageElementProperties = {
-                         image: {
-                             src: imgElement.getAttribute('src') || '',
-                             alt: imgElement.getAttribute('alt') || '',
-                             width: imgStyles.width || imgElement.getAttribute('width') || undefined,
-                             height: imgStyles.height || imgElement.getAttribute('height') || undefined,
-                         },
-                         border: {
-                             width: imgStyles.borderWidth,
-                             style: safeCast(imgStyles.borderStyle, ['solid', 'dashed', 'dotted']),
-                             color: imgStyles.borderColor,
-                             radius: imgStyles.borderRadius
-                         }
-                    };
-                     if (!imageProps.image.src) {
-                         throw new Error('Image src is missing or empty');
-                     }
-                     if (!imageProps.border?.width && !imageProps.border?.style && !imageProps.border?.color && !imageProps.border?.radius) delete imageProps.border;
-                     properties = imageProps;
-                    break;
-                case 'divider':
-                    const dividerProps: DividerElementProperties = {
-                        divider: {
-                            color: styles.borderTopColor, // hr styles often use border-top
-                            height: styles.borderTopWidth,
-                            width: styles.width
-                        }
-                    };
-                    properties = dividerProps;
-                    break;
-                case 'spacer':
-                     // Spacer is handled differently as contentElement might be the table itself
-                     const spacerTable = contentElement as HTMLTableElement | null;
-                     const spacerCell = spacerTable?.querySelector('td');
-                     const spacerStyles = parseStyleString(spacerCell?.getAttribute('style'));
-                     const spacerHeight = spacerStyles?.height;
-                     if (!spacerHeight) {
-                         throw new Error('Spacer height could not be determined from cell style');
-                     }
-                     // Basic validation: check if it ends with 'px' (could be more robust)
-                     if (!spacerHeight.endsWith('px')) {
-                         console.warn(`[SemanticParserV2] Spacer height "${spacerHeight}" might be invalid format.`);
-                     }
-                     properties = { spacer: { height: spacerHeight } };
-                    break;
-                default:
-                     const _exhaustiveCheck: never = type; // Ensure all types handled
-                     throw new Error(`Unhandled element type in property extraction: ${_exhaustiveCheck}`);
+       switch (type) {
+         case 'header':
+           const headerProps: HeaderElementProperties = {
+               level: contentElement.tagName.toLowerCase() as any, // Cast needed
+               text: contentElement.textContent || '',
+               typography: this.extractTypographyStyles(styles)
+           };
+           if (!headerProps.level || !['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(headerProps.level)) {
+                throw new Error('Invalid or missing header level');
            }
-       } catch (error) {
-           console.error(`[SemanticParserV2] Validation failed for type ${type}:`, error);
-           return null; // Return null on validation failure
+           properties = headerProps;
+           break;
+         case 'text':
+           const textProps: TextElementProperties = {
+               text: contentElement.textContent || '',
+               typography: this.extractTypographyStyles(styles)
+           };
+           properties = textProps;
+           break;
+         case 'button':
+           const buttonLink = contentElement as HTMLAnchorElement;
+           const buttonStyles = parseStyleString(buttonLink.getAttribute('style'));
+           const buttonProps: ButtonElementProperties = {
+               button: {
+                   href: buttonLink.getAttribute('href') || '',
+                   target: safeCast(buttonLink.getAttribute('target') || '_blank', ['_blank', '_self']),
+                   backgroundColor: buttonStyles.backgroundColor,
+                   textColor: buttonStyles.color,
+                   borderRadius: buttonStyles.borderRadius,
+                   border: buttonStyles.border,
+               },
+               typography: {
+                   fontFamily: buttonStyles.fontFamily,
+                   fontSize: buttonStyles.fontSize,
+                   fontWeight: buttonStyles.fontWeight
+               }
+           };
+           if (!buttonProps.button.href) {
+               throw new Error('Button href is missing or empty');
+           }
+           // Add basic URL format check (example)
+           if (!buttonProps.button.href.startsWith('http') && !buttonProps.button.href.startsWith('mailto:') && buttonProps.button.href !== '#') {
+               console.warn(`[SemanticParserV2] Button href "${buttonProps.button.href}" might be invalid.`);
+           }
+           properties = buttonProps;
+           break;
+         case 'image':
+           const imgProps: ImageElementProperties = { image: { src: '' } }; // Initialize
+           imgProps.image.src = contentElement.getAttribute('src') || '';
+           imgProps.image.alt = contentElement.getAttribute('alt') || undefined;
+           imgProps.image.width = contentElement.getAttribute('width') || undefined;
+           imgProps.image.height = contentElement.getAttribute('height') || undefined;
+           const imgStyles = parseStyleString(contentElement.getAttribute('style'));
+           imgProps.border = {
+               width: imgStyles.borderWidth,
+               style: safeCast(imgStyles.borderStyle, ['solid', 'dashed', 'dotted']),
+               color: imgStyles.borderColor,
+               radius: imgStyles.borderRadius
+           };
+            if (!imgProps.border?.width && !imgProps.border?.style && !imgProps.border?.color && !imgProps.border?.radius) delete imgProps.border;
+           
+           // (+) Check for parent link (for regular links or video poster links)
+           const parentLink = contentElement.closest('a');
+           if (parentLink) {
+               imgProps.image.linkHref = parentLink.getAttribute('href') || undefined;
+               imgProps.image.linkTarget = safeCast(parentLink.getAttribute('target'), ['_blank', '_self']);
+               // TODO: How to differentiate between linkHref and videoHref during parse?
+               // For now, linkHref holds the value. Generator prioritizes videoHref if present.
+               // We could add a data-attribute during generation if needed: data-is-video="true"
+           }
+           properties = imgProps;
+           break;
+         case 'divider':
+           const dividerProps: DividerElementProperties = {
+               divider: {
+                   color: styles.borderTopColor, // hr styles often use border-top
+                   height: styles.borderTopWidth,
+                   width: styles.width
+               }
+           };
+           properties = dividerProps;
+           break;
+         case 'spacer':
+            // Spacer is handled differently as contentElement might be the table itself
+            const spacerTable = contentElement as HTMLTableElement | null;
+            const spacerCell = spacerTable?.querySelector('td');
+            const spacerStyles = parseStyleString(spacerCell?.getAttribute('style'));
+            const spacerHeight = spacerStyles?.height;
+            if (!spacerHeight) {
+                throw new Error('Spacer height could not be determined from cell style');
+            }
+            // Basic validation: check if it ends with 'px' (could be more robust)
+            if (!spacerHeight.endsWith('px')) {
+                console.warn(`[SemanticParserV2] Spacer height "${spacerHeight}" might be invalid format.`);
+            }
+            properties = { spacer: { height: spacerHeight } };
+           break;
+
+        // (+) Add cases for new types
+        case 'subtext':
+           const subtextProps: SubtextElementProperties = { text: contentElement.textContent || '' };
+           subtextProps.typography = this.extractTypographyStyles(styles);
+           properties = subtextProps;
+           break;
+        
+        case 'quote':
+            const quoteProps: QuoteElementProperties = { text: '' }; // Initialize
+            const quoteTableStyles = parseStyleString(contentElement.getAttribute('style'));
+            // Extract border/bg from table element
+            quoteProps.border = { 
+                width: quoteTableStyles.borderLeftWidth, 
+                style: safeCast(quoteTableStyles.borderLeftStyle, ['solid', 'dashed', 'dotted']),
+                color: quoteTableStyles.borderLeftColor,
+            };
+            if (!quoteProps.border?.width && !quoteProps.border?.style && !quoteProps.border?.color) delete quoteProps.border;
+            quoteProps.backgroundColor = quoteTableStyles.backgroundColor;
+            // Extract text/styles from inner p tags
+            const textP = contentElement.querySelector('td > p:first-child');
+            if (textP) {
+                quoteProps.text = textP.textContent || '';
+                quoteProps.typography = this.extractTypographyStyles(parseStyleString(textP.getAttribute('style')));
+            }
+            const citationP = contentElement.querySelector('td > p:last-child'); // Assumes citation is last p
+            if (citationP && citationP !== textP) {
+                quoteProps.citation = citationP.textContent?.replace(/^\-\s*/, '').trim() || undefined;
+            }
+            properties = quoteProps;
+            break;
+            
+        case 'code':
+            const codeProps: CodeElementProperties = { code: '' };
+            const codeBlockStyles = parseStyleString(contentElement.getAttribute('style')); // Styles from the outer div
+            codeProps.backgroundColor = codeBlockStyles.backgroundColor;
+            codeProps.borderRadius = codeBlockStyles.borderRadius;
+            codeProps.padding = codeBlockStyles.padding;
+            const codeTag = contentElement.querySelector('pre > code');
+            if (codeTag) {
+                codeProps.code = codeTag.textContent || '';
+                codeProps.typography = this.extractTypographyStyles(parseStyleString(codeTag.getAttribute('style')));
+                // Language hint might be stored in a class, e.g., class="language-javascript"
+                const preTag = codeTag.closest('pre');
+                const langClass = preTag?.className.match(/language-(\S+)/);
+                if (langClass && langClass[1]) {
+                    codeProps.language = langClass[1];
+                }
+            }
+            properties = codeProps;
+            break;
+        
+        case 'list':
+            const listProps: ListElementProperties = { items: [], listType: 'unordered' };
+            listProps.listType = contentElement.tagName.toLowerCase() === 'ol' ? 'ordered' : 'unordered';
+            const listItems = contentElement.querySelectorAll('li');
+            if (listItems.length > 0) {
+                listProps.items = Array.from(listItems).map(li => li.textContent || '');
+                // Extract typography from the first list item as representative (or could check list tag itself)
+                listProps.typography = this.extractTypographyStyles(parseStyleString(listItems[0].getAttribute('style')));
+                 // Extract marker style (basic color example)
+                 const listStyles = parseStyleString(contentElement.getAttribute('style'));
+                 if(listStyles.color) {
+                     listProps.markerStyle = { color: listStyles.color };
+                 }
+            }
+            properties = listProps;
+            break;
+
+        // (+) Add cases for MORE new types
+        case 'icon':
+            const iconProps: IconElementProperties = { icon: { src: '' } };
+            let iconImgElement: HTMLImageElement | null = null;
+            let iconLinkElement: HTMLAnchorElement | null = null;
+
+            if (contentElement.tagName === 'IMG') {
+                iconImgElement = contentElement as HTMLImageElement;
+            } else if (contentElement.tagName === 'A') {
+                iconLinkElement = contentElement as HTMLAnchorElement;
+                iconImgElement = contentElement.querySelector('img');
+            }
+
+            if (!iconImgElement) throw new Error('Icon img tag not found');
+
+            iconProps.icon.src = iconImgElement.getAttribute('src') || '';
+            iconProps.icon.alt = iconImgElement.getAttribute('alt') || undefined;
+            iconProps.icon.width = iconImgElement.getAttribute('width') || undefined;
+            iconProps.icon.height = iconImgElement.getAttribute('height') || undefined;
+
+            if (iconLinkElement) {
+                iconProps.icon.linkHref = iconLinkElement.getAttribute('href') || undefined;
+                iconProps.icon.linkTarget = safeCast(iconLinkElement.getAttribute('target'), ['_blank', '_self']);
+            }
+            properties = iconProps;
+            break;
+
+        case 'nav':
+            const navProps: NavElementProperties = { links: [] };
+            const navLinks = contentElement.querySelectorAll('a');
+            navProps.links = Array.from(navLinks).map(link => {
+                const linkStyles = parseStyleString(link.getAttribute('style'));
+                return {
+                    text: link.textContent || '',
+                    href: link.getAttribute('href') || '#',
+                    target: safeCast(link.getAttribute('target'), ['_blank', '_self']),
+                    typography: this.extractTypographyStyles(linkStyles)
+                };
+            });
+            // Extract layout (spacing, align from parent p?) and default typography from parent <p>
+            navProps.typography = this.extractTypographyStyles(styles); // Styles from the <p>
+            // TODO: Extract spacing/align from layout of the <p> or its styles?
+            properties = navProps;
+            break;
+
+        case 'social':
+            const socialProps: SocialElementProperties = { links: [] };
+            const socialLinks = contentElement.querySelectorAll('a');
+            socialProps.links = Array.from(socialLinks).map(link => {
+                const img = link.querySelector('img');
+                const imgSrc = img?.getAttribute('src') || '';
+                // Infer platform from placeholder src or alt text (basic)
+                let platform = 'custom';
+                const platformMatch = imgSrc.match(/#([a-zA-Z]+)-icon/);
+                if (platformMatch && platformMatch[1]) {
+                    platform = platformMatch[1];
+                }
+                return {
+                    platform: platform as any, // Cast needed
+                    href: link.getAttribute('href') || '#',
+                    iconSrc: imgSrc !== `#${platform}-icon` ? imgSrc : undefined, // Only store if non-default
+                    alt: img?.getAttribute('alt') || undefined
+                };
+            });
+             // Extract layout (spacing, align from parent p?) and iconStyle from first icon?
+             const firstIconImg = contentElement.querySelector('a > img');
+             if(firstIconImg) {
+                 const iconStyles = parseStyleString(firstIconImg.getAttribute('style'));
+                 socialProps.iconStyle = {
+                     width: iconStyles.width,
+                     height: iconStyles.height,
+                     borderRadius: iconStyles.borderRadius
+                 }
+             }
+             // TODO: Extract spacing/align
+            properties = socialProps;
+            break;
+
+        case 'appStoreBadge':
+            const badgeProps: AppStoreBadgeElementProperties = { badge: { platform: 'apple-app-store', href: '' } }; // Default platform needed
+            const badgeLink = contentElement as HTMLAnchorElement;
+            const badgeImg = contentElement.querySelector('img');
+
+            if (!badgeLink || !badgeImg) throw new Error('AppStoreBadge structure invalid (<a><img> missing)');
+
+            badgeProps.badge.href = badgeLink.getAttribute('href') || '#';
+            badgeProps.badge.alt = badgeImg.getAttribute('alt') || undefined;
+            badgeProps.badge.width = badgeImg.getAttribute('width') || undefined;
+            badgeProps.badge.height = badgeImg.getAttribute('height') || undefined;
+
+            // Infer platform from placeholder src or alt text (basic)
+            const badgeSrc = badgeImg.getAttribute('src') || '';
+            if (badgeSrc.includes('google-play') || badgeProps.badge.alt?.toLowerCase().includes('google play')) {
+                badgeProps.badge.platform = 'google-play-store';
+            } else if (badgeSrc.includes('app-store') || badgeProps.badge.alt?.toLowerCase().includes('app store')) {
+                 badgeProps.badge.platform = 'apple-app-store';
+            }
+            // TODO: Extract language?
+            properties = badgeProps;
+            break;
+
+        case 'unsubscribe':
+            const unsubProps: UnsubscribeElementProperties = { link: { text: '', href: '' } };
+            const unsubLinkElement = contentElement.querySelector('a');
+            if (!unsubLinkElement) throw new Error('Unsubscribe link not found');
+            unsubProps.link.text = unsubLinkElement.textContent || 'Unsubscribe';
+            unsubProps.link.href = unsubLinkElement.getAttribute('href') || '#';
+            unsubProps.link.target = safeCast(unsubLinkElement.getAttribute('target'), ['_blank', '_self']);
+            // Typography from parent <p>
+            unsubProps.typography = this.extractTypographyStyles(styles);
+            properties = unsubProps;
+            break;
+
+        case 'preferences':
+             const prefProps: PreferencesElementProperties = { link: { text: '', href: '' } };
+            const prefLinkElement = contentElement.querySelector('a');
+            if (!prefLinkElement) throw new Error('Preferences link not found');
+            prefProps.link.text = prefLinkElement.textContent || 'Preferences';
+            prefProps.link.href = prefLinkElement.getAttribute('href') || '#';
+            prefProps.link.target = safeCast(prefLinkElement.getAttribute('target'), ['_blank', '_self']);
+            // Typography from parent <p>
+            prefProps.typography = this.extractTypographyStyles(styles);
+            properties = prefProps;
+            break;
+
+        case 'previewText':
+            const previewProps: PreviewTextElementProperties = { text: '' };
+            // Extract text content, remove padding characters
+            let previewTextContent = contentElement.textContent || '';
+            previewTextContent = previewTextContent.replace(/(&zwnj;|&nbsp;)+$/, '').trim();
+            previewProps.text = previewTextContent;
+            properties = previewProps;
+            break;
+
+        case 'container': // These currently have no unique content element
+        case 'box':
+             // Properties are mainly styles applied to the wrapper TD (layoutStyles)
+             // Or potentially read from the placeholder comment if we added attributes there
+             // For now, return empty properties object, assuming styles handled by layout.
+             console.warn(`Parsing basic properties for ${type}. Advanced styles may need layout parsing.`);
+             properties = {};
+             break;
+
+         default:
+           // Should be handled by determineElementType, but as fallback:
+           console.warn("Attempting to extract properties for unknown or unhandled type:", type);
+           properties = {}; // Empty object
        }
-       
-       // Final check using type guards if needed, though switch logic should cover it
-       // if (!this.isValidPropertiesForType(properties, type)) return null;
-       
+
        return properties;
    }
    
    /**
-    * Extracts the primary content string from the core element.
-    * @param contentElement The core element (p, h2, img, a etc.)
-    * @param type The determined ElementType.
-    * @param wrapperElement The TD wrapper element (used for spacer fallback).
-    * @returns The content string.
+    * Helper to extract typography-related styles from a style object.
+    * @param styles Parsed style object.
+    * @returns Typography properties object.
     */
-   private extractElementContent(contentElement: Element | null, type: ElementType, wrapperElement: Element): string {
-       if (!contentElement) return '';
+   private extractTypographyStyles(styles: Record<string, string>): any {
+       const typography: any = {
+           fontFamily: styles.fontFamily,
+           fontSize: styles.fontSize,
+           fontWeight: styles.fontWeight,
+           fontStyle: styles.fontStyle,
+           color: styles.color,
+           textAlign: safeCast(styles.textAlign, ['left', 'center', 'right']),
+           lineHeight: styles.lineHeight,
+       };
+       // Remove undefined properties
+       Object.keys(typography).forEach(key => typography[key] === undefined && delete typography[key]);
+       return Object.keys(typography).length > 0 ? typography : undefined;
+   }
 
-       switch(type) {
-           case 'header':
-           case 'text':
-           case 'button':
-               return contentElement.textContent || '';
-           case 'image':
-                let imgElement = contentElement as HTMLImageElement;
-                // Handle image inside link case
-                if (contentElement.tagName !== 'IMG') {
-                    imgElement = contentElement.querySelector('img') as HTMLImageElement;
-                }
-               return imgElement?.getAttribute('alt') || ''; // Use alt text as primary 'content' for image?
-           case 'divider':
-           case 'spacer':
-               return ''; // No text content for these
-           default:
-                return contentElement.textContent || '';
-       }
+  /**
+   * Extracts the primary textual content of an element based on its type.
+   * @param contentElement The primary content DOM element.
+   * @param type The determined ElementType.
+   * @param wrapperElement The wrapping element (td).
+   * @returns The textual content string.
+   */
+   private extractElementContent(contentElement: Element | null, type: ElementType, wrapperElement: Element): string {
+     if (!contentElement) return '';
+
+     switch (type) {
+       case 'header':
+       case 'text':
+       case 'button': // Use textContent for button link as well
+       case 'subtext':
+         return contentElement.textContent || '';
+       case 'image':
+         return contentElement.getAttribute('alt') || ''; // Use Alt text as content
+       case 'divider':
+       case 'spacer':
+       case 'list': // List items are in properties
+       case 'code': // Code content is in properties
+         return ''; // No direct text content
+       case 'quote': // Extract main quote text, not citation
+         return contentElement.querySelector('td > p:first-child')?.textContent || '';
+       case 'icon':
+       case 'social':
+       case 'appStoreBadge':
+         return contentElement.querySelector('img')?.getAttribute('alt') || '';
+       case 'nav': // Maybe concatenate link text? Or leave empty?
+         return Array.from(contentElement.querySelectorAll('a')).map(a => a.textContent).join(', '); // Example concatenation
+       case 'unsubscribe':
+       case 'preferences':
+         return contentElement.querySelector('a')?.textContent || '';
+       case 'previewText':
+       case 'container':
+       case 'box':
+         return ''; // No visible text content
+       default:
+         // Fallback for potentially unhandled types
+         console.warn(`Extracting content with fallback for type: ${type}`);
+         return contentElement.textContent || '';
+     }
    }
 } 
