@@ -1,4 +1,33 @@
-import { EmailTemplate, EmailSection, EmailElement, EmailElementLayout, HeaderElementProperties, TextElementProperties, ButtonElementProperties, ImageElementProperties, DividerElementProperties, SpacerElementProperties, EmailSectionStyles, EmailGlobalStyles } from 'shared/types/v2/index.ts';
+import { 
+    EmailTemplate, 
+    EmailSection, 
+    EmailElement, 
+    EmailElementLayout, 
+    EmailSectionStyles, 
+    EmailGlobalStyles 
+} from '../../types/v2/index.ts'; // Import core types
+// Import specific property types directly from elements.ts
+import { 
+    HeaderElementProperties, 
+    TextElementProperties, 
+    ButtonElementProperties, 
+    ImageElementProperties, 
+    DividerElementProperties, 
+    SpacerElementProperties, 
+    SubtextElementProperties,
+    QuoteElementProperties,
+    CodeElementProperties,
+    ListElementProperties,
+    IconElementProperties,
+    NavElementProperties,
+    SocialElementProperties,
+    AppStoreBadgeElementProperties,
+    UnsubscribeElementProperties,
+    PreferencesElementProperties,
+    PreviewTextElementProperties,
+    ContainerElementProperties,
+    BoxElementProperties
+} from '../../types/v2/elements.ts'; // Path to elements definition
 
 /**
  * Generates email-compatible HTML from the V2 semantic structure.
@@ -188,14 +217,132 @@ export class HtmlGeneratorV2 {
         const spacerProps = element.properties as SpacerElementProperties;
         const sp = spacerProps.spacer || { height: '20px' };
         // Use a table for robust spacing in emails
-        elementContent = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td style="height:${sp.height}; line-height:${sp.height}; font-size:${sp.height};">&nbsp;</td></tr></table>`;
+        elementContent = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td style="height:${sp.height}; line-height:${sp.height}; font-size:${sp.height};\n&nbsp;</td></tr></table>`;
+        break;
+
+      // Add cases for ALL new types to satisfy exhaustiveness
+      case 'subtext':
+        const subtextProps = element.properties as SubtextElementProperties;
+        const subtextStyles = this.generateTypographyStyle(subtextProps.typography, { color: '#6c757d', fontSize: '14px' });
+        elementContent = `<p style="margin:0; ${subtextStyles}">${element.content}</p>`; // Use element.content for subtext
+        break;
+
+      case 'quote':
+        const quoteProps = element.properties as QuoteElementProperties;
+        const quoteStyles = this.generateTypographyStyle(quoteProps.typography, { fontStyle: 'italic' });
+        const quoteBorderStyles = this.generateBorderStyle(quoteProps.border, { width: '4px', style: 'solid', color: '#eeeeee' });
+        const quoteBg = quoteProps.backgroundColor ? `background-color:${quoteProps.backgroundColor};` : '';
+        // Ensure border-left is only applied if there are border styles
+        const quoteTableStyle = `width:100%; ${quoteBg} ${quoteBorderStyles ? `border-left:${quoteBorderStyles};` : ''}`.trim();
+        elementContent = `
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="${quoteTableStyle}">
+            <tr>
+              <td style="padding:10px 20px;">
+                <p style="margin:0; ${quoteStyles}">${element.content}</p> <!-- Use element.content for quote text -->
+                ${quoteProps.citation ? `<p style="margin:5px 0 0 0; text-align:right; font-size:14px; color:#6c757d;">- ${quoteProps.citation}</p>` : ''}
+              </td>
+            </tr>
+          </table>`;
+        break;
+
+      case 'code':
+        const codeProps = element.properties as CodeElementProperties;
+        const codeStyles = this.generateTypographyStyle(codeProps.typography, { fontFamily: 'monospace', fontSize: '14px' });
+        const codeBg = codeProps.backgroundColor ? `background-color:${codeProps.backgroundColor};` : '#f8f9fa';
+        const codePadding = codeProps.padding || '10px';
+        const codeRadius = codeProps.borderRadius || '4px';
+        elementContent = `<div style="${codeBg}; border-radius:${codeRadius}; padding:${codePadding}; overflow:auto;"><pre style="margin:0; white-space:pre-wrap; word-wrap:break-word;"><code style="${codeStyles}">${element.content}</code></pre></div>`; // Use element.content for code
         break;
         
+      // (+) Add the remaining cases here... (List, Icon, Nav, Social, etc.)
+      case 'list':
+        const listProps = element.properties as ListElementProperties;
+        const listTag = listProps.listType === 'ordered' ? 'ol' : 'ul';
+        const listItemStyles = this.generateTypographyStyle(listProps.typography);
+        const listItemsHtml = listProps.items?.map(item => `<li style="${listItemStyles}">${item}</li>`).join('\n') || ''; 
+        elementContent = `<${listTag} style="margin:0; padding-left:25px; ${listProps.markerStyle?.color ? `color:${listProps.markerStyle.color};` : ''}">
+          ${listItemsHtml}
+        </${listTag}>`;
+        break;
+
+      case 'icon':
+        const iconProps = element.properties as IconElementProperties;
+        const ico = iconProps.icon || { src: '#' };
+        const iconStyles = `width:${ico.width || '24px'}; height:${ico.height || 'auto'}; display:inline-block; vertical-align:middle;`;
+        const iconTag = `<img src="${ico.src}" alt="${ico.alt || ''}" style="${iconStyles}" width="${ico.width || '24'}" ${ico.height ? `height="${ico.height}"` : ''}/>`;
+        if (ico.linkHref) {
+          elementContent = `<a href="${ico.linkHref}" target="${ico.linkTarget || '_blank'}" style="text-decoration:none; line-height:1;">${iconTag}</a>`;
+        } else {
+          elementContent = iconTag;
+        }
+        break;
+
+      case 'nav':
+        const navProps = element.properties as NavElementProperties;
+        const defaultLinkStyle = this.generateTypographyStyle(navProps.typography);
+        const linksHtml = navProps.links?.map(link => {
+          const linkStyle = this.generateTypographyStyle(link.typography, navProps.typography); // Merge specific with default
+          return `<a href="${link.href}" target="${link.target || '_blank'}" style="text-decoration:none; ${linkStyle} ${navProps.layout?.spacing ? `padding: 0 ${navProps.layout.spacing};` : 'padding: 0 10px;'}">${link.text}</a>`;
+        }).join('') || '';
+        elementContent = `<p style="margin:0; ${defaultLinkStyle}">${linksHtml}</p>`;
+        break;
+
+      case 'social':
+        const socialProps = element.properties as SocialElementProperties;
+        const iconsHtml = socialProps.links?.map(link => {
+          const iconSrc = link.iconSrc || `#${link.platform}-icon`; 
+          const iconAlt = link.alt || `${link.platform} link`;
+          const iconWidth = socialProps.iconStyle?.width || '32px';
+          const iconHeight = socialProps.iconStyle?.height || 'auto';
+          const iconRadius = socialProps.iconStyle?.borderRadius || '0';
+          const iconTag = `<img src="${iconSrc}" alt="${iconAlt}" width="${iconWidth.replace('px','')}" style="display:block; width:${iconWidth}; height:${iconHeight}; border-radius:${iconRadius};" />`;
+          return `<a href="${link.href}" target="_blank" style="text-decoration:none; display:inline-block; ${socialProps.layout?.spacing ? `padding: 0 ${socialProps.layout.spacing};` : 'padding: 0 5px;'}">${iconTag}</a>`;
+        }).join('') || '';
+        elementContent = `<p style="margin:0;">${iconsHtml}</p>`;
+        break;
+
+      case 'appStoreBadge':
+        const badgeProps = element.properties as AppStoreBadgeElementProperties;
+        const bdg = badgeProps.badge;
+        const badgeSrc = `#${bdg.platform}-badge`; 
+        const badgeAlt = bdg.alt || `${bdg.platform} badge`;
+        const badgeWidth = bdg.width || '135px'; 
+        const badgeHeight = bdg.height || 'auto';
+        const badgeTag = `<img src="${badgeSrc}" alt="${badgeAlt}" width="${badgeWidth.replace('px','')}" style="display:inline-block; width:${badgeWidth}; height:${badgeHeight};"/>`;
+        elementContent = `<a href="${bdg.href}" target="_blank">${badgeTag}</a>`;
+        break;
+
+      case 'unsubscribe':
+        const unsubProps = element.properties as UnsubscribeElementProperties;
+        const unsubLinkStyle = this.generateTypographyStyle(unsubProps.typography, { fontSize: '12px', color: '#6c757d' });
+        const unsubLink = unsubProps.link || { text: 'Unsubscribe', href: '#' };
+        elementContent = `<p style="margin:0; ${unsubLinkStyle}"><a href="${unsubLink.href}" target="${unsubLink.target || '_blank'}" style="color:inherit;">${unsubLink.text}</a></p>`;
+        break;
+
+      case 'preferences':
+        const prefProps = element.properties as PreferencesElementProperties;
+        const prefLinkStyle = this.generateTypographyStyle(prefProps.typography, { fontSize: '12px', color: '#6c757d' });
+        const prefLink = prefProps.link || { text: 'Preferences', href: '#' };
+        elementContent = `<p style="margin:0; ${prefLinkStyle}"><a href="${prefLink.href}" target="${prefLink.target || '_blank'}" style="color:inherit;">${prefLink.text}</a></p>`;
+        break;
+
+      case 'previewText':
+        const previewProps = element.properties as PreviewTextElementProperties;
+        elementContent = `<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+                            ${previewProps.text}
+                            ${/* Add zero-width non-joiner characters for padding if needed */ '&zwnj;&nbsp;'.repeat(100)}
+                          </div>`;
+        break;
+
+      case 'container':
+      case 'box':
+        elementContent = `<!-- ${element.type} Element (ID: ${element.id}) -->`;
+        break;
+
       default:
-        // Handle `never` type for exhaustiveness checking
-        const _exhaustiveCheck: never = element;
-        console.warn('Unhandled element type:', _exhaustiveCheck);
-        elementContent = `<!-- Unhandled Type -->`;
+        const _exhaustiveCheck: never = element; 
+        console.error('[HtmlGeneratorV2] Unhandled element type encountered:', _exhaustiveCheck);
+        elementContent = `<!-- Unhandled Element Type: ${(element as any).type} -->`;
     }
 
     // Wrap element content in a table row/cell structure
@@ -206,6 +353,8 @@ export class HtmlGeneratorV2 {
         </td>
       </tr>`;
   }
+
+  // --- Re-add Missing Helper Methods --- 
 
   /**
    * Helper to generate inline style strings from style objects.
@@ -239,18 +388,20 @@ export class HtmlGeneratorV2 {
     return this.generateStyleString(layout);
   }
   
-  private generateTypographyStyle(typography: any): string {
-    return this.generateStyleString(typography);
+  private generateTypographyStyle(typography: any, defaults: Record<string, any> = {}): string {
+    const styles = { ...defaults, ...(typography || {}) };
+    return this.generateStyleString(styles);
   }
   
-  private generateBorderStyle(border: any): string {
-    // Simplistic for now, assumes direct properties like radius, width, color
-    return this.generateStyleString(border ? { 
-        borderWidth: border.width, 
-        borderStyle: border.style, 
-        borderColor: border.color, 
-        borderRadius: border.radius 
-      } : {});
+  private generateBorderStyle(border: any, defaults: Record<string, any> = {}): string {
+    if (!border && !Object.keys(defaults).length) return '';
+    const styles = { ...defaults, ...(border || {}) };
+    let borderString = '';
+    if (styles.width || styles.style || styles.color) {
+      borderString = `border:${styles.width || '1px'} ${styles.style || 'solid'} ${styles.color || '#000000'};`;
+    }
+    const radiusString = styles.radius ? `border-radius:${styles.radius};` : '';
+    return `${borderString} ${radiusString}`.trim();
   }
 
   /**
@@ -262,7 +413,6 @@ export class HtmlGeneratorV2 {
     if (!styles) return '';
     
     let styleObj = { ...styles }; // Copy to potentially modify
-    // Convert nested padding/border objects into direct properties for generateStyleString
     if (styleObj.padding) {
       Object.assign(styleObj, {
         paddingTop: styleObj.padding.top,
@@ -270,7 +420,7 @@ export class HtmlGeneratorV2 {
         paddingBottom: styleObj.padding.bottom,
         paddingLeft: styleObj.padding.left,
       });
-      delete styleObj.padding; // Remove the nested object
+      delete styleObj.padding;
     }
     if (styleObj.border) {
        Object.assign(styleObj, {
@@ -278,7 +428,7 @@ export class HtmlGeneratorV2 {
         borderStyle: styleObj.border.style,
         borderColor: styleObj.border.color,
       });
-      delete styleObj.border; // Remove the nested object
+      delete styleObj.border;
     }
     
     return this.generateStyleString(styleObj);
@@ -291,7 +441,6 @@ export class HtmlGeneratorV2 {
    */
   private generateGlobalBodyStyle(styles: EmailGlobalStyles | undefined): string {
       if (!styles) return '';
-      // Only include styles meant for the body tag itself
       const bodySpecificStyles = {
           backgroundColor: styles.bodyBackgroundColor,
           fontFamily: styles.bodyFontFamily,
@@ -304,4 +453,5 @@ export class HtmlGeneratorV2 {
   private camelToKebab(str: string): string {
     return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   }
-} 
+
+}

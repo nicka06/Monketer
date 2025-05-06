@@ -1,24 +1,33 @@
-# Email Element Structure Integration Plan
+# Email Element Structure Integration Plan (v2 with Placeholders & Storage)
 
-## Phase 1: Preparation (1-2 days)
+## Phase 1: Preparation (Mostly Complete)
 
 ### 1. Database Setup
 - [X] Add `semantic_email_v2` column (JSONB, NOT NULL) to `projects` table
 - [X] Add GIN index to `semantic_email_v2` column
 - [/] Set up database constraints (`NOT NULL` confirmed, further checks deferred to app logic)
+- (+) **Setup Supabase Storage:**
+    - [ ] Create `email_assets` bucket (or similar name).
+    - [ ] Define RLS Policies for uploads (authenticated users) and public read access.
+    - [ ] Structure storage paths (e.g., `/{user_id}/{project_id}/{timestamp}-{filename}`).
 
 ### 2. Type Definitions (V2)
 - [X] Create new types directory (`src/types/v2/`)
 - [X] Define `EmailElement` base interface and `ElementType`
+- (M) **Define New Element Types & Properties (`src/types/v2/elements.ts`):**
+    - [ ] Add new types to `ElementType` enum: `subtext`, `quote`, `code`, `list`, `icon`, `nav`, `social`, `appStoreBadge`, `unsubscribe`, `preferences`, `previewText`, `container`, `box`, `row`.
+    - [ ] Define corresponding `...ElementProperties` interfaces (e.g., `ListElementProperties`, `NavElementProperties`). Start with basic necessary properties.
+    - [ ] Add new types to the `EmailElement` discriminated union.
+    - [ ] Refine existing `ImageElementProperties` to include optional `videoHref: string` to support the video poster fallback strategy.
 - [X] Define `EmailSection` interface
 - [X] Define `EmailTemplate` interface
-- [X] Define all element-specific properties interfaces (Header, Text, Button, etc.)
-- [X] Define `EmailElement` as a discriminated union
-- [X] Create type guards and basic validators (`validators.ts`)
+- [ ] Define all element-specific properties interfaces (Header, Text, Button, etc.) *(Needs update for new types)*
+- [ ] Define `EmailElement` as a discriminated union *(Needs update for new types)*
+- [ ] Create type guards and basic validators (`validators.ts`) *(Needs updates for new types)*
 - [X] Create `index.ts` to export all V2 types
 - [X] Define Diff types (`diffs.ts`) and export
 
-### 3. Diff Types (V2)
+### 3. Diff Types (V2) - (No change needed here for placeholders/new types)
 - [X] Create `DifferV2` class structure (`src/services/v2/differ.ts`)
 - [X] Install `lodash` for deep comparison
 - [X] Implement `diffProperties` helper (handles nesting)
@@ -29,11 +38,16 @@
 - [ ] ~~Add conflict resolution~~ (Defer - Out of scope for basic differ)
 - [ ] ~~Add merge capabilities~~ (Defer - Separate utility needed)
 
-## Phase 2: Core Implementation (3-5 days)
+
+## Phase 2: Core Implementation (Backend & AI)
 
 ### 1. HTML Generation (V2 Semantic to HTML)
 - [X] Create `HtmlGeneratorV2` class structure (`src/services/v2/htmlGenerator.ts`)
-- [X] Implement `generateElementHtml` for basic types
+- (M) **Implement HTML Generation for New Element Types:**
+    - [ ] Add generation logic for: `subtext`, `quote`, `code`, `list`, `icon`, `nav`, `social`, `appStoreBadge`, `unsubscribe`, `preferences`, `previewText`, `container`, `box`, `row`.
+    - [ ] Ensure robust HTML (e.g., using tables for `row`/`column` layouts if needed for compatibility).
+    - [ ] Implement built-in fallbacks:
+        - [ ] Render `image` with `<a>` tag linking to `videoHref` if present (video poster fallback).
 - [X] Implement `generateSectionHtml`
 - [X] Implement `generate` method for full template HTML
 - [X] Add foundational email client compatibility (resets, Outlook comments)
@@ -43,91 +57,104 @@
 ### 2. Semantic Parsing (HTML to V2 Semantic)
 - [X] Create `SemanticParserV2` class structure (`src/services/v2/semanticParser.ts`)
 - [X] Install `jsdom` for server-side DOM parsing
+- (M) **Implement Semantic Parsing for New Element Types:**
+    - [ ] Add parsing logic to identify and extract properties/layout/content for the new element types from generated HTML.
+    - [ ] Ensure parser correctly identifies linked images as potential video posters (extracting `videoHref` from `<a>` tag wrapping `<img>`).
 - [X] Implement HTML-to-semantic section parsing (`parseSections`, `parseSection`, `extractSectionStyles`)
-- [X] Implement HTML-to-semantic element parsing (`parseElements`, `parseElement`, `determineElementType`)
-- [X] Implement property and layout extraction (`extractLayoutStyles`, `extractElementProperties`)
+- [ ] Implement HTML-to-semantic element parsing (`parseElements`, `parseElement`, `determineElementType`) *(Needs update for new types)*
+- [ ] Implement property and layout extraction (`extractLayoutStyles`, `extractElementProperties`) *(Needs update for new types)*
 - [X] Implement content extraction (`extractElementContent`)
 - [X] Add error handling (resilient parsing for sections/elements)
 - [X] Add validation (within property extraction)
 - [X] Add basic fallback handling (defaults during parsing)
 
-### 3. Diffing System (V2 vs V2)
-- [X] Create `DifferV2` class structure (`src/services/v2/differ.ts`)
-- [X] Install `lodash` for deep comparison
-- [X] Implement `diffProperties` helper (handles nesting)
-- [X] Implement `diffElements` method (ID-based, handles add/remove/modify/move)
-- [X] Implement `diffSections` method (ID-based, uses helpers)
-- [X] Implement `diffTemplates` method (handles name, global styles, sections)
-- [/] Add change tracking (Implicitly done via `TemplateDiffResult` output)
-- [ ] ~~Add conflict resolution~~ (Defer - Out of scope for basic differ)
-- [ ] ~~Add merge capabilities~~ (Defer - Separate utility needed)
+### 3. Diffing System (V2 vs V2) - (No change needed here)
+- ... (as before)
 
 ### 4. AI Integration
-- [X] Update AI system prompt to request V2 JSON format: `{ newTemplate: V2Structure, explanation: string }`
-- [X] Include V2 type definitions (condensed) in the system prompt
-- [X] Refine 'major' vs 'edit' mode instructions (creative freedom vs strict adherence)
+- (M) **Update AI system prompt:**
+    - [ ] Instruct AI to use placeholder markers (`@@PLACEHOLDER_IMAGE@@`, `@@PLACEHOLDER_LINK@@`, `@@PLACEHOLDER_TEXT@@` etc.) for missing assets/links/content implied by the user prompt but not provided.
+    - [ ] Instruct AI on video: Request an `image` element with a `videoHref` property, using placeholders for `src` and/or `videoHref` if unknown.
+    - [ ] Include V2 type definitions (condensed) in the system prompt *(Needs update for new types)*.
+    - [ ] Refine 'major' vs 'edit' mode instructions (creative freedom vs strict adherence).
 - [X] Ensure OpenAI API call uses `response_format: { type: "json_object" }`
-- [X] Update edge function response parsing to extract `newTemplate` and `explanation`
+- (M) **Update edge function response parsing:**
+    - [ ] Extract `newTemplate` and `explanation`.
+    - [ ] Add validation step to check the structure of the AI JSON response, including expected placeholder usage.
 - [ ] ~~Add element-specific prompts~~ (Defer - Sending full type list for now)
-- [ ] Add validation for the structure of the AI JSON response
 - [ ] Add error handling for AI call failures / invalid responses
 - [ ] Add retry mechanisms for AI calls (optional enhancement)
 
-### 5. Refactoring V1->V2 Integration Points (NEW STEP)
-- [ ] Update `getProjectData` in edge function to read from `semantic_email_v2` and return V2 `EmailTemplate`
-- [ ] Update `updateProject` in edge function to write to `semantic_email_v2` (V2 `EmailTemplate`)
-- [ ] Replace `normalizeTemplate` call in edge function with V2 equivalent or ensure it works with V2 (if needed)
-- [ ] Replace `generateHtmlFromSemantic` call in edge function with instantiation and call to `HtmlGeneratorV2.generate`
-- [ ] Replace `parseHtmlToSemantic` call in edge function (if used) with instantiation and call to `SemanticParserV2.parse`
-- [ ] Replace `diffSemanticEmails` call in edge function with instantiation and call to `DifferV2.diffTemplates`
-- [ ] Review and update any other backend code still using old V1 types/logic (e.g., saving pending changes format)
+### 5. Refactoring V1->V2 Integration Points (Edge Function)
+- [ ] Update `getProjectData` to read from `semantic_email_v2` and return V2 `EmailTemplate`.
+- [ ] Update `updateProject` to write to `semantic_email_v2` (V2 `EmailTemplate`). *(Ensure it handles data containing real URLs after user uploads)*.
+- [ ] Replace `normalizeTemplate` call with V2 equivalent or ensure it works with V2 (if needed).
+- [ ] Replace `generateHtmlFromSemantic` call with instantiation and call to `HtmlGeneratorV2.generate`. *(Ensure this uses the final V2 data with real URLs, not placeholders)*.
+- [ ] Replace `parseHtmlToSemantic` call (if used) with instantiation and call to `SemanticParserV2.parse`.
+- [ ] Replace `diffSemanticEmails` call with instantiation and call to `DifferV2.diffTemplates`.
+- [ ] Review and update any other backend code still using old V1 types/logic.
 
-## Phase 3: UI Updates (In Progress - Estimated 3-5 days total)
+## Phase 3: UI Updates (Editor & Preview)
 
-### 1. State Management
+### 1. State Management (`Editor.tsx`)
 - [X] Update `Project` type definition (`src/types/editor.ts`)
-- [X] Update `projectData` state in `Editor.tsx`
-- [X] Update service calls in `Editor.tsx` (`getProject`, `handleSendMessage`, `handleNavigateToSendPage`) to use/expect V2 data
-- [ ] Update `accept/rejectPendingChange` logic if needed (currently uses separate edge function, but relies on `fetchAndSetProject` which gets V2)
+- [X] Update `projectData` state in `Editor.tsx` to hold `semantic_email_v2`.
+- [X] Update service calls (`getProject`, `handleSendMessage`, `handleNavigateToSendPage`) to use/expect V2 data.
+- (+) **Add Supabase Client & Upload Logic:**
+    - [ ] Initialize Supabase client in the frontend app.
+    - [ ] Create reusable hook or service function for uploading files to Supabase Storage (`useStorageUpload` or similar).
+    - [ ] Implement logic within `Editor.tsx` or child components to update the `projectData.semantic_email_v2` state, replacing `@@PLACEHOLDER_...@@` markers with the real URLs returned after successful uploads.
 
-### 2. Editor Components (ON HOLD)
-- [ ] **(ON HOLD)** Define editing trigger mechanism (e.g., click on preview, tree view selection)
-- [ ] **(ON HOLD)** Create `ElementEditorPanel` component (or similar)
-- [ ] **(ON HOLD)** Implement logic to display panel based on selected element/section
-- [ ] **(ON HOLD)** Dynamically generate form fields in panel based on V2 element `type`, `properties`, and `layout`
-- [ ] **(ON HOLD)** Implement state update logic in `Editor.tsx` to modify `projectData.semantic_email_v2` based on editor panel changes
-- [ ] **(ON HOLD)** Implement client-side preview update (re-run `HtmlGeneratorV2` or similar) upon direct edits in the panel
-- [ ] **(ON HOLD)** Optional: Integrate direct edits with diffing/pending changes system (deferred?)
-- [ ] **(ON HOLD)** Create `SectionEditorPanel` component (similar logic)
+### 2. Editor Components (Direct Editing Panel - ON HOLD)
+- [ ] **(ON HOLD)** Define editing trigger mechanism...
+- ... (rest of direct editing panel items remain ON HOLD)
 
-### 3. Preview Components
-- [ ] Ensure `EmailPreview` renders HTML generated by `HtmlGeneratorV2` (Verified - uses `current_html`)
+### 3. Preview Components (`EmailPreview.tsx`, `EmailHtmlRenderer.tsx`)
+- [X] Ensure `EmailPreview` renders HTML generated by `HtmlGeneratorV2`.
+- (+) **Implement Placeholder Recognition & Rendering (UI Only):**
+    - [ ] Modify `EmailHtmlRenderer.tsx` (or the logic that provides its `htmlContent`).
+    - [ ] Add logic to detect attributes like `src="@@PLACEHOLDER_IMAGE@@"` or `href="@@PLACEHOLDER_LINK@@"` in the incoming HTML *preview*.
+    - [ ] Instead of rendering the broken tag, render a specific React component (e.g., `<ImagePlaceholder onClick={...}/>`, `<LinkPlaceholder onClick={...}/>`). This component will display the visual placeholder (grey box, icon, text).
+    - [ ] Pass necessary context (e.g., the element's `id` or path in the JSON structure) to the placeholder component's click handler.
+- (+) **Implement Upload Interaction on Placeholders:**
+    - [ ] The `onClick` handler of the placeholder component should trigger the file selection UI (e.g., `<input type="file">`).
+    - [ ] On file selection, call the Supabase upload function (`useStorageUpload`).
+    - [ ] On successful upload, trigger the state update in `Editor.tsx` to replace the placeholder marker with the real URL.
 - [ ] Add responsive preview (using media queries if applicable)
-- [ ] Add device preview toggle (Done)
-- [ ] Add theme preview toggle (Done - light/dark)
-- [ ] Add change highlighting based on V2 `TemplateDiffResult` (Deferred? Currently uses V1 `pendingChanges`)
-- [ ] Add interaction support for editing trigger **(ON HOLD - Depends on Editor Components)**
+- [X] Add device preview toggle
+- [X] Add theme preview toggle
+- [ ] Add change highlighting based on V2 `TemplateDiffResult` (Deferred?)
+- [ ] Add interaction support for editing trigger **(ON HOLD)**
 
-## Phase 4: Testing (NEXT FOCUS - Validation)
+## Phase 4: Testing (Focus on New Features & V2 Flow)
 
-- [ ] **Validate V2 AI Flow End-to-End:**
-    - [ ] Test `generate-email-changes` function (API call -> AI -> Parse -> Validate -> DB Update -> Response)
-    - [ ] Verify AI consistently returns valid V2 JSON structure.
+- (+) **Validate New Element Types:**
+    - [ ] Test `HtmlGeneratorV2` output for all new element types, including video poster fallback.
+    - [ ] Test `SemanticParserV2` correctly parses HTML for new types back to V2 structure, including video poster links.
+    - [ ] Perform basic email client testing (e.g., Gmail, Outlook, Apple Mail) for HTML generated for new types. Verify compatibility and fallbacks.
+- (+) **Validate Placeholders & Storage:**
+    - [ ] Test AI generation: Verify AI uses `@@PLACEHOLDER_...@@` markers correctly when assets/links aren't specified, including for video posters/links.
+    - [ ] Test UI rendering: Verify `EmailHtmlRenderer` displays the correct visual placeholder components instead of broken tags in the editor preview.
+    - [ ] Test upload interaction: Verify clicking placeholders triggers file selection and upload to Supabase Storage.
+    - [ ] Test state update: Verify the correct `@@PLACEHOLDER_...@@` marker in the `semantic_email_v2` state is replaced by the real Supabase URL.
+    - [ ] Test final HTML: Verify the HTML generated by the backend for sending/saving uses the **real URL** and *never* contains placeholder markers or UI components.
+- (M) **Validate V2 AI Flow End-to-End:**
+    - [ ] Test `generate-email-changes` function (API call -> AI (with placeholders) -> Parse -> Validate -> DB Update (with real URLs after upload) -> Response).
     - [ ] Verify AI adheres to 'major' vs 'edit' mode instructions with V2 structure.
     - [ ] Verify AI uses chat history context effectively.
-    - [ ] Verify `HtmlGeneratorV2` output (`current_html`) matches AI's V2 structure.
-    - [ ] Verify V2->V1 diff mapping for `pending_changes` storage.
-- [ ] Unit Tests (Services, Components)
-- [ ] Integration Tests (Full V2 Flow)
-- [ ] E2E Tests (User Flows)
+    - [ ] Verify `HtmlGeneratorV2` output (`current_html` for final send) matches the *final* V2 structure (with real URLs).
+    - [ ] Verify V2->V1 diff mapping for `pending_changes` storage (if still applicable).
+- [ ] Unit Tests (Services, Components - including placeholders, new element types)
+- [ ] Integration Tests (Full V2 Flow with uploads)
+- [ ] E2E Tests (User Flows including creating emails with new elements, uploading images/adding links via placeholders)
 
-## Phase 5: Deployment (1 day)
+## Phase 5: Deployment (No change)
 
 ### 1. Staging Deployment
 - [ ] Deploy new code (including updated edge function)
-- [ ] Verify functionality (create/edit emails)
+- [ ] Verify functionality (create/edit emails with new elements and placeholders)
 - [ ] Test performance
-- [ ] Test compatibility
+- [ ] Test compatibility (across major email clients)
 - [ ] Gather feedback
 
 ### 2. Production Deployment
@@ -136,7 +163,7 @@
 - [ ] Monitor performance
 - [ ] Monitor errors
 
-## Phase 6: Monitoring (Ongoing)
+## Phase 6: Monitoring (No change)
 
 ### 1. Error Tracking
 - [ ] Set up error tracking (frontend & edge function)
@@ -150,15 +177,15 @@
 - [ ] Set up logging
 - [ ] Set up reporting / dashboards
 
-## Timeline
-- Phase 1: Done (approx)
-- Phase 2: In Progress (Estimate: 3-5 days total)
-- Phase 3: In Progress (Estimated 3-5 days total)
-- Phase 4: 2-3 days
-- Phase 5: 1 day
-- Phase 6: Ongoing
-
-Total: 8-12 days remaining (approx)
+## Deferred / Future Enhancements
+- **Complex Interactive Elements:** `carousel`, `accordion`, `tabs`, `form`, etc. (Require advanced CSS/AMP with limited email client support).
+- **CSS Animations:** Elements relying heavily on `@keyframes`/`transition`. (Limited email client support; use animated GIFs via `image` element instead).
+- **Dynamic Content:** Real-time elements like `countdown`, `weather`, `stock`. (Require server-side generation or AMP).
+- **Advanced Layout:** Complex nested columns, potentially requiring Outlook-specific VML/MSO comments.
+- **Direct Element Editing Panel:** The UI panel for fine-grained editing of element properties (Currently ON HOLD).
+- **Conflict Resolution/Merging:** Advanced diffing features.
+- **Asset Management UI:** Interface for viewing/managing uploaded assets in Supabase Storage.
+- **Storage Cleanup:** Mechanisms for removing orphaned assets.
 
 ## Risk Mitigation
 
@@ -170,12 +197,17 @@ Total: 8-12 days remaining (approx)
 - [ ] Monitor load
 
 ### 2. Compatibility Assurance
-- [ ] Test email clients (Manual or using tools like Email on Acid/Litmus)
+- (M) Test email clients (Manual or using tools like Email on Acid/Litmus) for *new element types* and ensure fallbacks (like video posters) work reliably.
 - [ ] Implement fallbacks (within Generator/Parser)
 - [ ] Monitor rendering
 - [ ] Test devices / browsers
 
-### 3. User Impact Minimization
+### (+) 3. Storage Security & Costs
+- (+) Regularly review Supabase Storage RLS policies.
+- (+) Monitor storage usage and costs.
+- (+) Consider setting storage limits or alerts.
+
+### 4. User Impact Minimization
 - [ ] Schedule deployment off-peak
 - [ ] Provide communication
 - [ ] Offer support
@@ -184,11 +216,241 @@ Total: 8-12 days remaining (approx)
 
 ## Documentation
 - [ ] Update API documentation (if applicable)
-- [ ] Update user documentation (if UI changes)
-- [ ] Update developer documentation (new types, services)
-- [ ] Update troubleshooting guide
-- [ ] Update FAQ
+- (M) Update user documentation (explaining new elements, video support, how placeholders/uploads work).
+- (M) Update developer documentation (new types, services, placeholder pattern, storage integration, video fallback).
+- (M) Update troubleshooting guide (potential upload issues, placeholder issues, video rendering).
+- (M) Update FAQ
 
 ## Training (If applicable)
-- [ ] Train developers on new structure/services
-- [ ] Train support staff on potential issues
+- (M) Train developers on new structure/services/patterns.
+- (M) Train support staff on potential issues related to new elements, video, or uploads.
+
+# Multi-Stage Conversational AI Integration Plan
+
+## Goal:
+To implement a two-stage AI interaction flow:
+1.  **Clarification Stage:** An AI model (e.g., DeepSeek or OpenAI) interacts with the user to deconstruct their prompt, ask clarifying questions, and gather all necessary details for email element creation/modification.
+2.  **Generation Stage:** A second AI model (e.g., OpenAI GPT-4o-mini) receives a "perfect prompt" and a structured list of elements (with their base templates from `elementDefaults.ts`) from the clarification stage to generate the final `EmailTemplateV2`.
+
+---
+
+## Phase I: Setup & Core Data Structures (Client-Side & Shared)
+
+### 1. Define `elementDefaults.ts` (or equivalent configuration)
+    - **Location:** `src/config/elementDefaults.ts` (or similar, accessible to client and potentially mirrored/shared with backend).
+    - **Content:** Define default JSON structures for each `EmailElementTypeV2`.
+        ```typescript
+        // src/config/elementDefaults.ts
+        import { EmailElementTypeV2, ElementTypeV2 } from '@/types/v2';
+        import { generateId } from '@/lib/uuid';
+
+        export const elementDefaults: Record<ElementTypeV2, Omit<EmailElementTypeV2, 'id' | 'content'>> = {
+          header: {
+            type: 'header',
+            layout: { align: 'center' },
+            properties: { level: 'h1', text: 'Default Header Text', typography: { fontSize: '24px' } },
+          },
+          text: {
+            type: 'text',
+            layout: {},
+            properties: { text: 'Default paragraph text.', typography: { fontSize: '16px' } },
+          },
+          button: {
+            type: 'button',
+            layout: { align: 'center' },
+            properties: {
+              button: { href: '#', text: 'Click Me', backgroundColor: '#007bff', borderRadius: '4px' },
+              typography: { color: '#ffffff' }
+            },
+          },
+          image: {
+            type: 'image',
+            layout: { align: 'center' },
+            properties: {
+              image: { src: '@@PLACEHOLDER_IMAGE@@', alt: 'Placeholder Image', width: '100%', height: 'auto' },
+              border: {}
+            },
+          },
+          // ... definitions for ALL other supported element types (subtext, quote, etc.)
+        };
+
+        // Function to create a new element instance with a unique ID and specific content
+        export function createNewElement(type: ElementTypeV2, initialContent?: string): EmailElementTypeV2 {
+            const defaults = elementDefaults[type];
+            if (!defaults) throw new Error(`No default template for element type: ${type}`);
+
+            const newElement: EmailElementTypeV2 = JSON.parse(JSON.stringify({
+                id: generateId(), // Ensure new ID
+                ...defaults,
+            }));
+
+            if (initialContent) {
+                if (newElement.type === 'header' || newElement.type === 'text' || newElement.type === 'quote' || newElement.type === 'subtext') {
+                    newElement.properties.text = initialContent;
+                    newElement.content = initialContent;
+                } else if (newElement.type === 'button') {
+                    newElement.properties.button.text = initialContent;
+                    newElement.content = initialContent;
+                } // ... handle content for other types like list items, icon alt text, etc.
+            } else {
+                // Set default content from properties if not overridden
+                if (newElement.type === 'header' || newElement.type === 'text' || newElement.type === 'quote' || newElement.type === 'subtext') {
+                    newElement.content = newElement.properties.text;
+                } else if (newElement.type === 'button') {
+                    newElement.content = newElement.properties.button.text;
+                } else if (newElement.type === 'image') {
+                    newElement.content = newElement.properties.image.alt;
+                } // ... handle default content for other types
+            }
+            return newElement;
+        }
+        ```
+    - **Purpose:** Provides base structures for the Generation AI. This file needs to be accessible by the Supabase Edge Function that calls the Generation AI (e.g., by placing a copy or shared version in `supabase/functions/_shared/config/`).
+
+### 2. Update State Management (`src/pages/Editor.tsx`)
+    - **Define `ClarificationMessage` interface:**
+        ```typescript
+        interface ClarificationMessage {
+          id: string;
+          sender: 'ai' | 'user'; // To distinguish who sent the message in this sub-flow
+          text: string;
+          suggestions?: Array<{ text: string, value: string }>; // For AI questions with button suggestions
+          isQuestion?: boolean; // True if this AI message is a question expecting an answer
+        }
+        ```
+    - **Add new state variables:**
+        ```typescript
+        const [clarificationConversation, setClarificationConversation] = useState<ClarificationMessage[]>([]);
+        const [isClarifying, setIsClarifying] = useState<boolean>(false); // Controls UI during clarification
+        const [clarificationContext, setClarificationContext] = useState<any>(null); // Stores ongoing context for the clarification AI if needed across turns
+        ```
+    - **Refactor `handleSendMessage`:** This function will now initiate and manage the multi-stage AI interaction.
+
+## Phase II: Backend - Clarification AI Service
+
+### 1. Create New Supabase Edge Function (e.g., `clarify-user-intent`)
+    - **Input Parameters:**
+        - `userMessage: string` (The user's latest input, whether initial prompt or answer to a question).
+        - `mainChatHistory: ChatMessage[]` (The overall conversation history).
+        - `currentSemanticEmailV2: EmailTemplateV2 | null` (The current state of the email).
+        - `ongoingClarificationContext?: any` (Optional: Previous context/summary from the Clarification AI if the conversation is multi-turn).
+    - **Core Logic:**
+        - **Select Clarification AI Model:** (e.g., DeepSeek, OpenAI GPT-4o-mini, or other).
+        - **Construct System Prompt for Clarification AI:**
+            - Role: "You are an expert email design assistant. Your primary goal is to deeply understand the user's request for creating or modifying an email. You will achieve this by analyzing their message, the existing email structure, and conversation history. If details are missing or ambiguous, you must ask targeted clarifying questions. Once all necessary information is gathered, you will summarize the complete request for a separate AI to generate the email."
+            - Input Analysis: "Consider the user's message, the `mainChatHistory`, and `currentSemanticEmailV2`."
+            - Question Generation: "If clarification is needed:
+                - Ask 1 concise question at a time.
+                - For each question, provide 2-3 short, clickable `suggestions` that are likely answers.
+                - Respond ONLY with a JSON object: `{ \"status\": \"requires_clarification\", \"questions\": [{\"id\": \"q1\", \"text\": \"What text for the header?\", \"suggestions\": [{\"text\":\"Welcome!\", \"value\":\"Welcome!\"}, {\"text\":\"Hello World\", \"value\":\"Hello World\"}]}], \"aiSummaryForNextTurn\": \"User wants a header...\" }`
+            - Completion Condition: "If you believe you have all necessary details and the user's intent is clear:
+                - Generate a `perfectPrompt`: A comprehensive, unambiguous prompt for a *separate* Email Generation AI. This prompt should instruct the Generation AI on what to build or modify.
+                - Generate `elementsToProcess`: An array of objects, where each object details an element to be created or modified. Include `type` (e.g., 'button'), `action` ('add', 'modify', 'delete'), `targetId` (for 'modify'/'delete'), and `userPreferences` (a key-value map of all gathered details for that element, e.g., `{text: 'Sign Up', color: 'green', link: '...'}`).
+                - Respond ONLY with a JSON object: `{ \"status\": \"complete\", \"perfectPrompt\": \"...\", \"elementsToProcess\": [ { \"type\": \"button\", \"action\": \"add\", \"userPreferences\": {\"text\": \"Sign Up\"} } ], \"finalSummary\": \"User request fully clarified...\" }`"
+        - **Invoke Clarification AI Model:** Send the constructed prompt and user data.
+        - **Parse and Validate AI Response:** Ensure it's valid JSON and matches one of the expected output structures.
+    - **Output Parameters:** The JSON object as described above (`status`, `questions`, `perfectPrompt`, `elementsToProcess`, etc.).
+
+## Phase III: Frontend - Integrating Clarification Flow (`src/pages/Editor.tsx`)
+
+### 1. Enhance `ChatInterface` Component (`@/components/ChatInterface.tsx`)
+    - **Display Clarification AI Questions:** Render questions from the `clarificationConversation`.
+    - **Render Suggestion Buttons:** If `suggestions` are present for a question, display them as clickable buttons.
+    - **Handle Suggestion Clicks:** Clicking a suggestion button should:
+        - Add the suggestion's `value` as a "user" message to `clarificationConversation`.
+        - Trigger `handleSendMessage` (or a new internal handler) to send this answer back to the `clarify-user-intent` function.
+    - **Distinguish Main Chat from Clarification:** Potentially use different styling or a sub-section within the chat UI for the clarification interaction.
+
+### 2. Update `handleSendMessage` in `src/pages/Editor.tsx` (Orchestration Logic)
+    - **Initiate Clarification:**
+        - When a new user message is sent and `isClarifying` is false:
+            - Set `isClarifying(true)`.
+            - Add user's message to `chatMessages` (main history).
+            - Add user's message to `clarificationConversation` (as initial input).
+            - Call `clarify-user-intent` Edge Function with `userMessage`, `chatMessages`, `projectData?.semantic_email_v2`, and `clarificationContext`.
+    - **Process `clarify-user-intent` Response:**
+        - **If `response.status === 'requires_clarification'`)**:
+            - Append AI's questions to `clarificationConversation`.
+            - Update `setClarificationContext(response.aiSummaryForNextTurn)` (or similar context object).
+            - Chat UI updates to show new questions. User answers via text input or suggestion buttons.
+            - When user answers:
+                - Add user's answer to `clarificationConversation`.
+                - Call `clarify-user-intent` again, passing the new answer as `userMessage`, and the *updated* `clarificationContext`, `mainChatHistory`, `currentSemanticEmailV2`.
+        - **If `response.status === 'complete'`)**:
+            - Set `isClarifying(false)`.
+            - Add `response.finalSummary` (or a condensed version) as an AI message to the main `chatMessages`.
+            - Store `response.perfectPrompt` and `response.elementsToProcess`.
+            - Proceed to call the Generation AI service (Phase IV).
+            - Reset `clarificationConversation` and `clarificationContext`.
+    - **Loading States:** Manage `isLoading` appropriately throughout this interactive process.
+
+## Phase IV: Backend - Generation AI Service (Modifying `generate-email-changes` Edge Function)
+
+### 1. Modify `generate-email-changes` Edge Function
+    - **Update Input Parameters:**
+        - `perfectPrompt: string` (from the clarification stage).
+        - `elementsToProcess: Array<{ type: ElementTypeV2, action: 'add' | 'modify' | 'delete', targetId?: string, userPreferences: Record<string, any> }>` (structured list from clarification stage).
+        - `currentSemanticEmailV2: EmailTemplateV2 | null` (for context, especially for 'modify'/'delete' actions).
+        - `projectId: string`.
+    - **Core Logic:**
+        - **Construct System Prompt for Generation AI (e.g., GPT-4o-mini):**
+            - Base Instructions: "You are an AI email template generator. Your task is to create or update an email's `EmailTemplateV2` JSON structure. Respond ONLY with the complete, valid `EmailTemplateV2` JSON object. Adhere strictly to the V2 type definitions provided."
+            - **Dynamic Injection of Element Templates:**
+                - "You will be given a `perfectPrompt` for overall guidance and a list of `elementsToProcess`."
+                - "For each element in `elementsToProcess` where `action` is 'add':
+                    - Retrieve its base structure from `elementDefaults.ts` (e.g., `elementDefaults[element.type]`).
+                    - Your prompt should include: 'For an element of type `{{element.type}}`, start with this base JSON: `{{JSON.stringify(base_template)}}`. Apply these `userPreferences`: `{{JSON.stringify(element.userPreferences)}}` to modify the base structure. Ensure it has a new unique `id`.' "
+                - "For `action: 'modify'`, find the element with `targetId` in `currentSemanticEmailV2` and apply `userPreferences`."
+                - "For `action: 'delete'`, remove the element with `targetId`."
+                - "Follow the narrative and styling cues from the `perfectPrompt` to ensure a cohesive design."
+            - Include condensed V2 Type Definitions.
+            - Include `currentSemanticEmailV2` in the prompt for context.
+        - **Invoke Generation AI Model:**
+        - **Process Response:** Parse the returned `EmailTemplateV2` JSON.
+        - **Validate** the generated `EmailTemplateV2`.
+        - **Perform Diffing (Optional but Recommended):** Diff against `currentSemanticEmailV2` if it existed, to generate `pendingChanges`.
+        - **Update Database:** Save the new `semantic_email_v2` and `current_html` (generated from the new semantic V2).
+    - **Output Parameters:**
+        - `newSemanticEmail: EmailTemplateV2`
+        - `newHtml: string`
+        - `newPendingChanges: PendingChange[]`
+        - `aiExplanation: string` (summary from Generation AI, or the `finalSummary` from clarification)
+
+## Phase V: Frontend - Consuming Generation Result (`src/pages/Editor.tsx`)
+
+### 1. `handleSendMessage` (Continued from Clarification's 'complete' status)
+    - Invoke the modified `generate-email-changes` Edge Function, passing `perfectPrompt`, `elementsToProcess`, `projectData?.semantic_email_v2`, and `actualProjectId`.
+    - **Process Response:**
+        - Update `projectData` with `newSemanticEmail` and `newHtml`.
+        - Update `pendingChanges` state.
+        - Add `aiExplanation` to the main `chatMessages`.
+        - Trigger UI refresh for preview.
+
+## Phase VI: Iteration, Testing & Refinements
+
+### 1. Thorough Testing of Clarification Flow
+    - Test various user prompts (simple, complex, ambiguous).
+    - Evaluate quality and relevance of AI-generated questions and suggestions.
+    - Test the "completion" logic of the Clarification AI.
+    - Ensure context (chat history, current email) is used effectively.
+    - Test robustness of JSON parsing from Clarification AI.
+
+### 2. Testing of Generation Flow with Structured Input
+    - Verify that `elementDefaults.ts` are correctly injected and used by the Generation AI.
+    - Test `add`, `modify`, and `delete` actions for elements.
+    - Ensure `userPreferences` are correctly applied.
+    - Confirm `perfectPrompt` guides overall structure and style.
+
+### 3. User Experience (UX)
+    - Ensure the clarification process is not overly lengthy or frustrating.
+    - Provide clear visual cues during the `isClarifying` state.
+    - Make suggestion buttons easy to use.
+
+### 4. Performance
+    - Monitor latency of both AI calls. Optimize if necessary (e.g., model choice, prompt length).
+
+### 5. Error Handling
+    - Implement comprehensive error handling for all API calls and processing steps.
+    - Provide informative error messages to the user in the chat.
+
+---

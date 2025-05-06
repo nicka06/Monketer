@@ -14,7 +14,7 @@ import {
 // Import V2 types from _shared DIRECTLY
 // import { EmailTemplate as EmailTemplateV2 } from '../_shared/types/v2/index.ts'; // Old import via barrel file
 import { EmailTemplate as EmailTemplateV2 } from '../_shared/types/v2/template.ts'; // Direct import
-import { validateEmailTemplate } from '../_shared/types/v2/validators.ts'; // Already direct, keep
+import { validateEmailTemplateV2 } from '../_shared/types/v2/validators.ts'; // Corrected import name
 import { TemplateDiffResult, SectionDiff, ElementDiff } from '../_shared/types/v2/diffs.ts'; // Already direct, keep
 
 // Import V2 Services from _shared
@@ -353,7 +353,7 @@ interface EmailTemplateV2 { id: string; name: string; version: number; sections:
             "content": "This is an example email.",
             "layout": {},
             "properties": {
-              "text": "This is an example email.",
+              "text": "This is an example email.", 
               "typography": { "fontSize": "16px" }
             }
           }
@@ -367,7 +367,7 @@ interface EmailTemplateV2 { id: string; name: string; version: number; sections:
 `;
 
 
-    // --- Construct the V2 System Prompt --- 
+    // --- Construct the V2 System Prompt ---
     const baseV2SystemPrompt = `You are an AI assistant specialized in constructing and modifying email templates.
 Your SOLE task is to generate a valid JSON object containing the updated email structure and an explanation.
 You MUST respond ONLY with a single, valid JSON object. Do not include any text, markdown, apologies, or explanations outside the 'explanation' field of the JSON response.
@@ -375,8 +375,16 @@ The JSON object MUST STRICTLY follow the format: ${expectedResponseFormat}
 
 Adhere rigidly to the V2 Type Definitions provided below. DO NOT invent fields. DO NOT omit required fields.
 All element 'id' fields MUST be unique strings (you can generate random strings like 'el_abc123').
-The 'content' field in each element should contain the relevant text (e.g., header text, paragraph text, button label, image alt text).
+The 'content' field in each element should contain th e relevant text (e.g., header text, paragraph text, button label, image alt text).
 The 'properties' field MUST contain an object matching the specific interface for that element's 'type' (e.g., HeaderElementProperties for type 'header').
+
+**VERY IMPORTANT FOR IMAGES:** For every element where \`type\` is 'image', the nested \`properties.image\` object **MUST** contain both a \`width\` property (e.g., '100%', '600px') and a \`height\` property (e.g., '300px', 'auto'). If the user's request doesn't specify dimensions, default to \`width: '100%'\` and \`height: 'auto'\`. Do not omit these properties for images.
+
+**Image Source Generation:** If generating a new image element based on a user request *without* a specific source URL provided, you **MUST** set the \`properties.image.src\` field to the placeholder value \`@@PLACEHOLDER_IMAGE@@\`. Do not invent or use default URLs like 'https://example.com/...'.
+
+**Layout Defaults (Guideline):** Unless the user request specifies otherwise, **prefer to center visual elements** like headers, text, buttons, and images. Use the \`layout.align = 'center'\` property for this. This is a general guideline; prioritize user instructions if they conflict.
+
+**Link Generation:** ONLY add an 'href' (for buttons) or 'linkHref' (for images) if the user EXPLICITLY requests a specific URL. Otherwise, these properties should be omitted or set to a placeholder value like '#' or '@@PLACEHOLDER_LINK@@'. **DO NOT use default URLs like 'https://example.com' under any circumstances.**
 
 --- V2 Type Definitions ---
 ${v2TypeDefs}
@@ -387,9 +395,9 @@ ${v2Example}
 --- End Example ---
 
 Existing Template Structure (V2 JSON - ignore if mode is 'major' unless specifically asked to reference):
-\\\`\\\`\\\`json
+\`\`\`json
 ${JSON.stringify(currentV2Template, null, 2) || 'null'}
-\\\`\\\`\\\`
+\`\`\`
 `;
 
     let systemPrompt: string;
@@ -409,7 +417,7 @@ ${JSON.stringify(currentV2Template, null, 2) || 'null'}
         .slice(-3) // Get the last 3 messages
         .map((msg: any) => ({ // Map to OpenAI format
             role: msg.role === 'user' ? 'user' : 'assistant', // Ensure correct roles
-            content: msg.content
+      content: msg.content
         }))
         // Filter out any potential errors or non-user/assistant messages from history
         .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant');
@@ -467,7 +475,7 @@ ${JSON.stringify(currentV2Template, null, 2) || 'null'}
     }
 
     // --- Validate the AI's V2 Template Structure ---
-    const validationResult = validateEmailTemplate(parsedAiResponse.newTemplate);
+    const validationResult = validateEmailTemplateV2(parsedAiResponse.newTemplate);
     if (!validationResult.valid) {
         console.error('AI-generated V2 template failed validation:', validationResult.errors);
         console.error('Invalid Template Structure Received:', JSON.stringify(parsedAiResponse.newTemplate, null, 2)); // Log the invalid structure

@@ -7,7 +7,7 @@ import {
   ElementDiff,
   PropertyChange,
   ElementType
-} from 'shared/types/v2/index.ts';
+} from '../../types/v2/index.ts'; // Relative path
 import _ from 'https://esm.sh/lodash-es@4.17.21'; // Use URL import for Deno
 
 /**

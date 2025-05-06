@@ -1,4 +1,18 @@
-import { EmailTemplate, EmailSection, EmailElement, EmailElementLayout, HeaderElementProperties, TextElementProperties, ButtonElementProperties, ImageElementProperties, DividerElementProperties, SpacerElementProperties, EmailSectionStyles, EmailGlobalStyles } from '../../types/v2';
+import { EmailTemplate, EmailSection, EmailElement, EmailElementLayout, HeaderElementProperties, TextElementProperties, ButtonElementProperties, ImageElementProperties, DividerElementProperties, SpacerElementProperties, EmailSectionStyles, EmailGlobalStyles, SubtextElementProperties, QuoteElementProperties, CodeElementProperties, ListElementProperties, IconElementProperties, NavElementProperties, SocialElementProperties, AppStoreBadgeElementProperties, UnsubscribeElementProperties, PreferencesElementProperties, PreviewTextElementProperties, ContainerElementProperties, BoxElementProperties } from '../../types/v2';
+
+// (+) Exported utility function to check for placeholder values
+export function isPlaceholder(value: string | undefined | null): boolean {
+  if (!value || value === '#') {
+    return true;
+  }
+  if (value === '@@PLACEHOLDER_IMAGE@@' || value === '@@PLACEHOLDER_LINK@@') {
+    return true;
+  }
+  if (value.startsWith('https://via.placeholder.com')) {
+      return true;
+  }
+  return false;
+}
 
 /**
  * Generates email-compatible HTML from the V2 semantic structure.
@@ -163,18 +177,107 @@ export class HtmlGeneratorV2 {
         const btn = buttonProps.button || { href: '#' }; // Default href
         const btnTypography = this.generateTypographyStyle(buttonProps.typography);
         const btnStyles = `display:inline-block; color:${btn.textColor || '#ffffff'}; background-color:${btn.backgroundColor || '#007bff'}; border-radius:${btn.borderRadius || '5px'}; padding:12px 25px; text-decoration:none; ${btn.border ? `border:${btn.border};` : 'border:none;'} ${btnTypography}`;
-        elementContent = `<a href="${btn.href}" target="${btn.target || '_blank'}" style="${btnStyles}">${element.content}</a>`;
+        // (+) Add data attributes if href is a placeholder (using the utility function)
+        const isButtonLinkPlaceholder = isPlaceholder(btn.href);
+        const buttonDataAttrs = isButtonLinkPlaceholder
+            ? `data-element-id="${element.id}" data-property-path="button.href" data-placeholder="true" data-placeholder-type="link"` 
+            : '';
+        const finalButtonHref = isButtonLinkPlaceholder ? '#' : btn.href;
+
+        // (+) Render a non-clickable span if the link is a placeholder
+        if (isButtonLinkPlaceholder) {
+            // Add data-placeholder="true" ONLY if href is placeholder
+            const placeholderButtonAttrs = `data-element-id="${element.id}" data-property-path="button.href" data-placeholder="true" data-placeholder-type="link"`;
+            elementContent = `<span style="${btnStyles} cursor:default;" ${placeholderButtonAttrs}>${element.content} (Link Required)</span>`;
+        } else {
+            elementContent = `<a href="${finalButtonHref}" target="${btn.target || '_blank'}" style="${btnStyles}" ${buttonDataAttrs}>${element.content}</a>`; // buttonDataAttrs is empty here, which is correct
+        }
         break;
 
       case 'image':
         const imageProps = element.properties as ImageElementProperties;
-        const img = imageProps.image || { src: '#' }; // Default src
+        const imgLayout = element.layout || {};
+        const img = imageProps.image || { src: '#', alt: '', width: undefined, height: undefined, objectFit: 'cover' }; 
         const imgBorder = this.generateBorderStyle(imageProps.border);
-        const imgTag = `<img src="${img.src}" alt="${img.alt || ''}" width="${img.width || '100%'}" ${img.height ? `height="${img.height}"` : ''} style="display:block; max-width:100%; ${imgBorder}" />`;
-        if (img.linkHref) {
-          elementContent = `<a href="${img.linkHref}" target="${img.linkTarget || '_blank'}">${imgTag}</a>`;
+
+        const isPlaceholderSrc = isPlaceholder(img.src);
+        const finalSrc = isPlaceholderSrc ? '@@PLACEHOLDER_IMAGE@@' : img.src;
+
+        // --- Sizing Logic: Enforce Pixels --- 
+        const defaultWidthPx = 300;
+        const defaultHeightPx = 200;
+        let targetWidthPx = defaultWidthPx;
+        let targetHeightPx = defaultHeightPx;
+
+        // Helper to parse pixel values
+        const parsePixels = (value: string | undefined): number | null => {
+          if (value && typeof value === 'string' && value.endsWith('px')) {
+            const num = parseInt(value, 10);
+            return !isNaN(num) && num > 0 ? num : null;
+          }
+          return null;
+        };
+
+        // Try image properties first, then layout, then default
+        targetWidthPx = parsePixels(img.width) ?? parsePixels(imgLayout.width) ?? defaultWidthPx;
+        targetHeightPx = parsePixels(img.height) ?? parsePixels(imgLayout.height) ?? defaultHeightPx;
+
+        // Log warnings if defaults were used
+        if (targetWidthPx === defaultWidthPx && !parsePixels(img.width) && !parsePixels(imgLayout.width)) {
+             console.warn(`[HtmlGeneratorV2] Image ID ${element.id}: No valid pixel width found in image.width or layout.width. Falling back to ${defaultWidthPx}px.`);
+        }
+        if (targetHeightPx === defaultHeightPx && !parsePixels(img.height) && !parsePixels(imgLayout.height)) {
+             console.warn(`[HtmlGeneratorV2] Image ID ${element.id}: No valid pixel height found in image.height or layout.height. Falling back to ${defaultHeightPx}px.`);
+        }
+
+        // Styles for the WRAPPER div (fixed dimensions)
+        let wrapperStyles = `display:inline-block; width:${targetWidthPx}px; height:${targetHeightPx}px; overflow:hidden; line-height:1; ${imgBorder}`; 
+
+        // Styles for the inner IMG tag (fills wrapper, object-fit)
+        let imgStyles = `display:block; width:100%; height:100%; border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; object-fit:${img.objectFit || 'cover'};`;
+        
+        // Attributes for IMG tag (Outlook compatibility)
+        let imgWidthAttr = ` width="${targetWidthPx}"`;
+        let imgHeightAttr = ` height="${targetHeightPx}"`;
+        
+        const link = img.videoHref || img.linkHref;
+        const isPlaceholderLink = isPlaceholder(link);
+        const finalLink = isPlaceholderLink ? '#' : link;
+
+        // --- Element ID and Data Attributes --- 
+        const elementIdAttr = `id="${element.id}"`; // Plain ID for getElementById
+        const baseDataAttrs = `data-element-id="${element.id}"`; // Keep data-element-id as well
+
+        let finalImageDataAttrs = `${baseDataAttrs} data-property-path="image.src" data-placeholder-type="image"`;
+        if (isPlaceholderSrc) {
+            finalImageDataAttrs += ` data-placeholder="true"`;
+        }
+
+        const linkPropertyPath = img.videoHref ? 'image.videoHref' : 'image.linkHref';
+        let imageLinkDataAttrs = `${baseDataAttrs} data-property-path="${linkPropertyPath}" data-placeholder-type="link"`;
+        if (isPlaceholderLink) {
+            imageLinkDataAttrs += ` data-placeholder="true"`;
+        }
+        
+        // Construct the inner image tag
+        // Avoid duplicate base data attrs if linked
+        const imgDataAttrs = finalImageDataAttrs.replace(baseDataAttrs, '').trim();
+        const imgTag = `<img src="${finalSrc}" alt="${img.alt || ''}" style="${imgStyles}"${imgWidthAttr}${imgHeightAttr} ${imgDataAttrs} />`; 
+
+        // Construct the wrapper div (always present now for fixed sizing/overflow)
+        const finalWrapperDiv = `<div style="${wrapperStyles}">${imgTag}</div>`;
+
+        // Decide final content and add the plain ID attribute
+        if (link && !isPlaceholderLink) {
+            // Link wraps the sized div
+            elementContent = `<a ${elementIdAttr} href="${finalLink}" target="${img.linkTarget || '_blank'}" style="text-decoration:none; line-height:1; display:inline-block; width:${targetWidthPx}px; height:${targetHeightPx}px;" ${imageLinkDataAttrs}>${finalWrapperDiv}</a>`;
+        } else if (link && isPlaceholderLink) {
+            // Placeholder link wraps the sized div
+            elementContent = `<span ${elementIdAttr} style="text-decoration:none; line-height:1; display:inline-block; cursor:default; width:${targetWidthPx}px; height:${targetHeightPx}px;" ${imageLinkDataAttrs}>${finalWrapperDiv}</span>`;
         } else {
-          elementContent = imgTag;
+            // No link, add ID and base data attrs to the wrapper itself
+            const wrapperWithId = `<div ${elementIdAttr} style="${wrapperStyles}" ${baseDataAttrs}>${imgTag}</div>`;
+            elementContent = wrapperWithId;
         }
         break;
 
@@ -187,24 +290,180 @@ export class HtmlGeneratorV2 {
       case 'spacer':
         const spacerProps = element.properties as SpacerElementProperties;
         const sp = spacerProps.spacer || { height: '20px' };
-        // Use a table for robust spacing in emails
         elementContent = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td style="height:${sp.height}; line-height:${sp.height}; font-size:${sp.height};">&nbsp;</td></tr></table>`;
         break;
-        
+
+      case 'subtext':
+        const subtextProps = element.properties as SubtextElementProperties;
+        const subtextStyles = this.generateTypographyStyle(subtextProps.typography, { color: '#6c757d', fontSize: '14px' });
+        elementContent = `<p style="margin:0; ${subtextStyles}">${subtextProps.text}</p>`;
+        break;
+
+      case 'quote':
+        const quoteProps = element.properties as QuoteElementProperties;
+        const quoteStyles = this.generateTypographyStyle(quoteProps.typography, { fontStyle: 'italic' });
+        const quoteBorder = this.generateBorderStyle(quoteProps.border, { width: '4px', style: 'solid', color: '#eeeeee' });
+        const quoteBg = quoteProps.backgroundColor ? `background-color:${quoteProps.backgroundColor};` : '';
+        elementContent = `
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%; ${quoteBorder ? `border-left:${quoteBorder};` : ''} ${quoteBg}">
+            <tr>
+              <td style="padding:10px 20px;">
+                <p style="margin:0; ${quoteStyles}">${quoteProps.text}</p>
+                ${quoteProps.citation ? `<p style="margin:5px 0 0 0; text-align:right; font-size:14px; color:#6c757d;">- ${quoteProps.citation}</p>` : ''}
+              </td>
+            </tr>
+          </table>`;
+        break;
+
+      case 'code':
+        const codeProps = element.properties as CodeElementProperties;
+        const codeStyles = this.generateTypographyStyle(codeProps.typography, { fontFamily: 'monospace', fontSize: '14px' });
+        const codeBg = codeProps.backgroundColor ? `background-color:${codeProps.backgroundColor};` : '#f8f9fa';
+        const codePadding = codeProps.padding || '10px';
+        const codeRadius = codeProps.borderRadius || '4px';
+        elementContent = `<div style="${codeBg}; border-radius:${codeRadius}; padding:${codePadding}; overflow:auto;"><pre style="margin:0; white-space:pre-wrap; word-wrap:break-word;"><code style="${codeStyles}">${codeProps.code}</code></pre></div>`;
+        break;
+
+      case 'list':
+        const listProps = element.properties as ListElementProperties;
+        const listTag = listProps.listType === 'ordered' ? 'ol' : 'ul';
+        const listItemsHtml = listProps.items.map(item => `<li style="${this.generateTypographyStyle(listProps.typography)}">${item}</li>`).join('\n');
+        elementContent = `<${listTag} style="margin:0; padding-left:25px; ${listProps.markerStyle?.color ? `color:${listProps.markerStyle.color};` : ''}">
+          ${listItemsHtml}
+        </${listTag}>`;
+        break;
+
+      // (+) New Types Start
+      case 'icon':
+        const iconProps = element.properties as IconElementProperties;
+        const ico = iconProps.icon || { src: '#' };
+        const iconStyles = `width:${ico.width || '24px'}; height:${ico.height || 'auto'}; display:inline-block; vertical-align:middle;`;
+        // (+) Add data attributes if src is placeholder
+        const iconDataAttrs = ico.src === '@@PLACEHOLDER_IMAGE@@' 
+            ? `data-element-id="${element.id}" data-property-path="icon.src" data-placeholder-type="image"` 
+            : '';
+        const iconTag = `<img src="${ico.src}" alt="${ico.alt || ''}" style="${iconStyles}" width="${ico.width || '24'}" ${ico.height ? `height="${ico.height}"` : ''} ${iconDataAttrs}/>`;
+        // (+) Add data attributes if linkHref is placeholder
+        const iconLinkDataAttrs = ico.linkHref === '@@PLACEHOLDER_LINK@@' 
+            ? `data-element-id="${element.id}" data-property-path="icon.linkHref" data-placeholder-type="link"` 
+            : '';
+        if (ico.linkHref) {
+          elementContent = `<a href="${ico.linkHref}" target="${ico.linkTarget || '_blank'}" style="text-decoration:none; line-height:1;" ${iconLinkDataAttrs}>${iconTag}</a>`;
+        } else {
+          elementContent = iconTag;
+        }
+        break;
+      case 'nav':
+        const navProps = element.properties as NavElementProperties;
+        const defaultLinkStyle = this.generateTypographyStyle(navProps.typography);
+        const linksHtml = navProps.links.map((link, index) => {
+          const linkStyle = this.generateTypographyStyle(link.typography, navProps.typography); // Merge specific with default
+          // (+) Add data attributes if href is placeholder
+          const navLinkDataAttrs = link.href === '@@PLACEHOLDER_LINK@@' 
+              ? `data-element-id="${element.id}" data-property-path="links.${index}.href" data-placeholder-type="link"` 
+              : '';
+          return `<a href="${link.href}" target="${link.target || '_blank'}" style="text-decoration:none; ${linkStyle} ${navProps.layout?.spacing ? `padding: 0 ${navProps.layout.spacing};` : 'padding: 0 10px;'}" ${navLinkDataAttrs}>${link.text}</a>`;
+        }).join(''); // Join directly for inline display
+        // Use a simple paragraph for alignment control via parent TD
+        elementContent = `<p style="margin:0; ${defaultLinkStyle}">${linksHtml}</p>`;
+        break;
+      case 'social':
+        const socialProps = element.properties as SocialElementProperties;
+        const iconsHtml = socialProps.links.map((link, index) => {
+          // Basic src determination (needs actual icons based on platform later)
+          const iconSrc = link.iconSrc || `#${link.platform}-icon`; // Placeholder src
+          const iconAlt = link.alt || `${link.platform} link`;
+          const iconWidth = socialProps.iconStyle?.width || '32px';
+          const iconHeight = socialProps.iconStyle?.height || 'auto';
+          const iconRadius = socialProps.iconStyle?.borderRadius || '0';
+          // (+) Add data attributes to image if src is placeholder (less common for social?)
+          const socialIconDataAttrs = iconSrc === '@@PLACEHOLDER_IMAGE@@' 
+              ? `data-element-id="${element.id}" data-property-path="links.${index}.iconSrc" data-placeholder-type="image"` 
+              : '';
+          const iconTag = `<img src="${iconSrc}" alt="${iconAlt}" width="${iconWidth.replace('px','')}" style="display:block; width:${iconWidth}; height:${iconHeight}; border-radius:${iconRadius};" ${socialIconDataAttrs} />`;
+          // (+) Add data attributes to link if href is placeholder
+          const socialLinkDataAttrs = link.href === '@@PLACEHOLDER_LINK@@' 
+              ? `data-element-id="${element.id}" data-property-path="links.${index}.href" data-placeholder-type="link"` 
+              : '';
+          return `<a href="${link.href}" target="_blank" style="text-decoration:none; display:inline-block; ${socialProps.layout?.spacing ? `padding: 0 ${socialProps.layout.spacing};` : 'padding: 0 5px;'}" ${socialLinkDataAttrs}>${iconTag}</a>`;
+        }).join('');
+        // Use paragraph for alignment control via parent TD
+        elementContent = `<p style="margin:0;">${iconsHtml}</p>`;
+        break;
+      case 'appStoreBadge':
+        const badgeProps = element.properties as AppStoreBadgeElementProperties;
+        const bdg = badgeProps.badge;
+        // Basic src determination (needs actual badge images later)
+        const badgeSrc = `#${bdg.platform}-badge`; // Placeholder src - Assuming generator finds real src normally
+        const badgeAlt = bdg.alt || `${bdg.platform} badge`;
+        const badgeWidth = bdg.width || '135px'; // Example default
+        const badgeHeight = bdg.height || 'auto';
+        // (+) Add data attributes to image if src is placeholder (unlikely for badges?)
+        const badgeImageDataAttrs = badgeSrc === '@@PLACEHOLDER_IMAGE@@' 
+            ? `data-element-id="${element.id}" data-property-path="badge.src" data-placeholder-type="image"` 
+            : '';
+        const badgeTag = `<img src="${badgeSrc}" alt="${badgeAlt}" width="${badgeWidth.replace('px','')}" style="display:inline-block; width:${badgeWidth}; height:${badgeHeight};" ${badgeImageDataAttrs}/>`;
+        // (+) Add data attributes to link if href is placeholder
+        const badgeLinkDataAttrs = bdg.href === '@@PLACEHOLDER_LINK@@' 
+            ? `data-element-id="${element.id}" data-property-path="badge.href" data-placeholder-type="link"` 
+            : '';
+        elementContent = `<a href="${bdg.href}" target="_blank" ${badgeLinkDataAttrs}>${badgeTag}</a>`;
+        break;
+      case 'unsubscribe':
+        const unsubProps = element.properties as UnsubscribeElementProperties;
+        const unsubLinkStyle = this.generateTypographyStyle(unsubProps.typography, { fontSize: '12px', color: '#6c757d' });
+        const unsubLink = unsubProps.link || { text: 'Unsubscribe', href: '#' };
+        // (+) Add data attributes if href is placeholder
+        const unsubLinkDataAttrs = unsubLink.href === '@@PLACEHOLDER_LINK@@' 
+            ? `data-element-id="${element.id}" data-property-path="link.href" data-placeholder-type="link"` 
+            : '';
+        elementContent = `<p style="margin:0; ${unsubLinkStyle}"><a href="${unsubLink.href}" target="${unsubLink.target || '_blank'}" style="color:inherit;" ${unsubLinkDataAttrs}>${unsubLink.text}</a></p>`;
+        break;
+      case 'preferences':
+        const prefProps = element.properties as PreferencesElementProperties;
+        const prefLinkStyle = this.generateTypographyStyle(prefProps.typography, { fontSize: '12px', color: '#6c757d' });
+        const prefLink = prefProps.link || { text: 'Preferences', href: '#' };
+        // (+) Add data attributes if href is placeholder
+        const prefLinkDataAttrs = prefLink.href === '@@PLACEHOLDER_LINK@@' 
+            ? `data-element-id="${element.id}" data-property-path="link.href" data-placeholder-type="link"` 
+            : '';
+        elementContent = `<p style="margin:0; ${prefLinkStyle}"><a href="${prefLink.href}" target="${prefLink.target || '_blank'}" style="color:inherit;" ${prefLinkDataAttrs}>${prefLink.text}</a></p>`;
+        break;
+      case 'previewText':
+        const previewProps = element.properties as PreviewTextElementProperties;
+        elementContent = `<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+                            ${previewProps.text}
+                            ${/* Add zero-width non-joiner characters for padding if needed */ '&zwnj;&nbsp;'.repeat(100)}
+                          </div>`;
+        break;
+      case 'container':
+        const containerProps = element.properties as ContainerElementProperties;
+        const containerStyle = this.generateStyleString(containerProps.styles);
+        elementContent = `<!-- Container Element (ID: ${element.id}) - Content follows -->`;
+        break;
+      case 'box':
+        const boxProps = element.properties as BoxElementProperties;
+        const boxStyle = this.generateStyleString(boxProps.styles);
+        elementContent = `<!-- Box Element (ID: ${element.id}) - Content follows -->`;
+        break;
+      // (+) New Types End
+
       default:
-        // Handle `never` type for exhaustiveness checking
+        // This should now only catch truly unexpected cases or if a type is missed above
         const _exhaustiveCheck: never = element;
-        console.warn('Unhandled element type:', _exhaustiveCheck);
+        console.error('Unhandled element type in default:', _exhaustiveCheck);
         elementContent = `<!-- Unhandled Type -->`;
     }
 
-    // Wrap element content in a table row/cell structure
-    return `
+    // Wrap the content in a table row/cell structure with layout styles
+    const elementHtml = `
       <tr>
         <td id="element-${element.id}" style="${layoutStyles}">
           ${elementContent}
         </td>
       </tr>`;
+
+    return elementHtml;
   }
 
   /**
@@ -239,18 +498,21 @@ export class HtmlGeneratorV2 {
     return this.generateStyleString(layout);
   }
   
-  private generateTypographyStyle(typography: any): string {
-    return this.generateStyleString(typography);
+  private generateTypographyStyle(typography: any, defaults: Record<string, any> = {}): string {
+    const styles = { ...defaults, ...(typography || {}) };
+    // Add specific typography properties
+    return this.generateStyleString(styles);
   }
   
-  private generateBorderStyle(border: any): string {
-    // Simplistic for now, assumes direct properties like radius, width, color
-    return this.generateStyleString(border ? { 
-        borderWidth: border.width, 
-        borderStyle: border.style, 
-        borderColor: border.color, 
-        borderRadius: border.radius 
-      } : {});
+  private generateBorderStyle(border: any, defaults: Record<string, any> = {}): string {
+    if (!border && !Object.keys(defaults).length) return '';
+    const styles = { ...defaults, ...(border || {}) };
+    let borderString = '';
+    if (styles.width || styles.style || styles.color) {
+      borderString = `border:${styles.width || '1px'} ${styles.style || 'solid'} ${styles.color || '#000000'};`;
+    }
+    const radiusString = styles.radius ? `border-radius:${styles.radius};` : '';
+    return `${borderString} ${radiusString}`.trim();
   }
 
   /**
