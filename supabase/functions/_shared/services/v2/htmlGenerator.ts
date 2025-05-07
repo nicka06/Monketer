@@ -26,7 +26,8 @@ import {
     PreferencesElementProperties,
     PreviewTextElementProperties,
     ContainerElementProperties,
-    BoxElementProperties
+    BoxElementProperties,
+    FooterElementProperties
 } from '../../types/v2/elements.ts'; // Path to elements definition
 
 /**
@@ -66,7 +67,7 @@ export class HtmlGeneratorV2 {
           body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
           table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
           img { -ms-interpolation-mode: bicubic; display: block; border: 0; outline: none; text-decoration: none; }
-          body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; ${bodyStyles} }
+          body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
           a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
           /* Fix for Gmail blue links */
           u + #body a { color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; }
@@ -108,7 +109,7 @@ export class HtmlGeneratorV2 {
     // Added id="body" for Gmail blue link fix
     const bodyContent = `
       <body id="body" style="margin:0; padding:0; word-spacing:normal; ${bodyStyles}">
-        <table role="presentation" style="width:100%; border-collapse:collapse; border:0; border-spacing:0; background:${globalStyles.bodyBackgroundColor || '#ffffff'};">
+        <table role="presentation" style="width:100%; border-collapse:collapse; border:0; border-spacing:0;">
           <tr>
             <td align="center" style="padding:0;">
               <!--[if mso | IE]>
@@ -116,7 +117,7 @@ export class HtmlGeneratorV2 {
               <tr>
               <td>
               <![endif]-->
-              <table role="presentation" class="email-container" style="width:100%; max-width:${contentWidth}; border-collapse:collapse; border:0; border-spacing:0; text-align:left;">
+              <table role="presentation" class="email-container" style="width:100%; max-width:${contentWidth}; border-collapse:collapse; border:0; border-spacing:0; text-align:left; background:${globalStyles.bodyBackgroundColor || '#ffffff'};">
                 ${sectionsHtml}
               </table>
               <!--[if mso | IE]>
@@ -339,6 +340,17 @@ export class HtmlGeneratorV2 {
         elementContent = `<!-- ${element.type} Element (ID: ${element.id}) -->`;
         break;
 
+      case 'footer':
+        const footerProps = element.properties as FooterElementProperties;
+        const footerStyles = this.generateTypographyStyle(footerProps.typography, {
+          fontSize: '12px',
+          color: '#000000',
+          textAlign: 'center',
+          lineHeight: '1.5'
+        });
+        elementContent = `<p style="margin:0; ${footerStyles}">${element.content}</p>`;
+        break;
+
       default:
         const _exhaustiveCheck: never = element; 
         console.error('[HtmlGeneratorV2] Unhandled element type encountered:', _exhaustiveCheck);
@@ -442,9 +454,9 @@ export class HtmlGeneratorV2 {
   private generateGlobalBodyStyle(styles: EmailGlobalStyles | undefined): string {
       if (!styles) return '';
       const bodySpecificStyles = {
-          backgroundColor: styles.bodyBackgroundColor,
           fontFamily: styles.bodyFontFamily,
           color: styles.bodyTextColor
+          // Removed backgroundColor from body styles
       };
       return this.generateStyleString(bodySpecificStyles);
   }

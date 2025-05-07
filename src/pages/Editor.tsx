@@ -6,7 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { EmailPreview } from '@/components/EmailPreview';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Project, EmailTemplate, PendingChange, ChatMessage, EmailElement } from '@/types/editor';
-import { EmailTemplate as EmailTemplateV2, EmailElement as EmailElementTypeV2 } from '@/types/v2';
+import { EmailTemplate as EmailTemplateV2, EmailElement as EmailElementTypeV2 } from '../../supabase/functions/_shared/types/v2';
+import { ClarificationMessage, ClarificationApiResponse, QuestionResponse, CompleteResponse } from '@/types/ai';
 import { 
   getProject, 
   saveChatMessage, 
@@ -40,33 +41,8 @@ import { Input } from '@/components/ui/input';
 // Define InteractionMode type locally or import if shared
 type InteractionMode = 'ask' | 'edit' | 'major';
 
-// Sample empty template for new projects
-const emptyTemplate: EmailTemplate = {
-  id: generateId(),
-  name: 'New Email',
-  sections: [
-    {
-      id: generateId(),
-      elements: [
-        {
-          id: generateId(),
-          type: 'header',
-          content: 'Welcome to your new email',
-          styles: { fontSize: '24px', fontWeight: 'bold', color: '#333' },
-        },
-        {
-          id: generateId(),
-          type: 'text',
-          content: 'This is a starter template. Use the AI to help you create amazing emails.',
-          styles: { fontSize: '16px', color: '#555' },
-        },
-      ],
-      styles: { padding: '20px' },
-    },
-  ],
-  styles: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto' },
-  version: 1,
-};
+// Sample empty template for new projects // Removed: No longer used
+// const emptyTemplate: EmailTemplate = { ... }; // Removed
 
 const Editor = () => {
   const { projectId, username, projectName } = useParams<{ projectId?: string; username?: string; projectName?: string }>();
@@ -109,6 +85,13 @@ const Editor = () => {
   
   // (+) Memoized instance of the generator
   const htmlGenerator = useMemo(() => new HtmlGeneratorV2(), []);
+  
+  // State for clarification flow (Added state variables)
+  const [clarificationConversation, setClarificationConversation] = useState<ClarificationMessage[]>([]);
+  const [isClarifying, setIsClarifying] = useState<boolean>(false);
+  const [clarificationContext, setClarificationContext] = useState<any>(null);
+  const [hasFirstDraft, setHasFirstDraft] = useState<boolean>(false);
+  const [isCreatingFirstEmail, setIsCreatingFirstEmail] = useState<boolean>(false); // New state
   
   // (+) Callback passed to EmailPreview's overlay click handler
   const handlePlaceholderActivation = useCallback((context: { elementId: string; path: string; type: 'image' | 'link' | 'text' }) => {
@@ -187,6 +170,7 @@ const Editor = () => {
         setPendingChanges(fetchedResult.pendingChanges || []);
         // (+) Initialize livePreviewHtml with fetched HTML
         setLivePreviewHtml(fetchedResult.project.current_html || null);
+        setHasFirstDraft(false);
         return fetchedResult.project;
       } else {
         toast({ title: 'Error', description: 'Project not found.', variant: 'destructive' });
@@ -201,21 +185,22 @@ const Editor = () => {
     }
   }, [navigate, toast]);
 
-  // Handle projectId or username/projectName route
+  // Combined useEffect for project loading
   useEffect(() => {
     if (!user) return;
-    
-    const loadProjectData = async () => {
-        setIsLoadingProject(true);
+    const loadProjectDataInternal = async () => {
+      setIsLoadingProject(true);
       setProjectData(null);
       setChatMessages([]);
       setPendingChanges([]);
       setHasCode(false);
       setActualProjectId(null);
-      setSelectedMode('major'); // Reset mode to major when loading new project
-      // (+) Reset live preview on project load
-      setLivePreviewHtml(null); 
-        
+      setSelectedMode('major');
+      setLivePreviewHtml(null);
+      setClarificationConversation([]);
+      setIsClarifying(false);
+      setHasFirstDraft(false);
+
       try {
         // Case 1: Using the /editor/:projectId route
         if (projectId) {
@@ -239,34 +224,29 @@ const Editor = () => {
             navigate('/dashboard');
           }
         } 
-        // Case 3: Creating a new project at /editor route
+        // Case 3: No specific project, potentially new project flow (handled by UI now)
         else {
-          console.log("No project ID or name provided, preparing for new project.");
-          setProjectTitle('Untitled Document');
-          setActualProjectId(null);
-
-          // Check localStorage for saved content and set as initial input value
-          const savedContent = localStorage.getItem('savedEmailContent');
-          if (savedContent) {
-            console.log("Found saved content in localStorage:", savedContent);
-            setInitialInputValue(savedContent);
-            localStorage.removeItem('savedEmailContent');
-            console.log("Cleared savedEmailContent from localStorage");
-        } else {
-            setInitialInputValue(null);
-          }
-          // (+) Set initial preview for new projects (maybe empty or based on a default)
-          setLivePreviewHtml('<p>Start by typing a request to the AI!</p>'); // Or generate from an empty V2 struct
+          // This case might be where a user lands on /editor without a projectId
+          // We will rely on the UI to show the initial prompt screen if projectData.semantic_email_v2 is null
+          console.log("Navigated to editor without specific project ID or name. UI will handle initial state.");
+          // Initialize with minimal state for a new project prompt
+          setProjectData(null); // Explicitly null to trigger initial UI
+          setProjectTitle('New Email');
+          setActualProjectId(null); 
+          setHasCode(false);
+          setLivePreviewHtml(null);
+          // No need to create a project here; user will initiate via prompt.
+        }
+      } catch (err) {
+        console.error('Error in project loading useEffect:', err);
+        toast({ title: 'Error', description: 'An unexpected error occurred while loading.', variant: 'destructive' });
+        // navigate('/dashboard'); // Consider if navigation is always right here
+      } finally {
+        setIsLoadingProject(false);
       }
-    } catch (error) {
-        console.error('Error in loadProjectData wrapper:', error);
-    } finally {
-      setIsLoadingProject(false);
-    }
-  };
-    
-    loadProjectData();
-  }, [projectId, username, projectName, user, navigate, toast, fetchAndSetProject]);
+    };
+    loadProjectDataInternal();
+  }, [projectId, username, projectName, user, fetchAndSetProject, navigate, toast]);
 
   // Simulate progress for loading animation
   useEffect(() => {
@@ -362,179 +342,299 @@ const Editor = () => {
     }
   };
 
-  // handleSendMessage now matches ChatInterface prop expectations
-  const handleSendMessage = async (message: string, mode: InteractionMode) => {
-      setIsLoading(true);
-    setProgress(0);
-    let response;
-    let currentProjectId = actualProjectId;
-    const newUserMessage: ChatMessage = {
-      id: generateId(),
-      project_id: currentProjectId || 'unknown',
-      role: 'user',
-        content: message,
-        timestamp: new Date(),
-    };
+  const processClarificationResponse = useCallback((result: ClarificationApiResponse) => {
+    console.log('[Editor|processClarificationResponse] Received result:', JSON.stringify(result));
+    setIsLoading(true); // Keep loading until generation is also done or clarification continues
 
-    // --- Add User Message to State Immediately --- 
-    setChatMessages(prev => [...prev, newUserMessage]);
+    if (!result || !result.status) {
+      console.error("[Editor|processClarificationResponse] Invalid result from clarification AI:", result);
+      toast({ title: 'Error', description: 'Received an invalid response from the clarification AI.', variant: 'destructive' });
+      setIsClarifying(false); 
+      setClarificationConversation([]); 
+      setIsLoading(false);
+      return;
+    }
+
+    if (result.status === 'requires_clarification') {
+      const questionResponse = result as QuestionResponse;
+      console.log('[Editor|processClarificationResponse] Status: requires_clarification. AI Question ID:', questionResponse.question.id, 'Text:', questionResponse.question.text);
+      const aiClarificationMessage: ClarificationMessage = {
+        id: generateId(),
+        sender: 'ai',
+        text: questionResponse.question.text,
+        suggestions: questionResponse.question.suggestions,
+        isQuestion: true,
+        timestamp: new Date().toISOString(),
+      };
+      setClarificationConversation(prev => {
+        const newConvo = [...prev, aiClarificationMessage];
+        console.log('[Editor|processClarificationResponse] Updating clarificationConversation to:', JSON.stringify(newConvo));
+        return newConvo;
+      });
+      setClarificationContext(prevContext => {
+        console.log('[Editor|processClarificationResponse] Updating clarificationContext from:', JSON.stringify(prevContext), 'to:', JSON.stringify(questionResponse.aiSummaryForNextTurn));
+        return questionResponse.aiSummaryForNextTurn;
+      });
+      setIsClarifying(prevIsClarifying => {
+        console.log('[Editor|processClarificationResponse] Updating isClarifying from:', prevIsClarifying, 'to: true');
+        return true;
+      });
+      setIsLoading(false); // AI has responded, waiting for user
+    } else if (result.status === 'complete') {
+      console.log('[Editor|processClarificationResponse] Status: complete.');
+      setIsClarifying(false);
+      // The call to callGenerationAI will handle isLoading and setHasFirstDraft
+      callGenerationAI(result as CompleteResponse);
+    } else {
+      // This case should ideally not be reached if types are correct, but good for safety
+      const unknownResponse = result as any; // Cast to any to access status if it's an unexpected structure
+      console.error("[Editor|processClarificationResponse] Unknown status from clarification AI:", unknownResponse);
+      toast({ title: 'Error', description: `Received an unknown response type ('${(unknownResponse as any)?.status || 'unknown'}') from clarification AI.`, variant: 'destructive' });
+      setIsClarifying(false); // Reset clarification state
+      setClarificationConversation([]); // Clear conversation
+      setIsLoading(false);
+    }
+  }, [toast, currentUsername, actualProjectId, projectData?.semantic_email_v2, chatMessages, clarificationContext]);
+
+  const callGenerationAI = async (completionData: CompleteResponse) => {
+    console.log('[Editor|callGenerationAI] Called with completion data.');
+    if (!actualProjectId) {
+      toast({ title: 'Error', description: 'Project ID is missing.', variant: 'destructive' });
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
 
     try {
-      // --- Ensure Project Exists --- 
-      if (!currentProjectId) {
-        console.log("No project ID found. Creating new project before sending message...");
-        const titleForNewProject = projectTitle || "Untitled Document"; 
-        
-        const newProject = await createProject(titleForNewProject);
-        if (!newProject || !newProject.id) { 
-          throw new Error('Failed to create project or project ID is missing.');
-        }
-        currentProjectId = newProject.id;
-        setActualProjectId(currentProjectId);
-        setProjectData(newProject);
-        newUserMessage.project_id = currentProjectId;
-
-        window.history.pushState({}, '', `/editor/${currentProjectId}`); 
-        
-        console.log("New project created with ID:", currentProjectId);
-        setHasCode(!!newProject.current_html);
-        setPendingChanges([]);
-        
-        // Force the first message to be a major edit
-        mode = 'major';
-      }
-      
-      if (!currentProjectId) {
-        throw new Error("Project ID is still missing after creation check.");
-      }
-      
-      setProgress(50);
-        
-      // --- Prepare Payload for Edge Function --- 
       const payload = {
-        prompt: message,
-        chatHistory: chatMessages.filter(m => m.id !== newUserMessage.id), 
-        mode: mode,
-        projectId: currentProjectId 
+        perfectPrompt: completionData.perfectPrompt,
+        elementsToProcess: completionData.elementsToProcess,
+        currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+        projectId: actualProjectId,
+        newTemplateName: projectData?.name || 'Generated Email' // Or use a name from completionData if available
       };
-      console.log("Sending payload to generate-email-changes:", payload);
-        
-      // --- Call Edge Function --- 
-      response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
+      console.log('[Editor|callGenerationAI] Payload for generate-email-v2:', JSON.stringify(payload));
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-v2`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`, 
+          'Authorization': `Bearer ${supabase.auth.getSession() ? (await supabase.auth.getSession()).data.session?.access_token : ''}`,
         },
         body: JSON.stringify(payload),
       });
-      setProgress(80);
-      console.log(`[handleSendMessage] Fetch response status: ${response.status}`);
+
+      console.log('[Editor|callGenerationAI] Response status:', response.status);
+      const responseText = await response.text();
+      console.log('[Editor|callGenerationAI] Response text:', responseText);
 
       if (!response.ok) {
-        let errorData = { error: 'Unknown backend error', message: 'Response not OK', problematicJson: null };
-        try {
-          const errorJson = await response.json();
-          console.error("[handleSendMessage] Backend error response body:", errorJson);
-          errorData.error = errorJson.error || errorData.error;
-          errorData.message = errorJson.message || errorData.message;
-          errorData.problematicJson = errorJson.problematicJson || null;
-        } catch (parseError) {
-          console.error("[handleSendMessage] Failed to parse error response body:", parseError);
-          const errorText = await response.text();
-          console.error("[handleSendMessage] Backend error response text:", errorText);
-          errorData.message = errorText.substring(0, 200) || 'Failed to process request';
-        }
-         throw { message: errorData.error, details: errorData.message, problematicJson: errorData.problematicJson };
+        throw new Error(`Failed to generate email: ${response.status} ${responseText || response.statusText}`);
       }
-      
-      // --- Process Successful Response --- 
-      const result = await response.json();
-      console.log("[handleSendMessage] Success response body:", JSON.stringify(result)); // Log the full result
 
-      // Expect backend to return V2 template
-      const { message: aiResponseMessage, newSemanticEmail: newSemanticEmailV2, newHtml, newPendingChanges } = result;
+      const newSemanticEmailV2 = JSON.parse(responseText) as EmailTemplateV2;
+      console.log('[Editor|callGenerationAI] Successfully generated new EmailTemplateV2:', newSemanticEmailV2);
 
-      // --- Add detailed logging --- 
-      console.log("[handleSendMessage] Received newHtml (first 500 chars):", newHtml?.substring(0, 500));
-      console.log("[handleSendMessage] Received newPendingChanges:", JSON.stringify(newPendingChanges, null, 2));
-      // --- End detailed logging ---
+      setProjectData(prev => prev ? { ...prev, semantic_email_v2: newSemanticEmailV2, name: newSemanticEmailV2.name } : null);
+      if (newSemanticEmailV2.name) setProjectTitle(newSemanticEmailV2.name);
+      setHasCode(true); // Assuming this indicates HTML is generated/available
+      setHasFirstDraft(true); // 3a. Set hasFirstDraft to true on success
 
-      if (!newSemanticEmailV2 || !newHtml) {
-        throw new Error("Backend response missing newSemanticEmailV2 or newHtml.");
-      }
-      
-      setPendingChanges(newPendingChanges || []);
-      console.log("[handleSendMessage] Pending changes set from direct response.");
-      
-      // --- Update Project Data State with V2 structure ---
-      setProjectData(prevData => {
-        const baseData = prevData ?? {
-            id: currentProjectId!, 
-            name: projectTitle || "Untitled Document", 
-            createdAt: new Date(),
-            isArchived: false, 
-            // Add default version if creating baseData inline
-            version: 2 
-        };
-        return {
-          ...baseData,
-          semantic_email: null, // Nullify V1 field
-          semantic_email_v2: newSemanticEmailV2, // Store V2 template
-          current_html: newHtml,
-          lastEditedAt: new Date(),
-          // Safely access prevData version, fallback to V2 template version or default
-          version: newSemanticEmailV2.version || prevData?.version || 2, 
-        };
-      });
-        setHasCode(true);
-      console.log("[handleSendMessage] Project data and related states updated with V2 structure.");
-
-      const assistantMessage: ChatMessage = {
-            id: generateId(),
-        project_id: currentProjectId,
+      // Add AI message to main chat
+      const aiMessageForMainChat: ChatMessage = {
+        id: generateId(),
+        project_id: actualProjectId,
         role: 'assistant',
-        content: aiResponseMessage || 'Email updated.',
-            timestamp: new Date(),
+        content: `Okay, I have all the details. Perfect prompt preview: "${completionData.perfectPrompt.substring(0, 100)}..."`, // Or a success message
+        timestamp: new Date(), // 6. Corrected timestamp
       };
-      setChatMessages(prev => [...prev, assistantMessage]);
-      
-      try {
-        await saveChatMessage(newUserMessage);
-        await saveChatMessage(assistantMessage);
-        console.log("[handleSendMessage] Chat messages saved successfully.");
-      } catch(saveError) {
-        console.error("Error saving chat messages:", saveError);
-        toast({ title: 'Warning', description: 'Could not save chat history.', variant: 'default' });
-      }
+      setChatMessages(prev => [...prev, aiMessageForMainChat]);
+      // Optionally save this to DB, or just display
 
+      setIsCreatingFirstEmail(false); // Reset: First email created successfully
+      toast({ title: 'Success', description: 'Email generated successfully!' });
     } catch (error: any) {
-      console.error("[handleSendMessage] Error processing message:", error);
-      
-      let displayError = "An unexpected error occurred.";
-      let problematicJson = null;
-      if (typeof error === 'object' && error !== null) {
-        displayError = error.message || displayError;
-        problematicJson = error.problematicJson || null;
-      } else if (typeof error === 'string') {
-        displayError = error;
-      }
-
-      const errorId = generateId();
-      const errorMessageObject: ChatMessage = {
-        id: errorId,
-        project_id: currentProjectId || 'unknown',
-        role: 'assistant',
-        content: `Error: ${displayError}${problematicJson ? `\n\nProblematic JSON:\n\`\`\`json\n${problematicJson}\n\`\`\`\`` : ''}`,
-            timestamp: new Date(),
-        isError: true,
-      };
-      setChatMessages(prev => [...prev.filter(m => m.id !== newUserMessage.id), errorMessageObject]);
-      toast({ title: 'Error', description: displayError.substring(0, 100), variant: 'destructive' });
+      console.error('[Editor|callGenerationAI] Error:', error);
+      toast({ title: 'Error generating email', description: error.message || 'Unknown error', variant: 'destructive' });
+      setHasFirstDraft(false); // 3b. Ensure it's false on error in catch block
+      setIsCreatingFirstEmail(false); // Reset: Error during first email generation
     } finally {
       setIsLoading(false);
-      setProgress(100);
-      console.log("[handleSendMessage] Finished.");
+    }
+  };
+  
+  const handleSendMessage = async (message: string, mode: InteractionMode /* mode might be deprecated or used differently now */) => {
+    console.log("%%%% EDITOR: handleSendMessage CALLED %%%%"); // Simplest possible log
+    setIsLoading(true);
+    
+    let currentProjectId = actualProjectId; // Initialize with actualProjectId from state
+
+    const newUserMessageForMainChat: ChatMessage = {
+      id: generateId(),
+      project_id: currentProjectId || 'temp_project_id', // Use currentProjectId (which is actualProjectId or newly created one)
+      role: 'user',
+      content: message,
+      timestamp: new Date(),
+    };
+    // Add to main chat history IF NOT ALREADY in clarification (to avoid duplicates if user typed a new line vs. prompt)
+    if (!isClarifying) {
+        setChatMessages(prev => [...prev, newUserMessageForMainChat]);
+    }
+
+    if (!currentProjectId) {
+      console.log("No project ID found. Creating new project...");
+      try {
+        const newProject = await createProject(projectTitle || "Untitled Document"); 
+        if (!newProject || !newProject.id) throw new Error('Failed to create project.');
+        currentProjectId = newProject.id;
+        setActualProjectId(currentProjectId);
+        setProjectData(newProject); 
+        newUserMessageForMainChat.project_id = currentProjectId; 
+        window.history.pushState({}, '', `/editor/${currentProjectId}`);
+      } catch (projError: any) {
+        console.error("Error creating project:", projError);
+        toast({ title: 'Project Error', description: `Failed to create project: ${projError.message}`, variant: 'destructive' });
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    if (isClarifying) {
+      // User typed a reply while in clarification mode
+      console.log("[Editor|handleSendMessage] User typed reply during clarification. Sending to clarify-user-intent.");
+      const userClarificationReply: ClarificationMessage = {
+        id: generateId(),
+        sender: 'user',
+        text: message,
+        timestamp: new Date().toISOString(),
+      };
+      setClarificationConversation(prev => [...prev, userClarificationReply]);
+      
+      const payload = {
+        userMessage: message, 
+        mainChatHistory: chatMessages.filter(m => m.id !== newUserMessageForMainChat.id), 
+        currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+        ongoingClarificationContext: clarificationContext,
+        projectId: currentProjectId!,
+      };
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}` },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent' }));
+          throw new Error(errorData.error || `Clarify intent failed: ${response.status}`);
+        }
+        const result = await response.json() as ClarificationApiResponse;
+        processClarificationResponse(result);
+      } catch (error: any) {
+        console.error('[Editor|handleSendMessage-clarifying] Error calling clarify-user-intent:', error);
+        toast({ title: 'Error', description: error.message || 'Could not process your reply.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
+        setIsCreatingFirstEmail(false); // Reset: Error during clarification for the first email
+      }
+    } else {
+      // This is a new prompt, initiate clarification flow
+      console.log("[Editor|handleSendMessage] New prompt. Initiating clarification flow.");
+      setClarificationContext(null); 
+      const initialClarificationMessage: ClarificationMessage = {
+        id: generateId(),
+        sender: 'user',
+        text: message,
+        timestamp: new Date().toISOString()
+      };
+      setClarificationConversation([initialClarificationMessage]); 
+
+      const payload = {
+        userMessage: message,
+        mainChatHistory: chatMessages.filter(m => m.id !== newUserMessageForMainChat.id), 
+        currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+        ongoingClarificationContext: null, 
+        projectId: currentProjectId!,
+      };
+      console.log('[Editor|handleSendMessage-new_clarify] Calling clarify-user-intent with payload:', JSON.stringify(payload)); // Log payload
+      try {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}` },
+          body: JSON.stringify(payload),
+        });
+        
+        console.log('[Editor|handleSendMessage-new_clarify] Raw response status:', response.status); // Log status
+        const responseText = await response.text(); // Get raw text
+        console.log('[Editor|handleSendMessage-new_clarify] Raw response text:', responseText); // Log raw text
+
+        if (!response.ok) {
+          // Try to parse errorData from responseText if not ok
+          let errorData = { error: `Clarify intent failed with status: ${response.status}` };
+          try {
+            errorData = JSON.parse(responseText); // Try to parse if it's JSON
+          } catch (parseError) {
+            console.warn('[Editor|handleSendMessage-new_clarify] Could not parse error response as JSON:', parseError);
+            // errorData remains the generic status error
+          }
+          throw new Error(errorData.error || `Clarify intent failed: ${response.status}`);
+        }
+        const result = JSON.parse(responseText) as ClarificationApiResponse;
+        console.log('[Editor|handleSendMessage-new_clarify] Parsed result:', result); // Log parsed result
+        processClarificationResponse(result);
+      } catch (error: any) {
+        console.error('[Editor|handleSendMessage-new_clarify] Error calling clarify-user-intent or processing response:', error); // More generic log here
+        toast({ title: 'Error', description: error.message || 'Could not start clarification.', variant: 'destructive' });
+        setIsClarifying(false); 
+        setClarificationConversation([]);
+        setIsCreatingFirstEmail(false); // Reset: Error during clarification for the first email
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleSuggestionSelected = async (suggestionValue: string) => {
+    console.log('[Editor|handleSuggestionSelected] Suggestion selected:', suggestionValue);
+    setIsLoading(true);
+    
+    const userClarificationReply: ClarificationMessage = {
+      id: generateId(),
+      sender: 'user',
+      text: suggestionValue,
+      timestamp: new Date().toISOString(),
+    };
+    setClarificationConversation(prev => [...prev, userClarificationReply]);
+
+    const payload = {
+      userMessage: suggestionValue,
+      mainChatHistory: chatMessages, 
+      currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+      ongoingClarificationContext: clarificationContext,
+      projectId: actualProjectId!,
+    };
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from clarify-user-intent' }));
+        throw new Error(errorData.error || `Clarify intent failed with status: ${response.status}`);
+      }
+      const result = await response.json() as ClarificationApiResponse;
+      processClarificationResponse(result);
+    } catch (error: any) {
+      console.error('[Editor|handleSuggestionSelected] Error calling clarify-user-intent:', error);
+      toast({ title: 'Error', description: error.message || 'Could not process suggestion.', variant: 'destructive' });
+      // If this error is during initial email creation, reset the flag
+      if (isCreatingFirstEmail) {
+        setIsCreatingFirstEmail(false);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -957,236 +1057,301 @@ const Editor = () => {
     setLinkInputValue('');
   };
 
+  const handleModeChange = (newMode: InteractionMode) => {
+    if (newMode === 'major' || hasFirstDraft) {
+      setSelectedMode(newMode);
+      // If user re-selects 'major' after a draft exists, and they want to refine it,
+      // we might need to re-initialize the clarification flow.
+      if (newMode === 'major' && hasFirstDraft && !isClarifying) {
+         console.log("[Editor|handleModeChange] Switched to Major Edit on existing draft. Ready for new clarification input.");
+      }
+    } else {
+      toast({title: "Mode Unavailable", description: "Minor Edit and Just Ask modes are available after the first email draft is generated.", duration: 3000});
+    }
+  };
+
   if (isLoadingProject) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your project...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+        <p className="mt-4 text-lg">Loading Your Email Workspace...</p>
+        {/* <Progress value={progress} className="w-1/2 mt-2" /> */}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* (+) Add hidden file input */}
-      <input 
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelected}
-        accept="image/*" 
-        style={{ display: 'none' }} 
-      />
-      
-      {/* Top navigation bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 flex-shrink-0 relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <div className="flex items-center">
-            <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="h-5 w-5" />
-              <span className="sr-only">Back to all projects</span>
-            </Button>
-          </div>
-          
-          <div className="flex-1 flex justify-center max-w-md">
-            {isEditingTitle ? (
-              <input
-                type="text"
-                value={projectTitle}
-                onChange={(e) => setProjectTitle(e.target.value)}
-                onBlur={() => {
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      {/* Header */}
+      <header className="flex items-center justify-between p-3 border-b sticky top-0 z-10 bg-background">
+        {/* Left section: Back button, Title, Edit icon */}
+        <div className="flex items-center">
+          <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="h-5 w-5" />
+            <span className="sr-only">Back to all projects</span>
+          </Button>
+        </div>
+        
+        <div className="flex-1 flex justify-center max-w-md">
+          {isEditingTitle ? (
+            <input
+              type="text"
+              value={projectTitle}
+              onChange={(e) => setProjectTitle(e.target.value)}
+              onBlur={() => {
+                setIsEditingTitle(false);
+                handleTitleChange(projectTitle);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
                   setIsEditingTitle(false);
                   handleTitleChange(projectTitle);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setIsEditingTitle(false);
-                    handleTitleChange(projectTitle);
-                  }
-                }}
-                autoFocus
-                className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
-              />
-            ) : (
-              <h1 
-                className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
-                onClick={() => setIsEditingTitle(true)}
-              >
-                {projectTitle}
-              </h1>
-            )}
-          </div>
-          
-          <div className="flex items-center">
-            <Button variant="ghost" size="icon">
-              <Settings className="h-5 w-5" />
-              <span className="sr-only">Settings</span>
+                }
+              }}
+              autoFocus
+              className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
+            />
+          ) : (
+            <h1 
+              className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setIsEditingTitle(true)}
+            >
+              {projectTitle}
+            </h1>
+          )}
+        </div>
+        
+        <div className="flex items-center">
+          <Button variant="ghost" size="icon">
+            <Settings className="h-5 w-5" />
+            <span className="sr-only">Settings</span>
+          </Button>
+        </div>
+      </header>
+
+      {/* Conditional UI Rendering Logic */}
+      {isLoadingProject ? (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+          <p className="mt-4 text-lg">Loading Your Email Workspace...</p>
+        </div>
+      ) : (!projectData?.semantic_email_v2 && !isClarifying && !isCreatingFirstEmail) ? (
+        // "Create Your First Email!" prompt screen
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <Mail size={64} className="text-muted-foreground mb-6" />
+          <h2 className="text-3xl font-semibold mb-3">Create Your First Email!</h2>
+          <p className="text-muted-foreground mb-8 max-w-md">
+            {actualProjectId ? 
+              "You don't have an email drafted for this project yet." : 
+              "Welcome! Let's start your first email."}
+            {' '}
+            Describe what you want to build, and let our AI craft it for you.
+          </p>
+          <div className="w-full max-w-lg space-y-4">
+            <Input
+              placeholder="e.g., A welcome email for new subscribers, highlighting key features..."
+              value={initialInputValue || ''}
+              onChange={(e) => setInitialInputValue(e.target.value)}
+              className="text-base p-4"
+            />
+            <Button
+              onClick={() => {
+                if (initialInputValue) { 
+                  console.log('Initial Email Generation. Prompt:', initialInputValue, 'Project ID (current):', actualProjectId);
+                  setIsCreatingFirstEmail(true); 
+                  handleSendMessage(initialInputValue, 'major'); 
+                  setInitialInputValue(''); 
+                } else {
+                  toast({ title: 'Prompt is empty', description: 'Please describe the email you want to create.', variant: 'default'});
+                }
+              }}
+              disabled={isLoading || !initialInputValue}
+              className="w-full text-lg py-6"
+              size="lg"
+            >
+              {isLoading ? 'Generating...' : 'Generate Email with AI'}
             </Button>
           </div>
         </div>
-        
-        {/* Absolutely positioned Send Preview button */}
-        <Button 
-          variant="outline" 
-          onClick={handleNavigateToSendPage} 
-          disabled={!hasCode || isLoadingProject} 
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded px-4 border mr-2"
-        >
-          <Mail className="mr-2 h-4 w-4" />
-          Send Preview
-        </Button>
-      </header>
-
-      {/* Main content with resizable panels - set to flex-grow to take remaining height */}
-      <div className="flex-grow flex overflow-hidden">
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="w-full h-full"
-        >
-          {/* Email preview panel */}
+      ) : (
+        // Main Editor UI with chat interface
+        <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+          {/* Left Panel: Email Preview */}
           <ResizablePanel 
             defaultSize={75}
             minSize={40}
-            className="bg-neutral-100 dark:bg-neutral-950 overflow-auto"
+            className="bg-neutral-100 dark:bg-neutral-950 overflow-hidden relative"
           >
-            {/* Preview Controls Header */}
-            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-              {/* Left side (Placeholder or future use) */}
-              <div>
-                {/* Conditionally render Accept/Reject buttons - REMOVED FROM HERE */}
-                {/* 
-                {pendingChanges && pendingChanges.length > 0 && (
+            {/* Preview Controls Header - Only show when we have an email */}
+            {projectData?.semantic_email_v2 && !isLoading && (
+              <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+                <div></div>
+                <div className="flex items-center space-x-6">
                   <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAcceptAll}
+                    <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
+                    <Switch
+                      id="dark-mode-switch"
+                      checked={isDarkMode}
+                      onCheckedChange={setIsDarkMode}
+                      aria-label="Toggle Dark Mode"
                       disabled={isLoading}
-                      className="bg-green-50 hover:bg-green-100 border-green-300 text-green-700"
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      Accept All ({pendingChanges.length})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRejectAll}
-                      disabled={isLoading}
-                      className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Reject All
-                    </Button>
+                    />
+                    <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
                   </div>
-                )}
-                 */}
-              </div>
-
-              {/* Right-aligned controls wrapper */}
-              <div className="flex items-center space-x-6">
-                {/* Light/Dark Mode Switch */}
-                <div className="flex items-center space-x-2">
-                  <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
-                  <Switch
-                    id="dark-mode-switch"
-                    checked={isDarkMode}
-                    onCheckedChange={setIsDarkMode}
-                    aria-label="Toggle Dark Mode"
-                    disabled={isLoading} // Disable switches during loading
-                  />
-                  <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
-                </div>
-
-                {/* Desktop/Mobile Switch */}
-                <div className="flex items-center space-x-2">
-                  <Monitor className={cn("h-4 w-4", isMobileView ? "text-gray-500" : "text-primary")} />
-                  <Switch
-                    id="mobile-view-switch"
-                    checked={isMobileView}
-                    onCheckedChange={setIsMobileView}
-                    aria-label="Toggle Mobile View"
-                    disabled={isLoading} // Disable switches during loading
-                  />
-                  <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
+                  <div className="flex items-center space-x-2">
+                    <Monitor className={cn("h-4 w-4", isMobileView ? "text-gray-500" : "text-primary")} />
+                    <Switch
+                      id="mobile-view-switch"
+                      checked={isMobileView}
+                      onCheckedChange={setIsMobileView}
+                      aria-label="Toggle Mobile View"
+                      disabled={isLoading}
+                    />
+                    <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {/* Preview Content Area */}
-            <div className="min-h-[calc(100%-50px)] max-h-screen overflow-y-auto">
-              {!hasCode && !projectData?.current_html ? (
-                <div className="bg-white m-6 p-8 rounded-lg shadow-sm border border-gray-100 text-center h-full flex flex-col justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
-                  <div>
-                  <h2 className="text-2xl font-medium mb-4">Start Creating Your Email</h2>
-                  <p className="text-gray-500 mb-6">
-                    Send a message to the AI assistant to start generating your email template.
-                  </p>
-                  </div>
-                  {isLoading && (
-                    <div className="space-y-3 mt-6">
-                      <p className="text-sm text-gray-500">Generating email template...</p>
-                      <Progress value={progress} className="h-2" />
+            )}
+
+            {/* Main Content Area */}
+            <div className={cn(
+              "relative",
+              projectData?.semantic_email_v2 && !isLoading ? "h-[calc(100%-50px)]" : "h-full"
+            )}>
+              {/* Show loading UI when:
+                  1. Explicitly loading (isLoading)
+                  2. Creating first email (isCreatingFirstEmail)
+                  3. In clarification but no content yet
+                  4. Have no content but not in initial state */}
+              {(isLoading || isCreatingFirstEmail || (isClarifying && !projectData?.semantic_email_v2) || (!projectData?.semantic_email_v2 && !isClarifying && chatMessages.length > 0)) ? (
+                // Generation in Progress UI
+                <div className="h-full bg-background flex flex-col">
+                  {/* Top Section with Animation */}
+                  <div className="flex-1 flex flex-col items-center justify-center p-8">
+                    <div className="relative mb-8">
+                      <div className="relative">
+                        <Mail className="h-20 w-20 text-primary animate-pulse" />
+                        <div className="absolute -right-3 -top-3">
+                          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    <h2 className="text-3xl font-semibold mb-3 text-center">
+                      {isClarifying ? "Understanding Your Needs..." : "Crafting Your Perfect Email"}
+                    </h2>
+                    <p className="text-lg text-muted-foreground mb-12 text-center max-w-md">
+                      {isClarifying 
+                        ? "Our AI is gathering details to create exactly what you need"
+                        : "Our AI is carefully generating your email based on our conversation"}
+                    </p>
+                  </div>
+                  
+                  {/* Bottom Section with Progress */}
+                  <div className="border-t bg-muted/30 p-8">
+                    <div className="max-w-md mx-auto space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {isClarifying ? "Understanding Progress" : "Generation Progress"}
+                          </span>
+                          <span className="font-medium">{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                      <p className="text-sm text-muted-foreground text-center">
+                        {isClarifying 
+                          ? "We'll start generating once we have all the details"
+                          : "This usually takes less than a minute"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="relative">
-                  {/* Revert to passing original props */}
-                    <EmailPreview
+              ) : (!projectData?.semantic_email_v2 && !isClarifying && chatMessages.length === 0) ? (
+                // Initial Welcome Screen - only show when we have no messages and no content
+                <div className="h-full flex items-center justify-center p-8">
+                  <div className="text-center max-w-md">
+                    <Mail size={64} className="text-muted-foreground mb-6 mx-auto" />
+                    <h2 className="text-2xl font-semibold mb-3">Create Your First Email!</h2>
+                    <p className="text-muted-foreground mb-8">
+                      {actualProjectId ? 
+                        "You don't have an email drafted for this project yet." : 
+                        "Welcome! Let's start your first email."}
+                      {' '}
+                      Describe what you want to build, and let our AI craft it for you.
+                    </p>
+                    <div className="space-y-4">
+                      <Input
+                        placeholder="e.g., A welcome email for new subscribers..."
+                        value={initialInputValue || ''}
+                        onChange={(e) => setInitialInputValue(e.target.value)}
+                        className="text-base p-4"
+                      />
+                      <Button
+                        onClick={() => {
+                          if (initialInputValue) {
+                            setIsCreatingFirstEmail(true);
+                            handleSendMessage(initialInputValue, 'major');
+                            setInitialInputValue('');
+                          } else {
+                            toast({ title: 'Prompt is empty', description: 'Please describe the email you want to create.', variant: 'default'});
+                          }
+                        }}
+                        disabled={isLoading || !initialInputValue}
+                        className="w-full text-lg py-6"
+                        size="lg"
+                      >
+                        {isLoading ? 'Generating...' : 'Generate Email with AI'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : projectData?.semantic_email_v2 && !isLoading ? (
+                // Email Preview - Only render when we have actual content and not loading
+                <div className="h-full overflow-auto">
+                  <EmailPreview
                     key={actualProjectId || 'preview-container'}
-                    currentHtml={livePreviewHtml || projectData?.current_html || ''}
+                    currentHtml={livePreviewHtml || projectData.current_html || ''}
                     pendingChanges={pendingChanges}
                     previewMode={isDarkMode ? 'dark' : 'light'}
                     previewDevice={isMobileView ? 'mobile' : 'desktop'}
-                    semanticTemplate={projectData?.semantic_email_v2 || null}
+                    semanticTemplate={projectData.semantic_email_v2}
                     onPlaceholderActivate={handlePlaceholderActivation}
                   />
-                   {isLoading && ( // Show progress overlay during any loading state
-                     <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-20">
-                        <div className="bg-white p-4 rounded-lg shadow-md text-center">
-                            <p className="text-sm text-gray-500 mb-2">Processing...</p>
-                            <Progress value={progress} className="h-2 w-32" />
-                        </div>
-                     </div>
-                  )}
+                </div>
+              ) : null}
+
+              {/* Floating Accept/Reject Bar - Only show when we have changes */}
+              {pendingChanges && pendingChanges.length > 0 && projectData?.semantic_email_v2 && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bg-background border border-border rounded-lg shadow-xl p-3 flex items-center gap-3">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRejectAll} 
+                    disabled={isLoading}
+                    className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700 px-3 py-1.5"
+                  >
+                    <X className="mr-1.5 h-4 w-4" />
+                    Reject All
+                  </Button>
+                  <Button 
+                    variant="default"
+                    size="sm"
+                    onClick={handleAcceptAll} 
+                    disabled={isLoading}
+                    className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5"
+                  >
+                    <Check className="mr-1.5 h-4 w-4" />
+                    Accept All
+                  </Button>
                 </div>
               )}
             </div>
-
-            {/* --- Floating Accept/Reject Bar (Inside Preview Panel) --- */}
-            {pendingChanges && pendingChanges.length > 0 && (
-              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bg-background border border-border rounded-lg shadow-xl p-3 flex items-center gap-3">
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRejectAll} 
-                  disabled={isLoading}
-                  className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700 px-3 py-1.5" // Adjusted padding
-                >
-                  <X className="mr-1.5 h-4 w-4" />
-                  Reject All
-                </Button>
-                <Button 
-                  variant="default"
-                  size="sm"
-                  onClick={handleAcceptAll} 
-                  disabled={isLoading}
-                   className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5" // Adjusted padding and colors
-                >
-                  <Check className="mr-1.5 h-4 w-4" />
-                  Accept All
-                </Button>
-              </div>
-            )}
-            {/* --- End Floating Bar --- */}
-            
           </ResizablePanel>
           
           {/* Resizable handle */}
           <ResizableHandle withHandle />
           
-          {/* Chat interface panel - fixed height with internal scrolling */}
+          {/* Chat interface panel */}
           <ResizablePanel 
             defaultSize={25} 
             minSize={20}
@@ -1195,24 +1360,25 @@ const Editor = () => {
             <div className="h-full">
               <ChatInterface
                 messages={chatMessages}
+                clarificationMessages={clarificationConversation}
+                isClarifying={isClarifying}
                 onSendMessage={handleSendMessage}
+                onSuggestionClick={handleSuggestionSelected}
                 isLoading={isLoading}
                 initialInputValue={initialInputValue} 
                 selectedMode={selectedMode}
-                onModeChange={(mode) => {
-                  // Only allow mode changes if there are messages
-                  if (chatMessages.length > 0 && !isLoading) {
-                    setSelectedMode(mode);
-                  }
+                onModeChange={handleModeChange}
+                modesAvailable={{
+                  minorEdit: hasFirstDraft,
+                  justAsk: hasFirstDraft,
                 }}
-                isModeLocked={chatMessages.length === 0}
               />
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
-      </div>
+      )}
 
-      {/* (+) Link Input Modal */}
+      {/* Link Input Modal */}
       <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

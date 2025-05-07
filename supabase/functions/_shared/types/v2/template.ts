@@ -1,9 +1,9 @@
 import { EmailSection } from './sections.ts';
 
 export interface EmailGlobalStyles {
-  bodyBackgroundColor?: string;
   bodyFontFamily?: string;
   bodyTextColor?: string;
+  bodyBackgroundColor?: string;
   contentWidth?: string; // e.g., '600px'
   // Add other global styles as needed
 }

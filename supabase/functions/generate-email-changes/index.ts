@@ -2,14 +2,18 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // Import shared types using relative path
-import {
-    // EmailTemplate, // Removed V1 import
-    EmailSection, // Needed by V1 diff logic initially, now likely removable
-    EmailElement, // Needed by V1 diff logic initially, now likely removable
-    InteractionMode,
-    PendingChangeInput,
-    corsHeaders
-} from '../_shared/types.ts'; // V1 shared types
+// import {
+//     // EmailTemplate, // Removed V1 import
+//     EmailSection, // Needed by V1 diff logic initially, now likely removable
+//     EmailElement, // Needed by V1 diff logic initially, now likely removable
+//     InteractionMode,
+//     PendingChangeInput,
+//     corsHeaders
+// } from '../_shared/types.ts'; // V1 shared types - INCORRECT PATH CAUSING DEPLOY ERROR
+
+import type { InteractionMode } from '../_shared/types/common.ts';
+import type { PendingChangeInput } from '../_shared/types/pendingChangeTypes.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 // Import V2 types from _shared DIRECTLY
 // import { EmailTemplate as EmailTemplateV2 } from '../_shared/types/v2/index.ts'; // Old import via barrel file

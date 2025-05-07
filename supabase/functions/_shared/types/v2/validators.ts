@@ -28,19 +28,19 @@ const EmailElementLayoutSchema = z.object({
 }).describe("Layout styles for an element");
 
 const BaseTypographySchema = z.object({
-    fontFamily: z.string().optional(),
-    fontSize: z.string().optional(),
-    fontWeight: z.string().optional(), // Allow string for weights like 700
-    fontStyle: z.enum(['italic', 'normal']).optional(),
-    color: z.string().optional(),
-    textAlign: z.enum(['left', 'center', 'right']).optional(),
-    lineHeight: z.string().optional(),
+    fontFamily: z.string(),
+    fontSize: z.string(),
+    fontWeight: z.string(),
+    fontStyle: z.enum(['italic', 'normal']),
+    color: z.string(),
+    textAlign: z.enum(['left', 'center', 'right']),
+    lineHeight: z.string(),
 }).describe("Base typography styles");
 
 const BaseBorderStyleSchema = z.object({
-    width: z.string().optional(),
-    style: z.enum(['solid', 'dashed', 'dotted']).optional(),
-    color: z.string().optional(),
+    width: z.string(),
+    style: z.enum(['solid', 'dashed', 'dotted']),
+    color: z.string(),
 }).describe("Base border styles (width, style, color)");
 
 // --- Element Property Schemas --- 
@@ -48,28 +48,28 @@ const BaseBorderStyleSchema = z.object({
 const HeaderElementPropertiesSchema = z.object({
   level: z.enum(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']),
   text: z.union([z.string().min(1), PlaceholderText]),
-  typography: BaseTypographySchema.optional(),
+  typography: BaseTypographySchema,
 });
 
 const TextElementPropertiesSchema = z.object({
-  text: z.union([z.string(), PlaceholderText]), // Allow empty string for text
-  typography: BaseTypographySchema.optional(),
+  text: z.union([z.string(), PlaceholderText]),
+  typography: BaseTypographySchema,
 });
 
 const ButtonElementPropertiesSchema = z.object({
   button: z.object({
     href: z.union([z.string().url().min(1), z.string().startsWith('#'), z.string().startsWith('mailto:'), PlaceholderLink]),
-    target: z.enum(['_blank', '_self']).optional(),
-    backgroundColor: z.string().optional(),
-    textColor: z.string().optional(),
-    borderRadius: z.string().optional(),
-    border: z.string().optional(), // e.g., '1px solid #000'
+    target: z.enum(['_blank', '_self']),
+    backgroundColor: z.string(),
+    textColor: z.string(),
+    borderRadius: z.string(),
+    border: z.string(),
   }),
-  typography: z.object({ // Optional separate typography for button text
-    fontFamily: z.string().optional(),
-    fontSize: z.string().optional(),
-    fontWeight: z.string().optional(),
-  }).optional(),
+  typography: z.object({
+    fontFamily: z.string(),
+    fontSize: z.string(),
+    fontWeight: z.string(),
+  }),
 });
 
 const ImageElementPropertiesSchema = z.object({
@@ -240,6 +240,11 @@ const BoxElementPropertiesSchema = z.object({
   }).optional(),
 });
 
+const FooterElementPropertiesSchema = z.object({
+  text: z.string(),
+  typography: BaseTypographySchema.optional(),
+});
+
 // --- Element Schema (Discriminated Union) ---
 
 // Define base separately to avoid repetition 
@@ -257,7 +262,6 @@ const EmailElementSchema = z.discriminatedUnion('type', [
   BaseEmailElementSchema.extend({ type: z.literal('image'), properties: ImageElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('divider'), properties: DividerElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('spacer'), properties: SpacerElementPropertiesSchema }),
-  // (+) Add ALL new types
   BaseEmailElementSchema.extend({ type: z.literal('subtext'), properties: SubtextElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('quote'), properties: QuoteElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('code'), properties: CodeElementPropertiesSchema }),
@@ -271,6 +275,7 @@ const EmailElementSchema = z.discriminatedUnion('type', [
   BaseEmailElementSchema.extend({ type: z.literal('previewText'), properties: PreviewTextElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('container'), properties: ContainerElementPropertiesSchema }),
   BaseEmailElementSchema.extend({ type: z.literal('box'), properties: BoxElementPropertiesSchema }),
+  BaseEmailElementSchema.extend({ type: z.literal('footer'), properties: FooterElementPropertiesSchema }),
 ]);
 
 // Infer the EmailElement type from the schema if needed elsewhere
@@ -296,9 +301,9 @@ const EmailSectionSchema = z.object({
 });
 
 const EmailGlobalStylesSchema = z.object({
-    bodyBackgroundColor: z.string().optional(),
     bodyFontFamily: z.string().optional(),
     bodyTextColor: z.string().optional(),
+    bodyBackgroundColor: z.string().optional(),
     contentWidth: z.string().optional(), // e.g., '600px'
 }).describe("Global styles applied to the email body or container");
 
