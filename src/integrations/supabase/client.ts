@@ -1,15 +1,31 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Try to get values from environment, with fallbacks
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nvlkyadiqucpjjgnhujm.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52bGt5YWRpcXVjcGpqZ25odWptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5MDAwNTcsImV4cCI6MjA2MTQ3NjA1N30.LJVCnNj46h9ogGY0g1OYSfJevBgulcTtUvEqs2fdZTw';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('Supabase configuration:', {
+// Check for Supabase URL
+if (!supabaseUrl) {
+  const errorMessage = "Supabase URL is missing. Make sure VITE_SUPABASE_URL is set in your .env file.";
+  console.error(`CRITICAL ERROR: ${errorMessage}`);
+  throw new Error(errorMessage); 
+}
+
+// Check for Supabase Anon Key
+if (!supabaseKey) {
+  const errorMessage = "Supabase Anon Key is missing. Make sure VITE_SUPABASE_ANON_KEY is set in your .env file.";
+  console.error(`CRITICAL ERROR: ${errorMessage}`);
+  throw new Error(errorMessage);
+}
+
+// If we've reached this point, the URL and Key were found.
+console.log('Supabase configuration successful:', {
   url: supabaseUrl,
-  keyAvailable: !!supabaseKey
+  keyAvailable: true 
 });
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize and export the Supabase client.
+// It's guaranteed that supabaseUrl and supabaseKey are strings here due to the checks above.
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
 
 // Improved toJson helper function that handles potentially malformed inputs
 export function toJson(obj: any): any {

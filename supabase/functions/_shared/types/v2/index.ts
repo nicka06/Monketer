@@ -26,11 +26,8 @@ export type {
 
 // Explicitly import and re-export types from validators.ts
 export { 
-    isEmailElement,
-    isEmailSection, // Add other validators if needed
-    isEmailTemplate,
-    validateEmailTemplate // Keeping this name consistent with edge func import
-} from './validators.ts'; 
+    validateEmailTemplateV2 // Corrected name and removed others
+} from './validators.ts';
 
 // Explicitly import and re-export types from diffs.ts
 export type {

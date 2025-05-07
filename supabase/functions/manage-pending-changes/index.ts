@@ -1,17 +1,29 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import {
-    EmailTemplate,
-    EmailSection, // Needed for applying changes
-    EmailElement, // Needed for applying changes
-    PendingChangeInput,
-    corsHeaders,
-    // EmailVersion // Might need later for snapshotting
-    PendingChange
-} from '../_shared/types.ts';
+// import {
+//     EmailTemplate, // V1 - likely removable
+//     EmailSection, // V1 - Needed for applying changes, ensure V2 logic uses V2 types
+//     EmailElement, // V1 - Needed for applying changes, ensure V2 logic uses V2 types
+//     PendingChangeInput,
+//     corsHeaders,
+//     // EmailVersion // Might need later for snapshotting
+//     PendingChange
+// } from '../_shared/types.ts'; // V1 shared types - INCORRECT PATH CAUSING DEPLOY ERROR
+
+import type { PendingChangeInput, PendingChange } from '../_shared/types/pendingChangeTypes.ts';
+import { corsHeaders } from '../_shared/cors.ts';
+// TODO: If EmailTemplate, EmailSection, EmailElement are still needed for V1 logic within this function,
+// they need to be correctly typed or imported from their V1 source, or the logic updated to V2.
+// For now, assuming the core logic has transitioned or will transition to V2 types for these.
+
+// Placeholder V1 types to allow compilation - TODO: Refactor to V2 or remove V1 logic
+type EmailTemplate = any;
+type EmailSection = any;
+type EmailElement = any;
+
 // Import shared HTML generator
-import { generateHtmlFromSemantic } from '../_shared/html-utils.ts';
+// import { generateHtmlFromSemantic } from '../_shared/html-utils.ts'; // Commented out as file not found
 
 // Type definition for the structure expected in old_content for 'delete' changes
 // This might already be defined in types.ts - if so, remove this definition
@@ -20,33 +32,66 @@ interface DeletedElementInfo extends EmailElement {
     originalSectionId?: string; // Ensure this is populated by the diff function
 }
 
-// --- Placeholder HTML Generator (Copy from generate-email-changes for now) --- 
-// Ideally, this lives in a shared utils file later
-/* REMOVED Placeholder - Now using shared function
-async function generateHtmlFromSemantic(semanticEmail: EmailTemplate): Promise<string> {
-    console.warn("[manage-pending-changes] generateHtmlFromSemantic not fully implemented - returning basic placeholder");
-    let html = `<html><head><style>${''}</style></head><body>`;
-    semanticEmail?.sections?.forEach(section => {
-        html += `<div id="${section.id}" style="${Object.entries(section.styles || {}).map(([k, v]) => `${k}:${v};`).join('')}">`;
-        section.elements?.forEach(element => {
-            let styleString = Object.entries(element.styles || {}).map(([k, v]) => `${k}:${v};`).join('');
-            html += `<div id="${element.id}" style="position:relative;">`;
-            switch(element.type) {
-                case 'header': html += `<h2 style="${styleString}">${element.content}</h2>`; break;
-                case 'text': html += `<p style="${styleString}">${element.content}</p>`; break;
-                case 'button': html += `<button style="${styleString}">${element.content}</button>`; break;
-                case 'image': html += `<img src="${element.content}" style="${styleString}" />`; break;
-                case 'divider': html += `<hr style="${styleString}" />`; break;
-                default: html += `<div>Unsupported element type: ${element.type}</div>`;
-            }
-            html += `</div>`;
-        });
-        html += `</div>`;
+// --- START NEW LOCAL V1 HTML GENERATOR ---
+function generateBasicV1HtmlLocal(semanticEmail: EmailTemplate): string {
+    if (!semanticEmail || !Array.isArray(semanticEmail.sections)) {
+        console.warn("[generateBasicV1HtmlLocal] Invalid or empty semanticEmail input.");
+        return '<html><body>Error: Invalid email data for HTML generation.</body></html>';
+    }
+
+    let html = '<html><head><style>';
+    // Basic global styles (if any were defined directly on V1 template, though not standard)
+    // html += semanticEmail.globalStyles || ''; 
+    html += 'body { margin: 0; padding: 0; font-family: sans-serif; } ';
+    html += '.section { box-sizing: border-box; width: 100%; } ';
+    html += '.element { padding: 5px; margin: 5px 0; } '; // Basic spacing for elements
+    html += '</style></head><body>';
+    
+    html += `<table role="presentation" style="width:100%; border-collapse:collapse; border:0; border-spacing:0; background:#ffffff;">
+        <tr>
+            <td align="center" style="padding:0;">
+                <table role="presentation" class="email-container" style="width:100%; max-width:602px; border-collapse:collapse; border:0; border-spacing:0; text-align:left; background-color:${semanticEmail.globalStyles?.bodyBackgroundColor || '#ffffff'};">`;
+
+    semanticEmail.sections.forEach((section: EmailSection) => {
+        let sectionStyles = '';
+        if (section.styles && typeof section.styles === 'object') {
+            sectionStyles = Object.entries(section.styles)
+                .map(([k, v]) => `${k.replace(/([A-Z])/g, '$1').toLowerCase()}:${v};`)
+                .join('');
+        }
+        html += `<div id="${section.id || 'sec_' + crypto.randomUUID().substring(0,8)}" class="section" style="${sectionStyles}">`;
+        
+        if (Array.isArray(section.elements)) {
+            section.elements.forEach((element: EmailElement) => {
+                let elementStyles = '';
+                if (element.styles && typeof element.styles === 'object') {
+                    elementStyles = Object.entries(element.styles)
+                        .map(([k, v]) => `${k.replace(/([A-Z])/g, '$1').toLowerCase()}:${v};`)
+                        .join('');
+                }
+                html += `<div id="${element.id || 'el_' + crypto.randomUUID().substring(0,8)}" class="element" style="position:relative; ${elementStyles}">`;
+                
+                const content = element.content || '';
+                switch(element.type) {
+                    case 'header': html += `<h2>${content}</h2>`; break;
+                    case 'text': html += `<p>${content}</p>`; break;
+                    case 'button': html += `<button>${content}</button>`; break;
+                    case 'image': html += `<img src="${content}" alt="Image" style="max-width: 100%; height: auto;" />`; break;
+                    case 'divider': html += '<hr />'; break;
+                    case 'spacer': html += '<div style="height: 20px;"></div>'; break; // Basic spacer
+                    default: html += `<div>Unsupported element type: ${element.type} - Content: ${content}</div>`;
+                }
+                html += '</div>';
+            });
+        }
+        html += '</div>';
     });
-    html += `</body></html>`;
+
+    html += '</table></td></tr></table>';
+    html += '</body></html>';
     return html;
 }
-*/
+// --- END NEW LOCAL V1 HTML GENERATOR ---
 
 // --- Function to Apply Pending Changes --- 
 function applyPendingChanges(currentTemplate: EmailTemplate, changes: PendingChangeInput[]): EmailTemplate {
@@ -326,8 +371,8 @@ serve(async (req) => {
 
             // 2. Regenerate HTML from Reverted State
             console.log("Regenerating HTML from reverted state...");
-            const revertedHtml = await generateHtmlFromSemantic(revertedSemanticEmail);
-            console.log("Regenerated HTML from reverted state.");
+            const revertedHtml = generateBasicV1HtmlLocal(revertedSemanticEmail);
+            console.log("Regenerated HTML from reverted state (using local basic V1 generator).");
 
             // 3. Call the database function to perform updates atomically
             const pendingChangeIds = pendingChanges.map(c => c.id);

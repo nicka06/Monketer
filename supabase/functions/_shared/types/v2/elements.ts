@@ -17,7 +17,8 @@ export type ElementType =
   | 'preferences'
   | 'previewText'
   | 'container'
-  | 'box'; // Add more types as needed
+  | 'box'
+  | 'footer'; // Add more types as needed
 
 export interface EmailElementLayout {
   width?: string;
@@ -317,6 +318,19 @@ export interface BoxElementProperties extends EmailElementProperties {
   };
 }
 
+export interface FooterElementProperties extends EmailElementProperties {
+  typography?: {
+    fontFamily?: string;
+    fontSize?: string;
+    fontWeight?: string;
+    fontStyle?: string;
+    color?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    lineHeight?: string;
+  };
+  text: string;
+}
+
 interface BaseEmailElement {
   id: string;
   content: string; // Used differently by different types (text, alt text, button label)
@@ -342,4 +356,5 @@ export type EmailElement =
   | (BaseEmailElement & { type: 'preferences'; properties: PreferencesElementProperties })
   | (BaseEmailElement & { type: 'previewText'; properties: PreviewTextElementProperties })
   | (BaseEmailElement & { type: 'container'; properties: ContainerElementProperties })
-  | (BaseEmailElement & { type: 'box'; properties: BoxElementProperties }); 
+  | (BaseEmailElement & { type: 'box'; properties: BoxElementProperties })
+  | (BaseEmailElement & { type: 'footer'; properties: FooterElementProperties }); 

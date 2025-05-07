@@ -1,8 +1,9 @@
-
 [functions]
 [functions.generate-email-changes]
 verify_jwt = true
 
+[functions.manage-pending-changes]
+verify_jwt = true
 
 [functions.send-preview-email]
 enabled = true

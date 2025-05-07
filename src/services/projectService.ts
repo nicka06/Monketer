@@ -9,84 +9,10 @@ import { EmailTemplate as EmailTemplateV2 } from '@/types/v2';
 import { HtmlGeneratorV2 } from '@/services/v2/htmlGenerator'; // Import V2 Generator
 
 // --- Default Email Template --- 
-const defaultSemanticTemplate: EmailTemplate = {
-    id: generateId(),
-    name: 'New Email',
-    sections: [
-        {
-            id: generateId(),
-            elements: [
-                { id: generateId(), type: 'header', content: 'Welcome to your new email', styles: { fontSize: '24px', fontWeight: 'bold', color: '#333333' } },
-            ],
-            styles: { padding: '20px' },
-        },
-        {
-            id: generateId(),
-            elements: [
-                { id: generateId(), type: 'text', content: 'This is a starter template. Use the AI to help you create amazing emails.', styles: { fontSize: '16px', color: '#555555' } },
-            ],
-            styles: {},
-        },
-        {
-            id: generateId(),
-            elements: [],
-            styles: { height: '20px' },
-        }
-    ],
-    styles: { globalCss: 'body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f4f4f4; }', fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto' },
-    version: 1,
-};
+// const defaultSemanticTemplate: EmailTemplate = { ... }; // Removed
 
 // --- Default V2 Email Template --- 
-const defaultSemanticTemplateV2: EmailTemplateV2 = {
-    id: generateId(), // Project ID will likely overwrite this
-    name: 'New Email',
-    version: 2,
-    globalStyles: {
-        bodyBackgroundColor: '#f4f4f4',
-        contentWidth: '600px',
-        bodyFontFamily: 'Arial, sans-serif'
-    },
-    sections: [
-        {
-            id: generateId(),
-            styles: { 
-                backgroundColor: '#ffffff',
-                padding: { top: '20px', bottom: '20px', left: '20px', right: '20px' } 
-            },
-            elements: [
-                {
-                    id: generateId(),
-                    type: 'header',
-                    content: 'Welcome to your new email',
-                    properties: { 
-                        level: 'h1', 
-                        text: 'Welcome to your new email',
-                        typography: {
-                            color: '#333333',
-                            fontSize: '28px',
-                            fontWeight: 'bold' 
-                        }
-                    },
-                    layout: { align: 'center', padding: { bottom: '10px' } }
-                },
-                {
-                    id: generateId(),
-                    type: 'text',
-                    content: 'This is a starter template. Use the AI to help you create amazing emails.',
-                    properties: { 
-                        text: 'This is a starter template. Use the AI to help you create amazing emails.',
-                        typography: {
-                            color: '#555555',
-                            fontSize: '16px' 
-                        }
-                    },
-                    layout: { align: 'center', padding: { top: '10px' } }
-                }
-            ]
-        }
-    ]
-};
+// const defaultSemanticTemplateV2: EmailTemplateV2 = { ... }; // Removed
 
 // --- Simple Client-Side HTML Generator (Matches basic structure of backend) ---
 function generateBasicHtml(template: EmailTemplate): string {
@@ -177,20 +103,20 @@ export const createProject = async (name: string): Promise<Project | null> => {
         if (!userData.user) throw new Error("User not authenticated.");
         
         const userId = userData.user.id;
-        const username = userData.user.email; // Or another field if preferred
+        // const username = userData.user.email; // Or another field if preferred // Commented out as username is not used
 
-        const defaultHtml = generateBasicHtml(defaultSemanticTemplate);
+        // const defaultHtml = generateBasicHtml(defaultSemanticTemplate); // Removed: No longer generating default HTML
 
         const { data, error } = await supabase
       .from('projects')
       .insert({
                 name: name,
                 user_id: userId,
-                semantic_email: defaultSemanticTemplate as any, // V1 template
-                semantic_email_v2: defaultSemanticTemplateV2 as any, // Add V2 default
-                current_html: defaultHtml, // TODO: Consider generating V2 HTML here?
+                semantic_email: null, // V1 template set to null
+                semantic_email_v2: null, // V2 template set to null
+                current_html: null, // HTML set to null
                 last_edited_at: new Date(),
-                version: 2 // Set version to 2 for new projects
+                version: 2 // Set version to 2 for new projects (or consider 0 or 1 if it represents content state)
       })
       .select()
       .single();
