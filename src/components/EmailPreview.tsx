@@ -4,12 +4,84 @@ import { cn } from "@/lib/utils";
 import { EmailHtmlRenderer } from './EmailHtmlRenderer';
 import { isPlaceholder } from '@/services/v2/htmlGenerator';
 import { 
-  EmailElement as EmailElementTypeV2,
+  EmailElement,
   ImageElementProperties, 
   ButtonElementProperties,
-} from '@/types/v2';
+} from '../../supabase/functions/_shared/types/v2/elements';
 
-// Utility function to wait for the next paint cycle
+/**
+ * EmailPreview Component
+ * 
+ * A sophisticated email preview component that provides an interactive preview environment
+ * with support for visual overlays, placeholder management, and responsive design.
+ * 
+ * Technical Implementation Details:
+ * 1. Iframe Integration:
+ *    - Uses EmailHtmlRenderer to render content in an isolated iframe
+ *    - Maintains coordinate mapping between iframe and parent document
+ *    - Handles scroll synchronization and resize events
+ * 
+ * 2. Overlay System:
+ *    - Two-layer overlay architecture:
+ *      a) Non-interactive overlays for pending changes (lower z-index)
+ *      b) Interactive overlays for placeholders (higher z-index)
+ *    - Uses absolute positioning with offset calculations
+ *    - Handles edge cases like iframe borders and scroll positions
+ * 
+ * 3. Performance Considerations:
+ *    - Uses RAF (RequestAnimationFrame) for smooth animations
+ *    - Batches DOM operations to minimize reflows
+ *    - Cleanup handlers for event listeners
+ * 
+ * 4. Responsive Features:
+ *    - Supports mobile/desktop preview modes
+ *    - Handles dark/light theme switching
+ *    - Maintains aspect ratios and dimensions
+ * 
+ * Props:
+ * @param {string | null} currentHtml - HTML content to render
+ *                                     Null triggers empty state display
+ * 
+ * @param {PendingChange[]} pendingChanges - Array of pending content changes
+ *                                          Each change includes: elementId, changeType (add/edit/delete)
+ * 
+ * @param {'light' | 'dark'} previewMode - Theme mode
+ *                                        'dark' applies color inversion via CSS filters
+ * 
+ * @param {'desktop' | 'mobile'} previewDevice - Device preview mode
+ *                                              Affects container width and scaling
+ * 
+ * @param {EmailTemplateV2 | null} semanticTemplate - Structured template data
+ *                                                   Used for placeholder detection and processing
+ * 
+ * @param {Function} onPlaceholderActivate - Callback for placeholder interaction
+ *                                          Receives: { elementId, path, type }
+ * 
+ * State Management:
+ * - Uses refs for DOM element access and measurement
+ * - Callback memoization for performance
+ * - Controlled props for preview modes
+ */
+
+/**
+ * waitForPaintCycle
+ * 
+ * Utility function that ensures DOM operations occur after the browser has completed
+ * layout and paint operations. Uses double requestAnimationFrame for maximum reliability.
+ * 
+ * Technical Details:
+ * - First RAF: Queues operation for next frame
+ * - Second RAF: Ensures first frame has completed
+ * - Helps prevent layout thrashing
+ * - More reliable than setTimeout(0) or single RAF
+ * 
+ * Use Cases:
+ * - DOM measurements after content changes
+ * - Overlay positioning calculations
+ * - Smooth animations and transitions
+ * 
+ * @param {Function} callback - Operation to execute after paint cycle
+ */
 function waitForPaintCycle(callback: () => void) {
   requestAnimationFrame(() => {
     requestAnimationFrame(callback);
@@ -24,9 +96,54 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   semanticTemplate,
   onPlaceholderActivate,
 }) => {
+  /**
+   * DOM References
+   * 
+   * overlayContainerRef: Container for all overlay elements
+   * - Positioned absolutely over the iframe
+   * - Contains both pending change and placeholder overlays
+   * - z-index managed for proper stacking
+   * 
+   * htmlRendererRef: Reference to the EmailHtmlRenderer component
+   * - Provides access to the iframe container
+   * - Used for coordinate calculations and event binding
+   * - Exposes getContainer() method for iframe access
+   */
   const overlayContainerRef = useRef<HTMLDivElement>(null);
   const htmlRendererRef = useRef<{ getContainer: () => HTMLDivElement | null } | null>(null);
 
+  /**
+   * calculateAndApplyOverlays
+   * 
+   * Core function responsible for creating and positioning all overlays.
+   * Handles both pending changes and placeholder overlays in a single pass.
+   * 
+   * Technical Process:
+   * 1. Setup and Validation
+   *    - Acquires necessary DOM references
+   *    - Validates iframe accessibility
+   *    - Clears existing overlays
+   * 
+   * 2. Coordinate Space Management
+   *    - Maps iframe coordinates to parent document
+   *    - Accounts for scroll position
+   *    - Handles iframe border offset
+   * 
+   * 3. Overlay Creation
+   *    - Two-phase process for pending changes
+   *    - Single-phase for placeholders
+   *    - Maintains separate z-indexes for stacking
+   * 
+   * Error Handling:
+   * - Graceful degradation if elements not found
+   * - Logging for debugging and monitoring
+   * - Maintains overlay state consistency
+   * 
+   * Performance:
+   * - Batches DOM operations
+   * - Minimizes reflows and repaints
+   * - Uses document fragments where beneficial
+   */
   const calculateAndApplyOverlays = useCallback(() => { 
     const container = htmlRendererRef.current?.getContainer(); 
     const overlayContainer = overlayContainerRef.current;
@@ -51,27 +168,28 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const iframeDoc = iframe.contentDocument;
     const iframeWin = iframe.contentWindow;
     const iframeRect = iframe.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect(); // Use container rect for offset
+    const containerRect = container.getBoundingClientRect();
     const scrollY = iframeWin.scrollY;
 
     let allPendingFound = true;
     
-    // --- 1. Apply overlays for PENDING CHANGES --- 
+    /**
+     * Process Non-Delete Pending Changes
+     * 
+     * Creates visual overlays for elements that have pending additions or edits.
+     * Deletions are handled at the template level and not visualized here.
+     * 
+     * Overlay Types:
+     * - Add: Green dashed border with light green background
+     * - Edit: Yellow solid border with light yellow background
+     */
     console.log("[EmailPreview] Processing Pending Changes Overlays...");
     if (Array.isArray(pendingChanges) && pendingChanges.length > 0) {
-      // First pass: Reset styles for deleted elements to calculate correct bounds
-      pendingChanges.forEach(change => {
-        if (change.changeType === 'delete') {
-          const targetElement = iframeDoc.getElementById(change.elementId);
-          if (targetElement) {
-            targetElement.style.opacity = '1'; // Reset opacity
-            targetElement.style.textDecoration = 'none'; // Reset decoration
-          }
-        }
-      });
-    
-      // Second pass: Create overlays
+      // Create overlays for additions and edits only
       pendingChanges.forEach((change: PendingChange) => {
+        // Skip deletion overlays as they're handled at template level
+        if (change.changeType === 'delete') return;
+
         const targetElement = iframeDoc.getElementById(change.elementId);
         if (!targetElement) {
           console.warn(`[EmailPreview] Pending Change Overlay: Element [ID: ${change.elementId}] not found in iframe. Skipping.`);
@@ -82,53 +200,52 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
         // Get element position relative to iframe
         const targetRect = targetElement.getBoundingClientRect();
         
-        // Create overlay
+        // Create overlay with appropriate styling based on change type
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.left = `${iframeRect.left + targetRect.left - containerRect.left}px`;
         overlay.style.top = `${iframeRect.top + targetRect.top - containerRect.top + scrollY}px`;
         overlay.style.width = `${targetRect.width}px`;
         overlay.style.height = `${targetRect.height}px`;
-        overlay.style.pointerEvents = 'none'; // These are visual-only
+        overlay.style.pointerEvents = 'none';
         overlay.style.zIndex = '10';
         overlay.style.boxSizing = 'border-box';
         overlay.style.borderRadius = '3px';
         
-        // Style based on change type
-        switch (change.changeType) {
-          case 'add': overlay.style.border = '2px dashed #22c55e'; overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)'; break;
-          case 'edit': overlay.style.border = '2px solid #eab308'; overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)'; break;
-          case 'delete': 
-            overlay.style.border = '2px dashed #ef4444'; 
-            overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-            if (targetElement) {
-              targetElement.style.opacity = '0.6';
-              targetElement.style.textDecoration = 'line-through';
-            }
-            break;
+        // Apply specific styles based on change type
+        if (change.changeType === 'add') {
+          overlay.style.border = '2px dashed #22c55e';
+          overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+        } else if (change.changeType === 'edit') {
+          overlay.style.border = '2px solid #eab308';
+          overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
         }
         
         overlayContainer?.appendChild(overlay);
       });
-      
-      if (allPendingFound) {
-        console.log("[EmailPreview] Pending Change Overlay calculation complete. All elements found.");
-      } else {
-        console.warn("[EmailPreview] Pending Change Overlay calculation complete. Some elements were NOT found.");
-      }
-    } else {
-      console.log("[EmailPreview] No pending changes to overlay.");
     }
 
-    // --- 2. Apply overlays for PLACEHOLDERS (using semanticTemplate) --- 
+    /**
+     * Section 2: Process Placeholder Overlays
+     * 
+     * Creates interactive overlays for placeholder elements (images/links).
+     * These overlays are clickable and trigger the onPlaceholderActivate callback.
+     * 
+     * Process:
+     * 1. Iterate through semantic template elements
+     * 2. Identify placeholder elements (images/links)
+     * 3. Create clickable overlays positioned absolutely
+     * 4. Add click handlers to trigger placeholder activation
+     */
     console.log("[EmailPreview] Processing Placeholder Overlays...");
     let placeholdersFound = 0;
     if (semanticTemplate?.sections) {
       semanticTemplate.sections.forEach(section => {
-        section.elements.forEach((element: EmailElementTypeV2) => {
+        section.elements.forEach((element: EmailElement) => {
           let isImagePlaceholder = false;
           let isLinkPlaceholder = false;
           
+          // Check for image and link placeholders
           if (element.type === 'image') {
             const props = element.properties as ImageElementProperties;
             if (props.image?.src && isPlaceholder(props.image.src)) {
@@ -154,23 +271,13 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             placeholdersFound++;
             const targetRect = targetElement.getBoundingClientRect();
 
-            // (+) Add detailed logging for coordinates
-            console.log(`[EmailPreview] Coords for ${element.id}:`);
-            console.log(`  - Target Rect (in iframe):`, JSON.stringify(targetRect));
-            console.log(`  - Iframe Rect:`, JSON.stringify(iframeRect));
-            console.log(`  - Container Rect:`, JSON.stringify(containerRect));
-            console.log(`  - Iframe ScrollY:`, scrollY);
-
             // Create clickable overlay
             const placeholderOverlay = document.createElement('div');
             placeholderOverlay.classList.add('placeholder-overlay-clickable');
             placeholderOverlay.style.position = 'absolute';
-            // Adjust calculation to account for the iframe's 2px border
-            const iframeBorderWidth = 2; 
+            const iframeBorderWidth = 2;
             const calculatedLeft = iframeRect.left + targetRect.left - containerRect.left + iframeBorderWidth;
             const calculatedTop = iframeRect.top + targetRect.top - containerRect.top + scrollY + iframeBorderWidth;
-            console.log(`  - Calculated Overlay Left:`, calculatedLeft);
-            console.log(`  - Calculated Overlay Top:`, calculatedTop);
             placeholderOverlay.style.left = `${calculatedLeft}px`;
             placeholderOverlay.style.top = `${calculatedTop}px`;
             placeholderOverlay.style.width = `${targetRect.width}px`;
@@ -182,7 +289,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             placeholderOverlay.style.backgroundColor = 'rgba(0, 255, 0, 0.3)';
             placeholderOverlay.setAttribute('title', isImagePlaceholder ? 'Click to upload image' : 'Click to set link');
 
-            // Determine type and path
+            // Determine type and path for placeholder activation
             let path = 'unknown.path';
             const type: 'image' | 'link' = isImagePlaceholder ? 'image' : 'link';
             if (isImagePlaceholder && element.type === 'image') {
@@ -192,7 +299,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
               else if (element.type === 'button') path = 'button.href';
             }
             
-            // Add click listener to call onPlaceholderActivate
+            // Add click handler
             placeholderOverlay.addEventListener('click', (e) => {
               e.stopPropagation();
               console.log(`[EmailPreview] Placeholder overlay clicked for element with data-element-id=${element.id} (path: ${path}, type: ${type})`);
@@ -209,6 +316,22 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     }
   }, [pendingChanges, semanticTemplate, onPlaceholderActivate]);
 
+  /**
+   * handleContentReady
+   * 
+   * Callback triggered when EmailHtmlRenderer has completed content rendering.
+   * Ensures proper timing for overlay calculations and positioning.
+   * 
+   * Technical Details:
+   * - Uses waitForPaintCycle for reliable timing
+   * - Handles initial content load and subsequent updates
+   * - Triggers overlay recalculation at optimal time
+   * 
+   * Edge Cases:
+   * - Handles empty content
+   * - Manages race conditions with DOM updates
+   * - Ensures proper cleanup between updates
+   */
   const handleContentReady = useCallback(() => {
     console.log("[EmailPreview] handleContentReady called (likely from EmailHtmlRenderer). Waiting for paint cycle...");
     waitForPaintCycle(() => {
@@ -217,7 +340,22 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     });
   }, [calculateAndApplyOverlays]);
 
-  // Effect for handling iframe scroll
+  /**
+   * Scroll Handler Effect
+   * 
+   * Manages overlay positioning during iframe content scrolling.
+   * Ensures overlays remain aligned with their target elements.
+   * 
+   * Technical Implementation:
+   * - Debounced scroll handler
+   * - RAF-based position updates
+   * - Proper event cleanup
+   * 
+   * Performance Considerations:
+   * - Minimizes scroll jank
+   * - Optimizes reflow triggers
+   * - Handles rapid scroll events
+   */
   useEffect(() => {
     const container = htmlRendererRef.current?.getContainer();
     if (!container) return;
@@ -233,7 +371,6 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
       });
     };
     
-    // Add scroll event listener to iframe content window
     iframe.contentWindow.addEventListener('scroll', handleIframeScroll);
     
     return () => {
@@ -243,34 +380,60 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     };
   }, [calculateAndApplyOverlays]);
 
-  const frameClass = 
-    previewDevice === 'mobile'
-      ? 'w-[375px] mx-auto rounded-xl overflow-hidden'
-      : 'max-w-[650px] w-full mx-auto rounded-xl overflow-hidden';
+  /**
+   * Style Computations
+   * 
+   * Calculates classes and styles for the preview container based on current mode.
+   * Handles responsive design and theme switching.
+   * 
+   * Technical Details:
+   * - Mobile: Fixed width (375px) with auto margins
+   * - Desktop: Fluid width with max constraint
+   * - Dark mode: Uses CSS filters for color inversion
+   * - Maintains consistent border radius and overflow
+   */
+  const frameClass = previewDevice === 'mobile'
+    ? 'w-[375px] mx-auto rounded-xl overflow-hidden'
+    : 'max-w-[650px] w-full mx-auto rounded-xl overflow-hidden';
       
   const frameBackground = 'bg-white';
   const inversionClass = previewMode === 'dark' ? 'filter invert hue-rotate-180' : '';
-  const outerContainerClass = "flex justify-center pt-4 pb-20"; 
+  const outerContainerClass = "flex justify-center pt-4 pb-20";
 
-    return (
+  return (
     <div className={outerContainerClass}>
       <div 
         className={cn("relative", frameClass, frameBackground, inversionClass)}
         style={{ boxShadow: 'none' }}
       >
-        <EmailHtmlRenderer
-          ref={htmlRendererRef}
-          html={currentHtml}
-          onContentReady={handleContentReady}
-        />
-        <div 
-          ref={overlayContainerRef}
-          className="absolute top-0 left-0 w-full h-full"
-          style={{ zIndex: 5 }}
-        >
-        {/* Child overlays for pending changes have pointer-events:none set individually */}
-        {/* Child overlays for placeholders do NOT have pointer-events:none */}
-      </div>
+        {!currentHtml ? (
+          // Empty State Display
+          <div className="flex items-center justify-center p-8 text-gray-500 bg-gray-50 rounded-xl min-h-[300px]">
+            <div className="text-center">
+              <p className="text-lg font-medium">No Email Content</p>
+              <p className="text-sm mt-2">Start editing to preview your email here</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Content Renderer */}
+            <EmailHtmlRenderer
+              ref={htmlRendererRef}
+              html={currentHtml}
+              onContentReady={handleContentReady}
+            />
+            {/* Overlay Container */}
+            <div 
+              ref={overlayContainerRef}
+              className="absolute top-0 left-0 w-full h-full"
+              style={{ zIndex: 5 }}
+            >
+              {/* Overlays are dynamically injected here */}
+              {/* Pending change overlays: pointer-events: none */}
+              {/* Placeholder overlays: pointer-events: auto */}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

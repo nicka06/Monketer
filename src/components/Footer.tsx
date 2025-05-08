@@ -1,5 +1,17 @@
 import { Link } from "react-router-dom";
 
+/**
+ * Navigation data structure defining all footer links organized by category
+ * Categories include:
+ * - product: Main product-related links
+ * - company: Organization and corporate information
+ * - support: Help and documentation resources
+ * - legal: Compliance and policy documents
+ * 
+ * Each link contains:
+ * - name: Display text for the link
+ * - href: Target URL/route
+ */
 const footerNavigation = {
   product: [
     { name: 'Features', href: '#' },
@@ -26,6 +38,35 @@ const footerNavigation = {
   ],
 };
 
+/**
+ * Footer Component
+ * 
+ * A responsive footer component that provides site-wide navigation and branding.
+ * 
+ * Layout Structure:
+ * - Main grid with 3 columns on XL screens:
+ *   • Left column: Brand section with logo and tagline
+ *   • Center/Right columns: Navigation sections in a 2x2 grid
+ * 
+ * Features:
+ * - Responsive layout that adapts to different screen sizes
+ * - Organized navigation with categorized links
+ * - Consistent branding with monketer purple accent
+ * - Accessible with proper ARIA labels and semantic HTML
+ * - Dynamic copyright year
+ * 
+ * Navigation Categories:
+ * - Product: Features, pricing, roadmap, guides
+ * - Company: About, blog, careers, partners
+ * - Support: Help, docs, contact, status
+ * - Legal: Privacy, terms, cookies
+ * 
+ * Styling:
+ * - Dark theme (bg-gray-900)
+ * - Hover effects on navigation links
+ * - Consistent spacing and typography
+ * - Border separator above copyright
+ */
 const Footer = () => {
   return (
     <footer className="bg-gray-900" aria-labelledby="footer-heading">

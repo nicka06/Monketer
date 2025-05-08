@@ -1,26 +1,63 @@
+/**
+ * EmailHtmlRenderer
+ * 
+ * This component renders HTML email content in an iframe, providing a preview environment
+ * for email templates with special handling for placeholder elements.
+ * 
+ * Key Features:
+ * 1. Renders email content in an isolated iframe environment
+ * 2. Transforms placeholder elements (images/links) into visual representations
+ * 3. Maintains proper styling and background colors
+ * 4. Auto-resizes based on content
+ * 5. Handles responsive design
+ * 
+ * @component
+ */
+
 import React, { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 
 interface EmailHtmlRendererProps {
+  /** The HTML content to render */
   html: string | null;
+  /** Callback fired when content is fully rendered and ready */
   onContentReady: () => void;
+  /** Optional className for the container div */
   className?: string;
 }
 
 export interface EmailHtmlRendererRef {
+  /** Returns the container div element */
   getContainer: () => HTMLDivElement | null;
 }
 
-// (+) Helper function to generate unique IDs
-function generatePlaceholderId() {
-  return `placeholder-${Math.random().toString(36).substring(2, 9)}`;
-}
-
-// (+) Helper function to safely escape HTML attributes
+/**
+ * Safely escapes HTML special characters to prevent XSS attacks.
+ * Used when inserting user-provided content into HTML attributes.
+ * 
+ * @param str - The string to escape
+ * @returns The escaped string safe for HTML insertion
+ * @example
+ * // Used when inserting styles or attributes:
+ * style="${escapeHtml(placeholderStyle)}"
+ */
 function escapeHtml(str: string) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-// (+) Helper function to process HTML and replace placeholders
+/**
+ * Processes HTML content to transform placeholder elements into visual representations.
+ * Handles two types of placeholders:
+ * 1. Images (<img data-placeholder="true">)
+ * 2. Links (<a data-placeholder="true">)
+ * 
+ * @param html - The raw HTML content to process
+ * @returns Processed HTML with placeholders transformed into visual elements
+ */
 function processHtmlForPlaceholders(html: string): string {
   if (!html) return '';
   console.log('[EmailHtmlRenderer:processHtml] === Starting Placeholder Processing ===');
@@ -45,24 +82,21 @@ function processHtmlForPlaceholders(html: string): string {
 
     // Extract existing styles and attributes for display
     const styleMatch = match.match(/style=[\'\"]([^\"\']*)[\'\"]/i);
-    // Regex to capture digits, percentages, or 'auto' (Fixed to handle % correctly)
     const widthMatch = match.match(/width=[\'\"]?(\\d+%?|auto)[\'\"]?/i);
     const heightMatch = match.match(/height=[\'\"]?(\\d+%?|auto)[\'\"]?/i);
     const altMatch = match.match(/alt=[\'\"]([^\"\']*)[\'\"]/i);
     
     const existingStyles = styleMatch ? styleMatch[1] : '';
-    // Use extracted value or default to '100%' if missing width attr
     const width = widthMatch ? widthMatch[1] : '100%'; 
     const height = heightMatch ? heightMatch[1] : 'auto'; 
     const alt = altMatch ? altMatch[1] : 'Image Placeholder';
     console.log(`[EmailHtmlRenderer:processHtml] Extracted for Image ${elementId}: width=${width}, height=${height}, alt=${alt}`);
 
-    // Ensure display: block or inline-block for proper sizing
+    // Ensure display: block for proper sizing
     let displayStyle = 'display: block;';
     if (existingStyles.includes('display:')) {
        displayStyle = existingStyles.match(/display:[^;]+/i)?.[0] || displayStyle;
     } 
-    // Removed the else-if for inline-block, block is usually safer for email images
 
     // Helper to add unit if needed
     const formatDimension = (value: string): string => {
@@ -75,29 +109,27 @@ function processHtmlForPlaceholders(html: string): string {
     // Generate placeholder styles
     let finalHeightStyle = '';
     if (height === 'auto') {
-      // If height is auto, use aspect ratio for the placeholder
       finalHeightStyle = 'aspect-ratio: 16 / 9;'; 
       console.log(`[EmailHtmlRenderer:processHtml] Using aspect-ratio for Image ${elementId}`);
     } else {
-      // Otherwise, use the specified height
       finalHeightStyle = `height: ${formatDimension(height)};`;
       console.log(`[EmailHtmlRenderer:processHtml] Using explicit height for Image ${elementId}: ${formatDimension(height)}`);
     }
 
-    // Clean the existing styles string more carefully
+    // Clean the existing styles string
     const cleanedExistingStyles = existingStyles
       .replace(/display:[^;]+;?/gi, '')
       .replace(/width:[^;]+;?/gi, '')
       .replace(/height:[^;]+;?/gi, '')
-      .replace(/max-width:[^;]+;?/gi, '') // Remove max-width as well
-      .replace(/aspect-ratio:[^;]+;?/gi, '') // Remove existing aspect-ratio
+      .replace(/max-width:[^;]+;?/gi, '')
+      .replace(/aspect-ratio:[^;]+;?/gi, '')
       .trim();
 
     const placeholderStyle = `
       ${displayStyle} 
       width: ${formatDimension(width)};
       ${finalHeightStyle}
-      max-width: 100%; /* Always apply max-width */
+      max-width: 100%;
       background-color: #e0e0e0; 
       border: 1px dashed #a0a0a0; 
       color: #666; 
@@ -108,7 +140,6 @@ function processHtmlForPlaceholders(html: string): string {
       justify-content: center; 
       cursor: pointer; 
       box-sizing: border-box;
-      /* Append cleaned existing styles */
       ${cleanedExistingStyles}
     `.replace(/\s+/g, ' ').trim();
     console.log(`[EmailHtmlRenderer:processHtml] Calculated Style for Image ${elementId}:`, placeholderStyle);
@@ -192,17 +223,37 @@ function processHtmlForPlaceholders(html: string): string {
   return finalHtml;
 }
 
+/**
+ * The main EmailHtmlRenderer component.
+ * Renders HTML email content in an iframe with special handling for placeholders.
+ * 
+ * Features:
+ * - Isolated rendering environment using iframe
+ * - Auto-resizing based on content
+ * - Background color preservation
+ * - Placeholder transformation
+ * - Responsive design support
+ * 
+ * @param props.html - The HTML content to render
+ * @param props.onContentReady - Callback when content is ready
+ * @param props.className - Optional container className
+ * @param ref - Forwarded ref with access to container element
+ */
 export const EmailHtmlRenderer = forwardRef<EmailHtmlRendererRef, EmailHtmlRendererProps>((
   { html, onContentReady, className },
   ref
 ) => {
+  // Container ref for the outer div
   const containerRef = useRef<HTMLDivElement>(null);
+  // Ref for the iframe element
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // Expose container access through ref
   useImperativeHandle(ref, () => ({ 
     getContainer: () => containerRef.current,
   }), []);
   
+  // Main effect for rendering HTML content
   useEffect(() => {
     console.log("[EmailHtmlRenderer|useEffect html] Effect triggered. Current HTML length:", html?.length ?? 0);
     const container = containerRef.current;
@@ -211,61 +262,82 @@ export const EmailHtmlRenderer = forwardRef<EmailHtmlRendererRef, EmailHtmlRende
       return;
     }
 
-    // Create or access iframe
+    // Create iframe if it doesn't exist
     if (!iframeRef.current) {
       const iframe = document.createElement('iframe');
+      // Set default iframe styling
       iframe.style.width = '100%';
-      iframe.style.minHeight = '300px'; // Minimum height
+      iframe.style.minHeight = '300px';
       iframe.style.border = '2px solid #d1d5db';
-      iframe.style.borderRadius = '0.75rem'; // matches rounded-xl
-      iframe.style.overflow = 'hidden'; // Hide scrollbars initially
-      iframe.setAttribute('scrolling', 'no'); // Disable scrolling
+      iframe.style.borderRadius = '0.75rem';
+      iframe.style.overflow = 'hidden';
+      iframe.setAttribute('scrolling', 'no');
       container.appendChild(iframe);
       iframeRef.current = iframe;
     }
 
-    // Set HTML content to iframe
+    // Render content in iframe
     if (iframeRef.current) {
       const iframe = iframeRef.current;
       
       try {
-        // Clear previous content by removing the iframe's document children
         const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
         if (iframeDoc) {
           iframeDoc.open();
           
           if (html) {
             console.log("[EmailHtmlRenderer|useEffect html] HTML content exists. Processing placeholders...");
-            // (+) Process HTML for placeholders before writing
+            // Transform placeholders in HTML content
             const processedHtml = processHtmlForPlaceholders(html);
             
-            // Add CSS to ensure content fills iframe properly
+            // Extract background color from email container
+            const bgColorMatch = processedHtml.match(/class="email-container"[^>]*background:([^;"]*)/i);
+            const backgroundColor = bgColorMatch ? bgColorMatch[1].trim() : '#ffffff';
+            
+            // Add styles for proper content display and background color
             const styleTag = `
               <style>
                 html, body {
                   margin: 0;
-                  padding: 20px;
+                  padding: 0;
                   height: auto;
                   overflow: visible;
-                  background-color: white;
+                  background-color: ${backgroundColor};
                 }
                 * {
                   box-sizing: border-box;
                 }
+                .email-content {
+                  padding: 20px;
+                  background-color: ${backgroundColor};
+                }
               </style>
             `;
-            iframeDoc.write(styleTag + processedHtml); // (+) Write processed HTML
+            
+            // Wrap content in container with proper styling
+            const wrappedHtml = `
+              ${styleTag}
+              <div class="email-content">
+                ${processedHtml}
+              </div>
+            `;
+            
+            iframeDoc.write(wrappedHtml);
           } else {
-            iframeDoc.write('<div style="padding: 16px; text-align: center; color: #888;">No preview available.</div>');
+            // Empty content - write nothing
+            iframeDoc.write('');
           }
           
           iframeDoc.close();
           
-          // Wait for iframe content to load before calling onContentReady
+          // Handle iframe content loading
           iframe.onload = () => {
             console.log("[EmailHtmlRenderer|useEffect html] iframe.onload triggered.");
             
-            // Resize iframe to content height
+            /**
+             * Resizes iframe to match content height
+             * Uses multiple height calculations to ensure accuracy across different browsers
+             */
             const resizeIframe = () => {
               try {
                 const body = iframeDoc.body;
@@ -293,7 +365,7 @@ export const EmailHtmlRenderer = forwardRef<EmailHtmlRendererRef, EmailHtmlRende
             // Initial resize
             resizeIframe();
             
-            // Add resize observer to handle dynamic content changes
+            // Set up automatic resizing for dynamic content
             if (window.ResizeObserver) {
               const resizeObserver = new ResizeObserver(() => {
                 resizeIframe();
@@ -312,10 +384,10 @@ export const EmailHtmlRenderer = forwardRef<EmailHtmlRendererRef, EmailHtmlRende
       }
     }
 
-    return () => {
-      // Cleanup if needed
-    };
+    // No cleanup needed
+    return () => {};
   }, [html, onContentReady]);
 
+  // Render container div
   return <div ref={containerRef} className={className} />;
 }); 

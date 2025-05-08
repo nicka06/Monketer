@@ -11,12 +11,53 @@ import {
   DialogTitle
 } from "./ui/dialog";
 
+/**
+ * HeroSection Component
+ * 
+ * A landing page hero section that serves as the main entry point for email creation.
+ * Features an AI-powered email generation interface with authentication flow.
+ * 
+ * Key Features:
+ * - Email content persistence across sessions
+ * - Authentication gate for generation
+ * - Responsive design with gradient background
+ * - Interactive UI elements with hover states
+ * 
+ * State Management:
+ * - emailContent: Stores user's email description
+ * - showAuthDialog: Controls authentication modal visibility
+ * - Persists content in localStorage during auth flow
+ * 
+ * Authentication Flow:
+ * 1. User enters email description
+ * 2. On submit, shows auth dialog
+ * 3. User chooses sign up or sign in
+ * 4. Content is preserved during authentication
+ * 
+ * UI Components:
+ * - Gradient background with rotation
+ * - Centered content layout
+ * - Multi-line text input
+ * - Animated submit button
+ * - Modal dialog for auth
+ * 
+ * Dependencies:
+ * - UI: Button, Textarea, Dialog components
+ * - Icons: ArrowRight from lucide-react
+ * - Routing: react-router-dom for navigation
+ * - Storage: localStorage for content persistence
+ */
 const HeroSection = () => {
+  // State for managing email content and auth dialog visibility
   const [emailContent, setEmailContent] = useState("");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const navigate = useNavigate();
 
-  // Properly load saved content with useEffect
+  /**
+   * Load saved content on component mount
+   * Retrieves any previously saved email content from localStorage
+   * This ensures content persistence across the auth flow
+   */
   useEffect(() => {
     const savedContent = localStorage.getItem('savedEmailContent');
     if (savedContent) {
@@ -24,29 +65,39 @@ const HeroSection = () => {
     }
   }, []);
 
+  /**
+   * Handle form submission
+   * Instead of direct generation, shows auth dialog
+   * Preserves entered content for post-auth flow
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Show the authentication dialog instead of proceeding directly
     setShowAuthDialog(true);
     console.log("Email content submitted:", emailContent);
   };
 
+  /**
+   * Handle authentication option selection
+   * Saves current content to localStorage before navigation
+   * Ensures smooth user experience across auth flow
+   * 
+   * @param route - Target authentication route ('/signup' or '/login')
+   */
   const handleAuthOption = (route: string) => {
-    // Save the email content to localStorage before navigating
     if (emailContent.trim()) {
       localStorage.setItem('savedEmailContent', emailContent);
     }
-    
-    // Close dialog and navigate to the selected route
     setShowAuthDialog(false);
     navigate(route);
   };
 
   return <div className="relative overflow-hidden bg-white pt-24 pb-16 sm:pt-32">
+      {/* Decorative gradient background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute left-[calc(50%-30rem)] top-[calc(50%-20rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-monketer-purple-light to-white opacity-30 sm:left-[calc(50%-30rem)] sm:top-[calc(50%-25rem)] sm:w-[72.1875rem]"></div>
       </div>
       
+      {/* Main content container */}
       <div className="mx-auto max-w-7xl px-6 lg:px-8 text-center">
         <div className="mx-auto max-w-3xl">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 mb-4">
@@ -56,6 +107,7 @@ const HeroSection = () => {
             Create "wow worthy" emails in a matter of seconds
           </p>
           
+          {/* Email generation form */}
           <form onSubmit={handleSubmit} className="mt-10 mx-auto max-w-2xl">
             <div className="flex flex-col items-center">
               <label htmlFor="email-content" className="text-left self-start mb-2 text-sm font-medium text-gray-700">
