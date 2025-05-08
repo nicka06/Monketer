@@ -232,7 +232,7 @@ const Editor = () => {
           // Initialize with minimal state for a new project prompt
           setProjectData(null); // Explicitly null to trigger initial UI
           setProjectTitle('New Email');
-          setActualProjectId(null); 
+          setActualProjectId(null);
           setHasCode(false);
           setLivePreviewHtml(null);
           // No need to create a project here; user will initiate via prompt.
@@ -241,10 +241,10 @@ const Editor = () => {
         console.error('Error in project loading useEffect:', err);
         toast({ title: 'Error', description: 'An unexpected error occurred while loading.', variant: 'destructive' });
         // navigate('/dashboard'); // Consider if navigation is always right here
-      } finally {
-        setIsLoadingProject(false);
-      }
-    };
+    } finally {
+      setIsLoadingProject(false);
+    }
+  };
     loadProjectDataInternal();
   }, [projectId, username, projectName, user, fetchAndSetProject, navigate, toast]);
 
@@ -1085,50 +1085,50 @@ const Editor = () => {
       {/* Header */}
       <header className="flex items-center justify-between p-3 border-b sticky top-0 z-10 bg-background">
         {/* Left section: Back button, Title, Edit icon */}
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-5 w-5" />
-            <span className="sr-only">Back to all projects</span>
-          </Button>
-        </div>
-        
-        <div className="flex-1 flex justify-center max-w-md">
-          {isEditingTitle ? (
-            <input
-              type="text"
-              value={projectTitle}
-              onChange={(e) => setProjectTitle(e.target.value)}
-              onBlur={() => {
-                setIsEditingTitle(false);
-                handleTitleChange(projectTitle);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+          <div className="flex items-center">
+            <Button variant="ghost" size="icon" className="mr-4" onClick={() => navigate('/dashboard')}>
+              <ArrowLeft className="h-5 w-5" />
+              <span className="sr-only">Back to all projects</span>
+            </Button>
+          </div>
+          
+          <div className="flex-1 flex justify-center max-w-md">
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={projectTitle}
+                onChange={(e) => setProjectTitle(e.target.value)}
+                onBlur={() => {
                   setIsEditingTitle(false);
                   handleTitleChange(projectTitle);
-                }
-              }}
-              autoFocus
-              className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
-            />
-          ) : (
-            <h1 
-              className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
-              onClick={() => setIsEditingTitle(true)}
-            >
-              {projectTitle}
-            </h1>
-          )}
-        </div>
-        
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon">
-            <Settings className="h-5 w-5" />
-            <span className="sr-only">Settings</span>
-          </Button>
-        </div>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setIsEditingTitle(false);
+                    handleTitleChange(projectTitle);
+                  }
+                }}
+                autoFocus
+                className="text-lg font-medium text-center border-b border-gray-300 focus:border-primary focus:outline-none px-2"
+              />
+            ) : (
+              <h1 
+                className="text-lg font-medium cursor-pointer hover:text-primary transition-colors"
+                onClick={() => setIsEditingTitle(true)}
+              >
+                {projectTitle}
+              </h1>
+            )}
+          </div>
+          
+          <div className="flex items-center">
+            <Button variant="ghost" size="icon">
+              <Settings className="h-5 w-5" />
+              <span className="sr-only">Settings</span>
+            </Button>
+          </div>
       </header>
-
+        
       {/* Conditional UI Rendering Logic */}
       {isLoadingProject ? (
         <div className="flex-1 flex flex-col items-center justify-center">
@@ -1154,7 +1154,7 @@ const Editor = () => {
               onChange={(e) => setInitialInputValue(e.target.value)}
               className="text-base p-4"
             />
-            <Button
+        <Button 
               onClick={() => {
                 if (initialInputValue) { 
                   console.log('Initial Email Generation. Prompt:', initialInputValue, 'Project ID (current):', actualProjectId);
@@ -1170,7 +1170,7 @@ const Editor = () => {
               size="lg"
             >
               {isLoading ? 'Generating...' : 'Generate Email with AI'}
-            </Button>
+        </Button>
           </div>
         </div>
       ) : (
@@ -1184,35 +1184,35 @@ const Editor = () => {
           >
             {/* Preview Controls Header - Only show when we have an email */}
             {projectData?.semantic_email_v2 && !isLoading && (
-              <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+            <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
                 <div></div>
-                <div className="flex items-center space-x-6">
-                  <div className="flex items-center space-x-2">
-                    <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
-                    <Switch
-                      id="dark-mode-switch"
-                      checked={isDarkMode}
-                      onCheckedChange={setIsDarkMode}
-                      aria-label="Toggle Dark Mode"
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2">
+                  <Sun className={cn("h-4 w-4", isDarkMode ? "text-gray-500" : "text-yellow-500")} />
+                  <Switch
+                    id="dark-mode-switch"
+                    checked={isDarkMode}
+                    onCheckedChange={setIsDarkMode}
+                    aria-label="Toggle Dark Mode"
                       disabled={isLoading}
-                    />
-                    <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Monitor className={cn("h-4 w-4", isMobileView ? "text-gray-500" : "text-primary")} />
-                    <Switch
-                      id="mobile-view-switch"
-                      checked={isMobileView}
-                      onCheckedChange={setIsMobileView}
-                      aria-label="Toggle Mobile View"
+                  />
+                  <Moon className={cn("h-4 w-4", isDarkMode ? "text-blue-400" : "text-gray-500")} />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Monitor className={cn("h-4 w-4", isMobileView ? "text-gray-500" : "text-primary")} />
+                  <Switch
+                    id="mobile-view-switch"
+                    checked={isMobileView}
+                    onCheckedChange={setIsMobileView}
+                    aria-label="Toggle Mobile View"
                       disabled={isLoading}
-                    />
-                    <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
-                  </div>
+                  />
+                  <Smartphone className={cn("h-4 w-4", isMobileView ? "text-primary" : "text-gray-500")} />
                 </div>
               </div>
+            </div>
             )}
-
+            
             {/* Main Content Area */}
             <div className={cn(
               "relative",
@@ -1243,7 +1243,7 @@ const Editor = () => {
                       {isClarifying 
                         ? "Our AI is gathering details to create exactly what you need"
                         : "Our AI is carefully generating your email based on our conversation"}
-                    </p>
+                  </p>
                   </div>
                   
                   {/* Bottom Section with Progress */}
@@ -1256,14 +1256,14 @@ const Editor = () => {
                           </span>
                           <span className="font-medium">{Math.round(progress)}%</span>
                         </div>
-                        <Progress value={progress} className="h-2" />
-                      </div>
+                      <Progress value={progress} className="h-2" />
+                    </div>
                       <p className="text-sm text-muted-foreground text-center">
                         {isClarifying 
                           ? "We'll start generating once we have all the details"
                           : "This usually takes less than a minute"}
                       </p>
-                    </div>
+                </div>
                   </div>
                 </div>
               ) : (!projectData?.semantic_email_v2 && !isClarifying && chatMessages.length === 0) ? (
@@ -1308,7 +1308,7 @@ const Editor = () => {
               ) : projectData?.semantic_email_v2 && !isLoading ? (
                 // Email Preview - Only render when we have actual content and not loading
                 <div className="h-full overflow-auto">
-                  <EmailPreview
+                    <EmailPreview
                     key={actualProjectId || 'preview-container'}
                     currentHtml={livePreviewHtml || projectData.current_html || ''}
                     pendingChanges={pendingChanges}
@@ -1317,34 +1317,34 @@ const Editor = () => {
                     semanticTemplate={projectData.semantic_email_v2}
                     onPlaceholderActivate={handlePlaceholderActivation}
                   />
-                </div>
+                        </div>
               ) : null}
 
               {/* Floating Accept/Reject Bar - Only show when we have changes */}
               {pendingChanges && pendingChanges.length > 0 && projectData?.semantic_email_v2 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bg-background border border-border rounded-lg shadow-xl p-3 flex items-center gap-3">
-                  <Button 
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRejectAll} 
-                    disabled={isLoading}
+              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 bg-background border border-border rounded-lg shadow-xl p-3 flex items-center gap-3">
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRejectAll} 
+                  disabled={isLoading}
                     className="bg-red-50 hover:bg-red-100 border-red-300 text-red-700 px-3 py-1.5"
-                  >
-                    <X className="mr-1.5 h-4 w-4" />
-                    Reject All
-                  </Button>
-                  <Button 
-                    variant="default"
-                    size="sm"
-                    onClick={handleAcceptAll} 
-                    disabled={isLoading}
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Reject All
+                </Button>
+                <Button 
+                  variant="default"
+                  size="sm"
+                  onClick={handleAcceptAll} 
+                  disabled={isLoading}
                     className="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5"
-                  >
-                    <Check className="mr-1.5 h-4 w-4" />
-                    Accept All
-                  </Button>
-                </div>
-              )}
+                >
+                  <Check className="mr-1.5 h-4 w-4" />
+                  Accept All
+                </Button>
+              </div>
+            )}
             </div>
           </ResizablePanel>
           

@@ -1,0 +1,402 @@
+📁 src/
+├── 📁 components/
+│   ├── 📄 EmailHtmlRenderer.tsx
+│   │   Purpose: Renders email content in an isolated iframe environment
+│   │   Details:
+│   │   - Transforms HTML email templates into interactive previews
+│   │   - Handles two types of placeholders (images and links)
+│   │   - Manages background colors and styling
+│   │   - Provides auto-resizing functionality
+│   │   - Implements security measures (HTML escaping)
+│   │   - Uses ResizeObserver for dynamic content
+│   │   Dependencies: React, forwardRef, useEffect, useRef
+│   │
+│   ├── 📄 EmailPreview.tsx
+│   │   Purpose: Provides interactive preview of email content with overlay management
+│   │   Details:
+│   │   - Iframe Integration:
+│   │     • Uses EmailHtmlRenderer for content display
+│   │     • Maintains coordinate mapping with parent document
+│   │     • Handles scroll synchronization
+│   │   - Overlay System:
+│   │     • Two-layer architecture for different overlay types
+│   │     • Non-interactive overlays for pending changes
+│   │     • Interactive overlays for placeholders
+│   │     • Absolute positioning with scroll compensation
+│   │   - Responsive Features:
+│   │     • Mobile/desktop preview modes
+│   │     • Dark/light theme switching
+│   │     • Maintains aspect ratios
+│   │   - Performance Optimizations:
+│   │     • RAF-based animations
+│   │     • Batched DOM operations
+│   │     • Efficient event cleanup
+│   │   Dependencies:
+│   │   - Components: EmailHtmlRenderer
+│   │   - Utils: cn, isPlaceholder
+│   │   - Types: EmailElement, ImageElementProperties, ButtonElementProperties
+│   │   State Management:
+│   │   - Refs: overlay container, html renderer
+│   │   - Props: currentHtml, pendingChanges, preview modes, callbacks
+│   │
+│   ├── 📄 FeaturesSection.tsx
+│   │   Purpose: Marketing component displaying key platform features
+│   │   Details:
+│   │   - Content Structure:
+│   │     • Static features array with 3 key capabilities
+│   │     • Each feature has title, description, and image
+│   │     • Unsplash images for feature illustrations
+│   │   - Layout:
+│   │     • Responsive grid (1/2/3 columns)
+│   │     • Centered header section
+│   │     • Card-based feature display
+│   │   - UI Features:
+│   │     • Hover effects on cards
+│   │     • Image zoom animations
+│   │     • Consistent spacing and typography
+│   │   Dependencies:
+│   │   - Styling: Tailwind CSS
+│   │   - No external component dependencies
+│   │   State Management:
+│   │   - Stateless component
+│   │   - Uses static data array
+│   │
+│   ├── 📄 Footer.tsx
+│   │   Purpose: Site-wide footer providing navigation and branding
+│   │   Details:
+│   │   - Content Structure:
+│   │     • Organized into 4 navigation categories:
+│   │       - Product: Features, pricing, roadmap, guides
+│   │       - Company: About, blog, careers, partners
+│   │       - Support: Help, docs, contact, status
+│   │       - Legal: Privacy, terms, cookies
+│   │     • Dynamic copyright year
+│   │     • Brand section with logo and tagline
+│   │   - Layout:
+│   │     • Responsive 3-column grid on XL screens
+│   │     • Left column: Brand section
+│   │     • Center/Right: Navigation sections (2x2 grid)
+│   │   - UI Features:
+│   │     • Dark theme (bg-gray-900)
+│   │     • Hover effects on navigation links
+│   │     • Semantic HTML structure with ARIA labels
+│   │   Dependencies:
+│   │   - Components: Link from react-router-dom
+│   │   - Styling: Tailwind CSS
+│   │   State Management:
+│   │   - Stateless component
+│   │   - Uses static navigation data structure
+│   │
+│   ├── 📄 HeroSection.tsx
+│   │   Purpose: Landing page hero section for email generation entry point
+│   │   Details:
+│   │   - User Flow:
+│   │     • Email content input and persistence
+│   │     • Authentication gating
+│   │     • Seamless navigation to auth routes
+│   │     • Content preservation during auth flow
+│   │   - UI Components:
+│   │     • Decorative gradient background
+│   │     • Centered content layout
+│   │     • Multi-line text input
+│   │     • Animated submit button
+│   │     • Authentication modal
+│   │   - Features:
+│   │     • Session persistence with localStorage
+│   │     • Responsive design across breakpoints
+│   │     • Interactive UI elements
+│   │     • Form validation and handling
+│   │   Dependencies:
+│   │   - UI: Button, Textarea, Dialog components
+│   │   - Icons: ArrowRight from lucide-react
+│   │   - Routing: react-router-dom
+│   │   State Management:
+│   │   - Local: emailContent, showAuthDialog
+│   │   - Storage: localStorage for content persistence
+│   │   - Navigation: useNavigate for routing
+│   │
+│   ├── 📄 Navbar.tsx
+│   │   Purpose: Responsive navigation bar with authentication options
+│   │   Details:
+│   │   - Layout Modes:
+│   │     • Desktop: Horizontal navigation with brand and auth buttons
+│   │     • Mobile: Collapsible menu with hamburger button
+│   │     • Fixed positioning with blur effect overlay
+│   │   - Visual Elements:
+│   │     • Brand section with Mail icon and text
+│   │     • Semi-transparent background with blur
+│   │     • Animated hamburger menu
+│   │     • Consistent monketer purple theming
+│   │   - Interactive Features:
+│   │     • Responsive breakpoint handling
+│   │     • Smooth menu transitions
+│   │     • Button hover states
+│   │     • Accessible navigation
+│   │   Dependencies:
+│   │   - UI: Button component from shadcn/ui
+│   │   - Icons: Mail from lucide-react
+│   │   - Routing: Link from react-router-dom
+│   │   - Styling: Tailwind CSS
+│   │   State Management:
+│   │   - Local: mobileMenuOpen for menu toggle
+│   │   - ARIA states for accessibility
+│   │
+│   ├── 📄 TestimonialsSection.tsx
+│   │   Purpose: Marketing component showcasing customer success stories
+│   │   Details:
+│   │   - Content Structure:
+│   │     • Static testimonials array with customer feedback
+│   │     • Each testimonial includes:
+│   │       - Unique identifier
+│   │       - Customer quote
+│   │       - Name and title
+│   │       - Company information
+│   │   - Layout Design:
+│   │     • Responsive grid system (1/2/3 columns)
+│   │     • Card-based presentation
+│   │     • Centered section header
+│   │     • Consistent spacing and alignment
+│   │   - Visual Elements:
+│   │     • Light purple section background
+│   │     • White testimonial cards
+│   │     • Gradient avatars with initials
+│   │     • Decorative quote marks
+│   │     • Subtle shadows and borders
+│   │   Dependencies:
+│   │   - No external component dependencies
+│   │   - Styling: Tailwind CSS
+│   │   State Management:
+│   │   - Stateless component
+│   │   - Uses static testimonial data
+│   │
+│   ├── 📄 ChatInterface.tsx
+│   │   Purpose: Provides the main chat interface for user-AI interactions
+│   │   Details:
+│   │   - Handles three interaction modes:
+│   │     • Major Edit: For significant changes
+│   │     • Minor Edit: For small adjustments
+│   │     • Just Ask: For questions without edits
+│   │   - Message Features:
+│   │     • Renders markdown content
+│   │     • Supports clarification workflows
+│   │     • Shows suggestion buttons
+│   │     • Displays loading states
+│   │     • Auto-scrolls to new messages
+│   │   - Input Features:
+│   │     • Multi-line support (Shift+Enter)
+│   │     • Focus management
+│   │     • Loading states
+│   │     • Placeholder text
+│   │   - UI Components:
+│   │     • Mode selection buttons
+│   │     • Message history area
+│   │     • Input area with send button
+│   │     • Clarification banner when needed
+│   │   Dependencies:
+│   │   - UI: Button, Textarea, ScrollArea, ReactMarkdown
+│   │   - Icons: Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2
+│   │   - Utils: cn (className utility)
+│   │   State Management:
+│   │   - Local: Input value, scroll position
+│   │   - Props: Messages, clarification state, loading state, mode selection
+│   │
+│   └── [More components will be documented as we review them]
+│
+├── 📁 hooks/
+│   ├── 📄 use-mobile.tsx
+│   │   Purpose: Comprehensive device detection system for adaptive UI
+│   │   Details:
+│   │   - Primary Features:
+│   │     • Device type detection (small-phone/large-phone/tablet/desktop)
+│   │     • Orientation awareness (portrait/landscape)
+│   │     • Touch capability detection
+│   │     • Real-time viewport tracking
+│   │   - Implementation:
+│   │     • Multiple detection factors (width, touch, orientation)
+│   │     • Configurable breakpoints
+│   │     • TypeScript interfaces for type safety
+│   │     • Event-based updates
+│   │   - Use Cases:
+│   │     • Different layouts per device type
+│   │     • Orientation-specific content
+│   │     • Touch-optimized interactions
+│   │     • Responsive behavior beyond CSS
+│   │   Dependencies:
+│   │   - React hooks (useState, useEffect)
+│   │   - Browser APIs (resize, orientationchange)
+│   │   Exports:
+│   │   - useMobileDetection: Complete device info
+│   │   - useIsMobile: Simple boolean check (legacy)
+│   │
+│   ├── 📄 use-toast.ts
+│   │   Purpose: Global toast notification system for application feedback
+│   │   Details:
+│   │   - Architecture:
+│   │     • Singleton pattern with global state
+│   │     • Pub/sub model for cross-component notifications
+│   │     • Reducer-based state management
+│   │     • Self-managing toast lifecycle
+│   │   - Features:
+│   │     • Create, update, and dismiss toasts
+│   │     • Configurable toast limits
+│   │     • Automatic toast cleanup
+│   │     • Toast prioritization
+│   │     • Action support in toasts
+│   │   - API Usage:
+│   │     • Hook-based: useToast()
+│   │     • Direct function: toast()
+│   │     • Programmatic dismissal
+│   │     • Toast updating
+│   │   Dependencies:
+│   │   - React (useState, useEffect)
+│   │   - UI components: ToastAction, Toast
+│   │   Exports:
+│   │   - useToast: Hook for component integration
+│   │   - toast: Standalone function for utility use
+│   │
+│   ├── 📄 useAuth.tsx
+│   │   Purpose: Central authentication system built on Supabase
+│   │   Details:
+│   │   - Authentication Flow:
+│   │     • Sign-in with email/password
+│   │     • User registration with profile creation
+│   │     • Session management and persistence
+│   │     • Secure sign-out process
+│   │   - Architecture:
+│   │     • Context-based state distribution
+│   │     • Real-time auth state synchronization
+│   │     • Protected route integration
+│   │     • User profile database integration
+│   │   - User Experience:
+│   │     • Toast notifications for auth events
+│   │     • Error handling and user feedback
+│   │     • Loading states during authentication
+│   │     • Rate limiting protection
+│   │   Dependencies:
+│   │   - External: Supabase auth service
+│   │   - Internal: useToast for notifications
+│   │   Exports:
+│   │   - useAuth: Hook for accessing auth context
+│   │   - AuthProvider: Context provider component
+│   │
+│   └── [More hooks will be documented as we review them]
+│
+├── 📁 integrations/
+│   ├── 📁 supabase/
+│   │   ├── 📄 client.ts
+│   │   │   Purpose: Primary Supabase integration and client configuration
+│   │   │   Details:
+│   │   │   - Core Functionality:
+│   │   │     • Initializes the global Supabase client
+│   │   │     • Validates environment configuration
+│   │   │     • Provides utility functions for Supabase operations
+│   │   │     • Handles error standardization
+│   │   │   - Configuration:
+│   │   │     • Loads credentials from environment variables
+│   │   │     • Performs validation checks on startup
+│   │   │     • Terminates application on missing configuration
+│   │   │   - Utilities:
+│   │   │     • toJson: Robust JSON parsing with comment handling
+│   │   │     • handleSupabaseError: Standardized error handling
+│   │   │   Dependencies:
+│   │   │   - External: @supabase/supabase-js
+│   │   │   - Environment: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+│   │   │   Exports:
+│   │   │   - supabase: Primary client instance
+│   │   │   - toJson: JSON utility function
+│   │   │   - handleSupabaseError: Error handler
+│   │   │
+│   │   ├── 📄 types.ts
+│   │   │   Purpose: TypeScript type definitions for Supabase database schema
+│   │   │   Details:
+│   │   │   - Schema Mapping:
+│   │   │     • Comprehensive type representation of database tables
+│   │   │     • Table relationships and foreign keys
+│   │   │     • Row, Insert, and Update type definitions
+│   │   │     • JSON and custom data types
+│   │   │   - Type Helpers:
+│   │   │     • Tables<> - For type-safe row access
+│   │   │     • TablesInsert<> - For type-safe record creation
+│   │   │     • TablesUpdate<> - For type-safe record updates
+│   │   │     • Enums<> and CompositeTypes<> for advanced types
+│   │   │   - Database Structure:
+│   │   │     • chat_messages: Conversation history
+│   │   │     • email_versions: Email version control
+│   │   │     • pending_changes: Staged modifications
+│   │   │     • projects: Main email projects
+│   │   │     • user_info: User profiles
+│   │   │   Note: This file is typically generated from the Supabase schema
+│   │   │   and should be updated when database changes occur
+│   │
+└── 📁 lib/
+    ├── 📄 utils.ts
+    │   Purpose: Core utility functions for UI operations
+    │   Details:
+    │   - Class Name Utility (cn):
+    │     • Merges CSS classnames intelligently
+    │     • Resolves Tailwind CSS conflicts
+    │     • Handles conditional class application
+    │     • Supports complex conditional expressions
+    │   - Implementation:
+    │     • Combines clsx (for conditional logic)
+    │     • Uses tailwind-merge (for conflict resolution)
+    │     • Supports all ClassValue types (strings, objects, arrays)
+    │   - Used Throughout:
+    │     • Component styling
+    │     • Conditional UI states
+    │     • Dynamic class application
+    │     • Variant-based styling
+    │   Dependencies:
+    │   - External: clsx, tailwind-merge
+    │   Exports:
+    │   - cn: Primary classnames utility function
+    │
+    ├── 📄 uuid-utils.ts
+    │   Purpose: UUID sanitization and processing utilities
+    │   Details:
+    │   - cleanUuid Function:
+    │     • Sanitizes potentially malformed UUIDs
+    │     • Handles trailing spaces, digits, comments 
+    │     • Validates against standard UUID format
+    │     • Provides fallback for non-UUID inputs
+    │   - Use Cases:
+    │     • Processing AI-generated IDs
+    │     • Sanitizing external data sources
+    │     • Pre-processing before database operations
+    │     • Defensive programming for ID handling
+    │   - Implementation:
+    │     • Uses regex pattern matching
+    │     • Performs type checking
+    │     • Maintains data integrity
+    │     • Graceful error handling
+    │   Dependencies:
+    │   - No external dependencies
+    │   Exports:
+    │   - cleanUuid: Primary UUID cleaning function
+    │
+    ├── 📄 uuid.ts
+    │   Purpose: UUID generation functionality for the application
+    │   Details:
+    │   - generateId Function:
+    │     • Creates cryptographically strong UUIDs (v4)
+    │     • Provides cross-platform compatibility
+    │     • Ensures collision resistance
+    │     • Simple wrapper around industry-standard library
+    │   - Use Cases:
+    │     • Database record creation
+    │     • React component keys
+    │     • New email element identifiers
+    │     • Temporary IDs for unsaved entities
+    │   - Implementation:
+    │     • Leverages uuid npm package
+    │     • Uses v4 (random-based) algorithm
+    │     • Server and browser compatible
+    │     • Clean API with single function export
+    │   Dependencies:
+    │   - External: uuid npm package
+    │   Exports:
+    │   - generateId: Function to create new UUIDs
+    │
+└── [More directories will be added as we review them]
+
+Note: This map will grow as we review more files together.
