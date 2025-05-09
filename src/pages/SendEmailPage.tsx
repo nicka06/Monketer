@@ -1,3 +1,10 @@
+/**
+ * SendEmailPage.tsx
+ * 
+ * Page for sending email previews to recipients with options to view and copy the HTML.
+ * Retrieves HTML content from sessionStorage that was stored during the email creation process.
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,14 +14,27 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Copy, Send, ArrowLeft } from 'lucide-react';
 
+/**
+ * SendEmailPage Component
+ * 
+ * Allows users to send email previews to specified recipients and view/copy the HTML content.
+ * Integrates with Supabase edge functions for email delivery.
+ */
 const SendEmailPage = () => {
+  // State for the recipient's email address
   const [recipientEmail, setRecipientEmail] = useState('');
+  // State for the email HTML content retrieved from sessionStorage
   const [emailHtml, setEmailHtml] = useState('');
+  // Loading state for API operations
   const [isLoading, setIsLoading] = useState(false);
+  
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Retrieve HTML from sessionStorage on mount
+  /**
+   * Retrieve HTML from sessionStorage on component mount
+   * Redirects to editor if content is missing
+   */
   useEffect(() => {
     const storedHtml = sessionStorage.getItem('emailHtmlToSend');
     if (storedHtml) {
@@ -32,6 +52,10 @@ const SendEmailPage = () => {
     }
   }, [navigate, toast]);
 
+  /**
+   * Copies the email HTML to clipboard
+   * Provides feedback via toast notifications
+   */
   const handleCopyHtml = () => {
     navigator.clipboard.writeText(emailHtml)
       .then(() => {
@@ -43,6 +67,11 @@ const SendEmailPage = () => {
       });
   };
 
+  /**
+   * Sends a preview email to the specified recipient
+   * Uses Supabase edge function for delivery
+   * Provides feedback and handles errors
+   */
   const handleSendPreview = async () => {
     if (!recipientEmail.trim()) {
       toast({ title: "Error", description: "Please enter a recipient email address.", variant: "destructive" });
@@ -78,6 +107,7 @@ const SendEmailPage = () => {
 
   return (
     <div className="container mx-auto max-w-3xl py-10 px-4">
+      {/* Navigation back to editor */}
       <Button 
         variant="ghost" 
         onClick={() => navigate(-1)} // Go back to the previous page (Editor)
