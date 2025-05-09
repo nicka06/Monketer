@@ -1,11 +1,26 @@
+/**
+ * PrivacyPolicy.tsx
+ * 
+ * Privacy policy page that displays the company's data handling practices
+ * and user rights regarding personal information.
+ */
+
 import React from 'react';
 import { Container } from '@/components/ui/container';
 import { Typography } from '@/components/ui/typography';
 
+/**
+ * PrivacyPolicy Component
+ * 
+ * Displays a comprehensive privacy policy with multiple sections covering data
+ * collection, usage, security, and user rights. Updates the "last updated" date
+ * automatically to the current date.
+ */
 const PrivacyPolicy: React.FC = () => {
   return (
     <Container className="py-16 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm p-8 md:p-12">
+        {/* Header with title and last updated date */}
         <div className="text-center mb-12">
           <Typography variant="h1" className="mb-4 text-monketer-purple">
             Privacy Policy
@@ -14,6 +29,7 @@ const PrivacyPolicy: React.FC = () => {
         </div>
         
         <div className="space-y-10 text-gray-600">
+          {/* Policy sections - each with a title and descriptive content */}
           <section className="bg-gray-50 p-6 rounded-lg text-center">
             <Typography variant="h2" className="mb-4 text-monketer-purple">
               Introduction

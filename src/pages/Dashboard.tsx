@@ -1,6 +1,19 @@
+/**
+ * Dashboard Component
+ * 
+ * Main user dashboard for managing email projects. Displays a list of user projects
+ * and provides functionality to create new projects or open existing ones.
+ * 
+ * Features:
+ * - Project listing with names and last edited dates
+ * - Creation of new email projects
+ * - Navigation to the email editor
+ * - Empty state handling
+ * - Loading state with spinner
+ * - Sign out functionality
+ */
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -25,7 +38,9 @@ const Dashboard = () => {
   const { user, signOut } = useAuth();
 
   useEffect(() => {
+    // Load projects and user data when component mounts
     loadProjects();
+    
     // Only try to get username if user exists
     if (user?.id) {
       getUsernameFromId(user.id)
@@ -40,6 +55,10 @@ const Dashboard = () => {
     }
   }, [user]);
 
+  /**
+   * Loads the user's projects from the backend service
+   * Updates state with projects or shows error toast on failure
+   */
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -57,22 +76,38 @@ const Dashboard = () => {
     }
   };
 
+  /**
+   * Navigates to the editor for creating a new project
+   * The actual project creation happens in the editor
+   */
   const handleCreateProject = () => {
-    // Simply navigate to the editor without creating a project
     navigate('/editor');
   };
 
+  /**
+   * Formats a date string into a user-friendly format
+   * @param dateString - ISO date string to format
+   * @returns Formatted date string
+   */
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
   };
 
   return (
     <div className="container mx-auto py-10 px-4">
+      {/* Header with title and sign out button */}
       <div className="relative flex justify-center items-center mb-8">
         <h1 className="text-3xl font-bold text-center">My Email Templates</h1>
         <Button variant="outline" onClick={signOut} className="absolute top-0 right-0">
@@ -80,11 +115,13 @@ const Dashboard = () => {
         </Button>
       </div>
 
+      {/* Loading spinner */}
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       ) : projects.length === 0 ? (
+        // Empty state
         <div className="text-center py-20 bg-gray-50 rounded-lg border border-dashed border-gray-300">
           <FileText className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-4 text-lg font-medium text-gray-900">No projects yet</h3>
@@ -97,6 +134,7 @@ const Dashboard = () => {
           </div>
         </div>
       ) : (
+        // Projects table
         <Table>
           <TableHeader>
             <TableRow>
@@ -109,12 +147,14 @@ const Dashboard = () => {
             {projects.map((project) => (
               <TableRow key={project.id}>
                 <TableCell className="font-medium">{project.name}</TableCell>
-                <TableCell>{formatDate(project.lastEditedAt.toString())}</TableCell>
+                <TableCell>
+                  {formatDate(project.lastEditedAt?.toString() || '')}
+                </TableCell>
                 <TableCell className="text-right">
                   {username ? (
-                  <Button variant="outline" asChild>
-                    <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
-                  </Button>
+                    <Button variant="outline" asChild>
+                      <Link to={`/editor/${username}/${encodeURIComponent(project.name)}`}>Open</Link>
+                    </Button>
                   ) : (
                     <Button variant="outline" disabled>Open</Button>
                   )}
@@ -124,6 +164,8 @@ const Dashboard = () => {
           </TableBody>
         </Table>
       )}
+      
+      {/* Create new project button (shown only when projects exist and loading is complete) */}
       {!loading && projects.length > 0 && (
         <div className="flex justify-center mt-8">
           <Button onClick={handleCreateProject}>

@@ -200,6 +200,171 @@
 │   │   - Local: Input value, scroll position
 │   │   - Props: Messages, clarification state, loading state, mode selection
 │   │
+│   ├── 📁 editor/
+│   │   ├── 📄 EditorHeader.tsx
+│   │   │   Purpose: Navigation header for the email editor interface
+│   │   │   Details:
+│   │   │   - Layout:
+│   │   │     • 3-section responsive header (left, center, right)
+│   │   │     • Sticky positioning with z-index control
+│   │   │     • Consistent spacing and borders
+│   │   │   - Features:
+│   │   │     • Dashboard navigation with back button
+│   │   │     • Inline project title editing
+│   │   │     • Settings button placeholder
+│   │   │   - Interactive Elements:
+│   │   │     • Title transforms to input on click
+│   │   │     • Changes saved on blur or Enter key
+│   │   │     • Keyboard accessible navigation
+│   │   │   - Accessibility:
+│   │   │     • Proper ARIA roles and labels
+│   │   │     • Screen reader text
+│   │   │     • Keyboard focus management
+│   │   │   Dependencies:
+│   │   │   - EditorContext for state management
+│   │   │   - react-router-dom for navigation
+│   │   │   - shadcn/ui Button component
+│   │   │   - lucide-react icons
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for title state
+│   │   │   - Local saveTitle handler for code reuse
+│   │   │
+│   │   ├── 📄 EmailPreviewControls.tsx
+│   │   │   Purpose: Control panel for toggling email preview settings
+│   │   │   Details:
+│   │   │   - Toggle Controls:
+│   │   │     • Light/dark mode preview switching
+│   │   │     • Desktop/mobile device view toggling
+│   │   │   - Visual Features:
+│   │   │     • Contextual icons that change color based on state
+│   │   │     • Structured layout with centered controls
+│   │   │     • Responsive switch components
+│   │   │     • Sticky positioning with z-index handling
+│   │   │   - Accessibility:
+│   │   │     • ARIA group roles for related controls
+│   │   │     • Screen reader labels for toggle groups
+│   │   │     • Proper aria-hidden attributes for decorative icons
+│   │   │     • Loading state disables controls when appropriate
+│   │   │   Dependencies:
+│   │   │   - EditorContext for state management
+│   │   │   - shadcn/ui Switch component
+│   │   │   - lucide-react icons
+│   │   │   - cn utility for conditional classes
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for preview mode states
+│   │   │   - No local state - fully controlled by context
+│   │   │
+│   │   ├── 📄 PendingChangesBar.tsx
+│   │   │   Purpose: Floating action bar for managing pending email changes
+│   │   │   Details:
+│   │   │   - UI Features:
+│   │   │     • Floating card layout with shadow and border
+│   │   │     • Centered positioning at the bottom of the preview
+│   │   │     • Color-coded action buttons (green/red)
+│   │   │     • Only renders when changes are present
+│   │   │   - Interaction:
+│   │   │     • Accept all changes with one click
+│   │   │     • Reject all changes with one click
+│   │   │     • Disabled states during loading operations
+│   │   │   - Accessibility:
+│   │   │     • Labeled region with change count information
+│   │   │     • Descriptive button labels with counts
+│   │   │     • Proper decorative icon handling
+│   │   │   Dependencies:
+│   │   │   - EditorContext for state and handlers
+│   │   │   - shadcn/ui Button component
+│   │   │   - lucide-react icons
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for pending changes
+│   │   │   - Derived state for change count
+│   │   │
+│   │   ├── 📄 LoadingScreen.tsx
+│   │   │   Purpose: Visual feedback display for various processing states
+│   │   │   Details:
+│   │   │   - Display Modes:
+│   │   │     • Generating: Creating email content
+│   │   │     • Clarifying: AI gathering requirements
+│   │   │     • Loading: Generic content acquisition
+│   │   │   - Visual Elements:
+│   │   │     • Animated mail icon with spinner
+│   │   │     • Context-appropriate headings and messages
+│   │   │     • Progress bar with percentage indicator
+│   │   │     • Two-section layout (main content + progress)
+│   │   │   - Implementation Features:
+│   │   │     • Content mapping for different states
+│   │   │     • Contextual messaging based on state
+│   │   │     • Progress rounding and formatting
+│   │   │   - Accessibility:
+│   │   │     • Live region for status updates
+│   │   │     • Appropriate ARIA labeling
+│   │   │     • Decorative elements marked appropriately
+│   │   │   Dependencies:
+│   │   │   - EditorContext for progress state
+│   │   │   - shadcn/ui Progress component
+│   │   │   - lucide-react Mail icon
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for progress and clarifying states
+│   │   │   - Content mapping based on display type
+│   │   │
+│   │   ├── 📄 InitialPromptScreen.tsx
+│   │   │   Purpose: Landing screen for email creation with AI
+│   │   │   Details:
+│   │   │   - Content Structure:
+│   │   │     • Welcome heading with explanatory text
+│   │   │     • Natural language prompt input field
+│   │   │     • Large generation button
+│   │   │     • Mail icon as visual indicator
+│   │   │   - User Experience:
+│   │   │     • Form validation with error messaging
+│   │   │     • Keyboard submission support (Enter key)
+│   │   │     • Contextual messaging based on project state
+│   │   │     • Visual feedback during loading
+│   │   │   - Implementation Features:
+│   │   │     • Input validation logic
+│   │   │     • Coordinated state updates
+│   │   │     • Conditional rendering
+│   │   │   - Accessibility:
+│   │   │     • ARIA labeling and relationships
+│   │   │     • Form validation announcements
+│   │   │     • Proper heading structure
+│   │   │     • Keyboard navigation support
+│   │   │   Dependencies:
+│   │   │   - EditorContext for state and message handling
+│   │   │   - shadcn/ui Input and Button components
+│   │   │   - lucide-react Mail icon
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for input value and loading state
+│   │   │   - Local validation state for error handling
+│   │   │
+│   │   ├── 📄 EmailPreviewPanel.tsx
+│   │   │   Purpose: Main container for email preview and interactions
+│   │   │   Details:
+│   │   │   - Component Composition:
+│   │   │     • Controls header for theme/device settings
+│   │   │     • Main preview area with iframe renderer
+│   │   │     • Floating action bar for pending changes
+│   │   │   - Layout Management:
+│   │   │     • Responsive height calculations
+│   │   │     • Overflow handling for content scrolling
+│   │   │     • Dark/light mode theming support
+│   │   │     • Conditional rendering based on content state
+│   │   │   - Integration Points:
+│   │   │     • Passes file input reference for image uploads
+│   │   │     • Forwards placeholder activation events
+│   │   │     • Provides context values to child components
+│   │   │   - Performance Features:
+│   │   │     • Derived values to avoid redundant calculations
+│   │   │     • Conditional rendering to prevent unnecessary DOM
+│   │   │     • Smart fallbacks for missing content values
+│   │   │   Dependencies:
+│   │   │   - EmailPreviewControls component
+│   │   │   - PendingChangesBar component
+│   │   │   - EmailPreview main renderer component
+│   │   │   - EditorContext for state management
+│   │   │   State Management:
+│   │   │   - Uses EditorContext for all state values
+│   │   │   - Local derived values for optimized rendering
+│   │
 │   └── [More components will be documented as we review them]
 │
 ├── 📁 hooks/
@@ -400,3 +565,253 @@
 └── [More directories will be added as we review them]
 
 Note: This map will grow as we review more files together.
+
+├── 📁 pages/
+│   ├── 📄 Index.tsx
+│   │   Purpose: Main landing page and entry point for the application
+│   │   Details:
+│   │   - Layout Structure:
+│   │     • Vertical flex container with full viewport height
+│   │     • Navbar header for navigation
+│   │     • Main content area with marketing sections
+│   │     • Footer with site links and information
+│   │   - Content Organization:
+│   │     • HeroSection: Primary call-to-action and value proposition
+│   │     • FeaturesSection: Product capabilities and benefits
+│   │     • TestimonialsSection: Social proof from customers
+│   │   - Design Approach:
+│   │     • Component-based architecture for maintainability
+│   │     • Clean separation of marketing sections
+│   │     • Responsive layout with flex positioning
+│   │   Dependencies:
+│   │   - Component imports: Navbar, HeroSection, FeaturesSection, TestimonialsSection, Footer
+│   │   - No direct state management or hooks
+│   │   - Uses Tailwind CSS for styling
+│   │
+│   ├── 📄 Login.tsx
+│   │   Purpose: User authentication page for account sign-in
+│   │   Details:
+│   │   - Form Structure:
+│   │     • Email and password fields with validation
+│   │     • Remember me checkbox (UI only)
+│   │     • Forgot password link (placeholder)
+│   │     • Submit button with loading states
+│   │   - Authentication Flow:
+│   │     • Form submission with preventDefault
+│   │     • Integration with useAuth hook for signIn functionality
+│   │     • Loading state management during authentication
+│   │     • Error handling for failed login attempts
+│   │   - Navigation Options:
+│   │     • Home link via logo
+│   │     • Sign up link for new users
+│   │     • Post-login redirection handled by auth hook and router
+│   │   - Visual Design:
+│   │     • Centered card layout on light background
+│   │     • Consistent brand styling with monketer-purple theme
+│   │     • Responsive sizing with breakpoints
+│   │   Dependencies:
+│   │   - External: React, react-router-dom
+│   │   - Internal: useAuth hook, Button component
+│   │   - UI: Lucide-react for icons, Tailwind CSS for styling
+│   │   State Management:
+│   │   - Local state: email, password, loading
+│   │   - Auth state: handled by useAuth hook
+│   │
+│   ├── 📄 Signup.tsx
+│   │   Purpose: User registration page for creating new accounts
+│   │   Details:
+│   │   - Form Structure:
+│   │     • Email and password fields with validation
+│   │     • Terms and conditions acceptance checkbox
+│   │     • Responsive submit button with loading state
+│   │   - Registration Flow:
+│   │     • Form submission with preventDefault
+│   │     • Account creation via useAuth hook
+│   │     • Loading state management during signup
+│   │     • Error handling with specific messaging for rate limits
+│   │     • Automatic navigation to editor on success
+│   │   - Navigation Options:
+│   │     • Home link via logo
+│   │     • Login link for existing users
+│   │   - Visual Design:
+│   │     • Centered card layout on light background
+│   │     • Consistent brand styling with monketer-purple theme
+│   │     • Focus states for input fields
+│   │     • Responsive sizing with breakpoints
+│   │   Dependencies:
+│   │   - External: React, react-router-dom
+│   │   - Internal: useAuth hook, useToast hook, Button component
+│   │   - UI: Lucide-react for Mail icon, Tailwind CSS for styling
+│   │   State Management:
+│   │   - Local state: email, password, loading
+│   │   - Auth state: handled by useAuth hook
+│   │
+│   ├── 📄 NotFound.tsx
+│   │   Purpose: 404 error page for handling navigation to non-existent routes
+│   │   Details:
+│   │   - User Experience:
+│   │     • Clear error messaging with 404 status code
+│   │     • Context-aware navigation options
+│   │     • Simplified interface focused on recovery
+│   │   - Adaptive Behavior:
+│   │     • Displays different navigation options based on auth state
+│   │     • Primary button routes to dashboard or home page depending on user status
+│   │     • Shows additional editor link option for authenticated users
+│   │   - Error Handling:
+│   │     • Logs attempted access to invalid routes
+│   │     • Captures pathname for debugging purposes
+│   │     • Provides clear visual indication of error state
+│   │   - Visual Design:
+│   │     • Centered card on light background for focus
+│   │     • Clean typography with clear visual hierarchy
+│   │     • Consistent brand styling with monketer-purple theme
+│   │   Dependencies:
+│   │   - External: react-router-dom for location and navigation
+│   │   - Internal: useAuth hook for authentication state
+│   │   - UI: Button component, Tailwind CSS for styling
+│   │   State Management:
+│   │   - Auth state: user status from useAuth hook
+│   │   - No local component state required
+│   │
+│   ├── 📄 PrivacyPolicy.tsx
+│   │   Purpose: Legal page displaying the company's privacy policy and data practices
+│   │   Details:
+│   │   - Content Structure:
+│   │     • Comprehensive policy sections covering data collection, usage, and rights
+│   │     • Auto-updating "last updated" date with current date
+│   │     • Contact information for privacy inquiries
+│   │   - Policy Sections:
+│   │     • Introduction to privacy commitment
+│   │     • Information collection practices
+│   │     • Data usage explanations
+│   │     • Security measures description
+│   │     • User rights enumeration
+│   │     • Policy update procedures
+│   │   - Visual Design:
+│   │     • Branded sections with monketer-purple color theme
+│   │     • Centered card layout on light background
+│   │     • Consistent typography with section hierarchy
+│   │     • Section cards with rounded corners and spacing
+│   │   Dependencies:
+│   │   - Components: Container and Typography UI components
+│   │   - No state management or authentication requirements
+│   │   - Uses Tailwind CSS for styling
+│   │
+│   ├── 📄 TermsOfService.tsx
+│   │   Purpose: Legal page outlining the platform's usage terms and conditions
+│   │   Details:
+│   │   - Content Structure:
+│   │     • Comprehensive terms sections covering usage rules and responsibilities
+│   │     • Auto-updating "last updated" date with current date
+│   │     • Contact information for inquiries
+│   │   - Terms Sections:
+│   │     • Introduction and agreement notice
+│   │     • Service usage rules and restrictions
+│   │     • User account responsibilities
+│   │     • Intellectual property rights clarification
+│   │     • Liability limitations and disclaimers
+│   │     • Terms modification procedures
+│   │   - Visual Design:
+│   │     • Branded sections with monketer-purple color theme
+│   │     • Centered card layout on light background
+│   │     • Consistent typography with section hierarchy
+│   │     • Section cards with rounded corners and spacing
+│   │     • Bulletpoint formatting for lists
+│   │   Dependencies:
+│   │   - Components: Container and Typography UI components
+│   │   - No state management or authentication requirements
+│   │   - Uses Tailwind CSS for styling
+│   │
+│   ├── 📄 SendEmailPage.tsx
+│   │   Purpose: Interface for sending email previews to recipients
+│   │   Details:
+│   │   - Core Functionality:
+│   │     • Retrieves HTML email content from sessionStorage
+│   │     • Allows sending preview emails to specified recipients
+│   │     • Provides HTML viewing and copying capabilities
+│   │     • Validates input and provides user feedback
+│   │   - Integration Points:
+│   │     • Uses Supabase edge functions for email delivery
+│   │     • Connects with session storage for HTML persistence
+│   │     • Implements Clipboard API for copying content
+│   │   - User Experience:
+│   │     • Input validation with clear error messages
+│   │     • Loading states during API operations
+│   │     • Toast notifications for action feedback
+│   │     • Navigation back to editor
+│   │     • Responsive layout with consistent styling
+│   │   - Error Handling:
+│   │     • Checks for missing HTML content
+│   │     • Validates recipient email
+│   │     • Provides clear error messages via toast
+│   │     • Redirects to editor if content is missing
+│   │   Dependencies:
+│   │   - Components: Button, Input, Textarea UI components
+│   │   - Hooks: useNavigate, useToast 
+│   │   - Services: Supabase client for edge function invocation
+│   │   - Icons: Loader2, Copy, Send, ArrowLeft from lucide-react
+│   │   State Management:
+│   │   - Local: recipientEmail, emailHtml, isLoading states
+│   │   - Browser: sessionStorage for HTML content persistence
+│   │
+│   ├── 📄 Dashboard.tsx
+│   │   Purpose: Main user dashboard for managing email projects
+│   │   Details:
+│   │   - Core Features:
+│   │     • Project listing with names and last edited dates
+│   │     • Creation of new email projects
+│   │     • Navigation to the email editor
+│   │     • Empty state handling with visual guidance
+│   │     • Loading state with spinner animation
+│   │   - User Interface:
+│   │     • Responsive table layout for project display
+│   │     • Header with sign out functionality
+│   │     • Action buttons for project management
+│   │     • Contextual empty state guidance
+│   │   - Data Management:
+│   │     • Project loading from backend service
+│   │     • Username resolution from user ID
+│   │     • Date formatting and error handling
+│   │     • Defensive coding with optional chaining
+│   │   Dependencies:
+│   │   - Components: Button, Table components from UI library
+│   │   - Icons: Plus, FileText from lucide-react
+│   │   - Services: projectService for data fetching
+│   │   - Hooks: useToast for notifications, useAuth for authentication
+│   │   - Routing: react-router-dom for navigation
+│   │   State Management:
+│   │   - Local: projects, loading, username states
+│   │   - User context: authentication state via useAuth
+│   │   - Navigation: useNavigate for routing
+│
+├── 📁 contexts/
+│   ├── 📄 EditorContext.tsx
+│   │   Purpose: Central state management and business logic for the email editor
+│   │   Details:
+│   │   - State Management:
+│   │     • Project data and metadata (title, ID, content)
+│   │     • UI states (loading, progress, modes)
+│   │     • User interactions (chat messages, pending changes)
+│   │     • Email preview settings (dark mode, mobile view)
+│   │     • Placeholder and content editing state
+│   │   - Core Functionality:
+│   │     • AI communication for email generation and editing
+│   │     • Multi-turn clarification conversation flow
+│   │     • Email creation and update operations
+│   │     • Pending changes management (accept/reject)
+│   │     • Property editing for email elements
+│   │   - Integration Points:
+│   │     • Supabase for database operations
+│   │     • File storage for image uploads
+│   │     • API communication for AI interactions
+│   │     • HTML generation from semantic templates
+│   │   Dependencies:
+│   │   - React (context, hooks)
+│   │   - Services (projectService, htmlGenerator)
+│   │   - Supabase client for database and storage
+│   │   - Type definitions from shared types
+│   │   Exports:
+│   │   - EditorContext: Raw context object
+│   │   - EditorProvider: Provider component
+│   │   - useEditor: Custom hook for context consumption
+│   │

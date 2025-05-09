@@ -1,3 +1,10 @@
+/**
+ * Signup.tsx
+ * 
+ * User registration page that allows new users to create an account.
+ * Handles form submission, validation, and account creation via Supabase.
+ */
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -5,14 +12,30 @@ import { Mail } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * Signup Component
+ * 
+ * Provides a registration form for new users to create accounts.
+ * Includes email/password inputs, terms acceptance, and error handling.
+ * On successful registration, redirects users to the editor page.
+ */
 const Signup = () => {
+  // Form state for email and password fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Loading state for submission feedback
   const [loading, setLoading] = useState(false);
+  
+  // Auth hook for signup functionality
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  /**
+   * Form submission handler for account creation
+   * Prevents default form behavior, manages loading state,
+   * and handles success/error scenarios
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -41,6 +64,7 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
+      {/* Header section with logo and title */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Link to="/" className="flex items-center">
@@ -57,9 +81,11 @@ const Signup = () => {
         </p>
       </div>
 
+      {/* Registration form card */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {/* Email input field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
@@ -79,6 +105,7 @@ const Signup = () => {
               </div>
             </div>
 
+            {/* Password input field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -98,6 +125,7 @@ const Signup = () => {
               </div>
             </div>
 
+            {/* Terms and conditions checkbox */}
             <div className="flex items-center">
               <input
                 id="terms"
@@ -118,6 +146,7 @@ const Signup = () => {
               </label>
             </div>
 
+            {/* Submit button with loading state */}
             <div>
               <Button 
                 type="submit"
