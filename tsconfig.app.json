@@ -23,8 +23,11 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@backend/*": ["./src/backend/*"],
+      "@features/*": ["./src/features/*"]
     }
   },
-  "include": ["src", "supabase/functions/_shared/types/config"]
+  "include": ["src", "src/shared/types/config"]
 }

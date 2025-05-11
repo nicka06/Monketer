@@ -1,5 +1,298 @@
+# Email Template Editor - Project Structure
+
+## SIMPLE MAP
+
+```
+src/
+├── backend/         # Supabase serverless functions
+│   ├── .temp/       # Supabase CLI version tracking
+│   ├── functions/   # Edge function implementations
+│   │   ├── _shared/ # Shared utilities and services
+│   │   │   ├── lib/ # Shared utilities
+│   │   │   │   ├── constants.ts    # CORS and configuration
+│   │   │   │   ├── uuid-utils.ts   # UUID validation utilities
+│   │   │   │   └── uuid.ts         # UUID generation
+│   │   │   └── services/ # Shared services
+│   │   │       ├── differ.ts       # Template diffing
+│   │   │       ├── htmlGenerator.ts # HTML generation
+│   │   │       └── semanticParser.ts # HTML parsing
+│   │   ├── clarify-user-intent/    # AI conversation middleware
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── generate-email-changes/ # Email modification handler
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── manage-pending-changes/ # Change workflow manager
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── send-preview-email/     # Email preview sender
+│   │   │   ├── index.ts            # Main function handler
+│   │   │   ├── deno.json           # Deno configuration for send-preview-email
+│   │   │   └── .npmrc              # NPM configuration for send-preview-email
+│   │   └── import_map.json         # Module import path configuration
+│   ├── config.toml  # Edge function configuration
+│   └── deno.jsonc   # Deno runtime configuration
+├── components/      # UI components for the application
+│   ├── editor/                  # Editor-specific UI components
+│   │   ├── EditorHeader.tsx
+│   │   ├── EmailPreviewControls.tsx
+│   │   ├── EmailPreviewPanel.tsx
+│   │   ├── LoadingScreen.tsx
+│   │   ├── InitialPromptScreen.tsx
+│   │   ├── PendingChangesBar.tsx
+│   │   └── PlaceholderEditModal.tsx
+│   ├── ui/                      # All basic UI component files
+│   ├── ChatInterface.tsx
+│   ├── EmailHtmlRenderer.tsx
+│   ├── EmailPreview.tsx
+│   ├── FeaturesSection.tsx
+│   ├── Footer.tsx
+│   ├── HeroSection.tsx
+│   ├── Navbar.tsx
+│   └── TestimonialsSection.tsx
+├── core/            # Application bootstrap and entry point
+│   ├── App.css
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── vite-env.d.ts
+│   └── index.css
+├── features/        # Business logic by domain
+│   ├── auth/
+│   │   └── useAuth.tsx
+│   ├── contexts/
+│   │   └── EditorContext.tsx
+│   ├── services/
+│   │   ├── differ.ts
+│   │   ├── htmlGenerator.ts
+│   │   ├── projectService.ts
+│   │   └── semanticParser.ts
+│   ├── types/
+│   │   ├── ai.ts
+│   │   ├── editor.ts
+│   │   └── index.ts
+│   └── utils/
+│       └── placeholderUtils.ts
+├── hooks/           # Reusable React hooks
+│   ├── use-toast.ts
+│   └── use-mobile.tsx
+├── integrations/    # External service connections
+│   └── supabase/
+│       ├── client.ts
+│       └── types.ts
+├── lib/             # General utilities
+│   ├── utils.ts
+│   ├── uuid-utils.ts
+│   └── uuid.ts
+├── pages/           # Page-level components
+│   ├── Dashboard.tsx
+│   ├── Editor.tsx
+│   ├── Index.tsx
+│   ├── Login.tsx
+│   ├── NotFound.tsx
+│   ├── PrivacyPolicy.tsx
+│   ├── SendEmailPage.tsx
+│   ├── Signup.tsx
+│   └── TermsOfService.tsx
+└── shared/          # Cross-environment shared code
+    ├── lib/         # Shared utilities
+    │   ├── uuid-utils.ts
+    │   └── uuid.ts
+    ├── services/    # Shared service implementations
+    │   ├── htmlGenerator.ts # Core HTML generator implementation
+    │   ├── differ.ts     # Core template diffing implementation
+    │   └── semanticParser.ts # Core semantic parsing implementation
+    └── types/       # Shared type definitions
+        ├── common.ts # Common shared types and enums
+        ├── diffs.ts # Template diffing type definitions
+        ├── editor.ts # Editor and chat interface types
+        ├── elements.ts # Email element type definitions
+        ├── index.ts # Type re-exports for module access
+        ├── pendingChangeTypes.ts # Pending change workflow types
+        ├── sections.ts # Email section type definitions
+        ├── template.ts # Email template structure types
+        ├── validators.ts # Template validation schemas
+        └── config/  # Configuration for type implementations
+            └── elementDefaults.ts # Default element configurations
+```
+
+## SUMMARY MAP
+
 📁 src/
+├── 📁 backend/
+│   ├── 📁 .temp/
+│   │   Purpose: Supabase CLI version tracking
+│   │   Details:
+│   │   - Tracks CLI version information
+│   │   - Manages local development state
+│   │   - Used by Supabase CLI for version control
+│   │
+│   ├── 📁 functions/
+│   │   ├── 📁 _shared/
+│   │   │   ├── 📁 lib/
+│   │   │   │   ├── 📄 constants.ts
+│   │   │   │   │   Purpose: CORS and configuration constants
+│   │   │   │   │   Details:
+│   │   │   │   │   - CORS headers and settings
+│   │   │   │   │   - API configuration values
+│   │   │   │   │   - Environment-specific constants
+│   │   │   │   │
+│   │   │   │   ├── 📄 uuid-utils.ts
+│   │   │   │   │   Purpose: UUID validation utilities
+│   │   │   │   │   Details:
+│   │   │   │   │   - UUID validation functions
+│   │   │   │   │   - UUID formatting helpers
+│   │   │   │   │   - Error handling for invalid UUIDs
+│   │   │   │   │
+│   │   │   │   └── 📄 uuid.ts
+│   │   │   │       Purpose: UUID generation implementation
+│   │   │   │       Details:
+│   │   │   │       - UUID v4 generation
+│   │   │   │       - Secure random number generation
+│   │   │   │       - Type-safe UUID handling
+│   │   │   │
+│   │   │   └── 📁 services/
+│   │   │       ├── 📄 differ.ts
+│   │   │       │   Purpose: Template diffing service
+│   │   │       │   Details:
+│   │   │       │   - Compares template versions
+│   │   │       │   - Generates change sets
+│   │   │       │   - Handles conflict resolution
+│   │   │       │
+│   │   │       ├── 📄 htmlGenerator.ts
+│   │   │       │   Purpose: HTML generation service
+│   │   │       │   Details:
+│   │   │       │   - Converts templates to HTML
+│   │   │       │   - Handles email-specific formatting
+│   │   │       │   - Manages responsive design
+│   │   │       │
+│   │   │       └── 📄 semanticParser.ts
+│   │   │           Purpose: HTML parsing service
+│   │   │           Details:
+│   │   │           - Parses HTML into structured data
+│   │   │           - Extracts semantic meaning
+│   │   │           - Validates template structure
+│   │   │
+│   │   ├── 📁 clarify-user-intent/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: AI conversation middleware
+│   │   │       Details:
+│   │   │       - Core Functionality:
+│   │   │         • Analyzes user messages for ambiguity
+│   │   │         • Asks targeted clarifying questions
+│   │   │         • Provides structured data for email generation
+│   │   │       - Input Processing:
+│   │   │         • User message analysis
+│   │   │         • Chat history context
+│   │   │         • Current email structure
+│   │   │         • Ongoing clarification context
+│   │   │       - Response Types:
+│   │   │         • Clarification questions with suggestions
+│   │   │         • Complete structured data for email generation
+│   │   │       - Technical Features:
+│   │   │         • Token limit management
+│   │   │         • Context window optimization
+│   │   │         • JSON response validation
+│   │   │         • Error handling and recovery
+│   │   │
+│   │   ├── 📁 generate-email-changes/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Email modification handler
+│   │   │       Details:
+│   │   │       - Processes user requests for changes
+│   │   │       - Generates email modifications
+│   │   │       - Validates changes before application
+│   │   │
+│   │   ├── 📁 manage-pending-changes/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Change workflow manager
+│   │   │       Details:
+│   │   │       - Manages pending changes queue
+│   │   │       - Handles change application
+│   │   │       - Coordinates change conflicts
+│   │   │
+│   │   └── 📁 send-preview-email/
+│   │       └── 📄 index.ts
+│   │           Purpose: Email preview sender
+│   │           Details:
+│   │           - Generates preview emails
+│   │           - Handles email delivery
+│   │           - Manages preview templates
+│   │       ├── 📄 deno.json
+│   │       │   Purpose: Deno configuration for send-preview-email
+│   │       │   Details:
+│   │       └── 📄 .npmrc
+│   │           Purpose: NPM configuration for send-preview-email
+│   │           Details:
+│   │
+│   ├── 📄 import_map.json
+│   │   Purpose: Module import path configuration
+│   │   Details:
+│   │   - Defines import path aliases for Supabase edge functions.
+│   │   - Helps manage module resolution and maintain cleaner import statements.
+│   │
+│   ├── 📄 config.toml
+│   │   Purpose: Edge function configuration and settings
+│   │   Details:
+│   │   - Function-specific settings:
+│   │     • JWT verification requirements
+│   │     • Function enablement flags
+│   │     • Entrypoint specifications
+│   │   - Import configuration:
+│   │     • Import map paths
+│   │     • Static file bundling
+│   │   - Security settings:
+│   │     • Authentication requirements
+│   │     • Access controls
+│   │   Usage:
+│   │   - Configures each edge function's behavior
+│   │   - Manages function dependencies
+│   │   - Controls function security
+│   │
+│   └── 📄 deno.jsonc
+│       Purpose: Deno runtime configuration
+│       Details:
+│       - Core Configuration:
+│         • Import map resolution
+│         • Module dependency paths
+│         • Runtime settings
+│       - Technical Design:
+│         • JSONC format for comments
+│         • Centralized import management
+│         • Runtime optimization settings
+│       Usage:
+│       - Resolves module imports
+│       - Manages dependencies
+│       - Configures Deno runtime
+│   
 ├── 📁 components/
+│   ├── 📄 ChatInterface.tsx
+│   │   Purpose: Provides the main chat interface for user-AI interactions
+│   │   Details:
+│   │   - Handles three interaction modes:
+│   │     • Major Edit: For significant changes
+│   │     • Minor Edit: For small adjustments
+│   │     • Just Ask: For questions without edits
+│   │   - Message Features:
+│   │     • Renders markdown content
+│   │     • Supports clarification workflows
+│   │     • Shows suggestion buttons
+│   │     • Displays loading states
+│   │     • Auto-scrolls to new messages
+│   │   - Input Features:
+│   │     • Multi-line support (Shift+Enter)
+│   │     • Focus management
+│   │     • Loading states
+│   │     • Placeholder text
+│   │   - UI Components:
+│   │     • Mode selection buttons
+│   │     • Message history area
+│   │     • Input area with send button
+│   │     • Clarification banner when needed
+│   │   Dependencies:
+│   │   - UI: Button, Textarea, ScrollArea, ReactMarkdown
+│   │   - Icons: Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2
+│   │   - Utils: cn (className utility)
+│   │   State Management:
+│   │   - Local: Input value, scroll position
+│   │   - Props: Messages, clarification state, loading state, mode selection
+│   │
 │   ├── 📄 EmailHtmlRenderer.tsx
 │   │   Purpose: Renders email content in an isolated iframe environment
 │   │   Details:
@@ -169,649 +462,218 @@
 │   │   - Stateless component
 │   │   - Uses static testimonial data
 │   │
-│   ├── 📄 ChatInterface.tsx
-│   │   Purpose: Provides the main chat interface for user-AI interactions
-│   │   Details:
-│   │   - Handles three interaction modes:
-│   │     • Major Edit: For significant changes
-│   │     • Minor Edit: For small adjustments
-│   │     • Just Ask: For questions without edits
-│   │   - Message Features:
-│   │     • Renders markdown content
-│   │     • Supports clarification workflows
-│   │     • Shows suggestion buttons
-│   │     • Displays loading states
-│   │     • Auto-scrolls to new messages
-│   │   - Input Features:
-│   │     • Multi-line support (Shift+Enter)
-│   │     • Focus management
-│   │     • Loading states
-│   │     • Placeholder text
-│   │   - UI Components:
-│   │     • Mode selection buttons
-│   │     • Message history area
-│   │     • Input area with send button
-│   │     • Clarification banner when needed
-│   │   Dependencies:
-│   │   - UI: Button, Textarea, ScrollArea, ReactMarkdown
-│   │   - Icons: Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2
-│   │   - Utils: cn (className utility)
-│   │   State Management:
-│   │   - Local: Input value, scroll position
-│   │   - Props: Messages, clarification state, loading state, mode selection
-│   │
 │   ├── 📁 editor/
+│   │   Purpose: Editor-specific UI components
+│   │   Details:
 │   │   ├── 📄 EditorHeader.tsx
-│   │   │   Purpose: Navigation header for the email editor interface
+│   │   │   Purpose:
 │   │   │   Details:
-│   │   │   - Layout:
-│   │   │     • 3-section responsive header (left, center, right)
-│   │   │     • Sticky positioning with z-index control
-│   │   │     • Consistent spacing and borders
-│   │   │   - Features:
-│   │   │     • Dashboard navigation with back button
-│   │   │     • Inline project title editing
-│   │   │     • Settings button placeholder
-│   │   │   - Interactive Elements:
-│   │   │     • Title transforms to input on click
-│   │   │     • Changes saved on blur or Enter key
-│   │   │     • Keyboard accessible navigation
-│   │   │   - Accessibility:
-│   │   │     • Proper ARIA roles and labels
-│   │   │     • Screen reader text
-│   │   │     • Keyboard focus management
-│   │   │   Dependencies:
-│   │   │   - EditorContext for state management
-│   │   │   - react-router-dom for navigation
-│   │   │   - shadcn/ui Button component
-│   │   │   - lucide-react icons
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for title state
-│   │   │   - Local saveTitle handler for code reuse
-│   │   │
 │   │   ├── 📄 EmailPreviewControls.tsx
-│   │   │   Purpose: Control panel for toggling email preview settings
+│   │   │   Purpose:
 │   │   │   Details:
-│   │   │   - Toggle Controls:
-│   │   │     • Light/dark mode preview switching
-│   │   │     • Desktop/mobile device view toggling
-│   │   │   - Visual Features:
-│   │   │     • Contextual icons that change color based on state
-│   │   │     • Structured layout with centered controls
-│   │   │     • Responsive switch components
-│   │   │     • Sticky positioning with z-index handling
-│   │   │   - Accessibility:
-│   │   │     • ARIA group roles for related controls
-│   │   │     • Screen reader labels for toggle groups
-│   │   │     • Proper aria-hidden attributes for decorative icons
-│   │   │     • Loading state disables controls when appropriate
-│   │   │   Dependencies:
-│   │   │   - EditorContext for state management
-│   │   │   - shadcn/ui Switch component
-│   │   │   - lucide-react icons
-│   │   │   - cn utility for conditional classes
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for preview mode states
-│   │   │   - No local state - fully controlled by context
-│   │   │
-│   │   ├── 📄 PendingChangesBar.tsx
-│   │   │   Purpose: Floating action bar for managing pending email changes
-│   │   │   Details:
-│   │   │   - UI Features:
-│   │   │     • Floating card layout with shadow and border
-│   │   │     • Centered positioning at the bottom of the preview
-│   │   │     • Color-coded action buttons (green/red)
-│   │   │     • Only renders when changes are present
-│   │   │   - Interaction:
-│   │   │     • Accept all changes with one click
-│   │   │     • Reject all changes with one click
-│   │   │     • Disabled states during loading operations
-│   │   │   - Accessibility:
-│   │   │     • Labeled region with change count information
-│   │   │     • Descriptive button labels with counts
-│   │   │     • Proper decorative icon handling
-│   │   │   Dependencies:
-│   │   │   - EditorContext for state and handlers
-│   │   │   - shadcn/ui Button component
-│   │   │   - lucide-react icons
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for pending changes
-│   │   │   - Derived state for change count
-│   │   │
-│   │   ├── 📄 LoadingScreen.tsx
-│   │   │   Purpose: Visual feedback display for various processing states
-│   │   │   Details:
-│   │   │   - Display Modes:
-│   │   │     • Generating: Creating email content
-│   │   │     • Clarifying: AI gathering requirements
-│   │   │     • Loading: Generic content acquisition
-│   │   │   - Visual Elements:
-│   │   │     • Animated mail icon with spinner
-│   │   │     • Context-appropriate headings and messages
-│   │   │     • Progress bar with percentage indicator
-│   │   │     • Two-section layout (main content + progress)
-│   │   │   - Implementation Features:
-│   │   │     • Content mapping for different states
-│   │   │     • Contextual messaging based on state
-│   │   │     • Progress rounding and formatting
-│   │   │   - Accessibility:
-│   │   │     • Live region for status updates
-│   │   │     • Appropriate ARIA labeling
-│   │   │     • Decorative elements marked appropriately
-│   │   │   Dependencies:
-│   │   │   - EditorContext for progress state
-│   │   │   - shadcn/ui Progress component
-│   │   │   - lucide-react Mail icon
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for progress and clarifying states
-│   │   │   - Content mapping based on display type
-│   │   │
-│   │   ├── 📄 InitialPromptScreen.tsx
-│   │   │   Purpose: Landing screen for email creation with AI
-│   │   │   Details:
-│   │   │   - Content Structure:
-│   │   │     • Welcome heading with explanatory text
-│   │   │     • Natural language prompt input field
-│   │   │     • Large generation button
-│   │   │     • Mail icon as visual indicator
-│   │   │   - User Experience:
-│   │   │     • Form validation with error messaging
-│   │   │     • Keyboard submission support (Enter key)
-│   │   │     • Contextual messaging based on project state
-│   │   │     • Visual feedback during loading
-│   │   │   - Implementation Features:
-│   │   │     • Input validation logic
-│   │   │     • Coordinated state updates
-│   │   │     • Conditional rendering
-│   │   │   - Accessibility:
-│   │   │     • ARIA labeling and relationships
-│   │   │     • Form validation announcements
-│   │   │     • Proper heading structure
-│   │   │     • Keyboard navigation support
-│   │   │   Dependencies:
-│   │   │   - EditorContext for state and message handling
-│   │   │   - shadcn/ui Input and Button components
-│   │   │   - lucide-react Mail icon
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for input value and loading state
-│   │   │   - Local validation state for error handling
-│   │   │
 │   │   ├── 📄 EmailPreviewPanel.tsx
-│   │   │   Purpose: Main container for email preview and interactions
+│   │   │   Purpose:
 │   │   │   Details:
-│   │   │   - Component Composition:
-│   │   │     • Controls header for theme/device settings
-│   │   │     • Main preview area with iframe renderer
-│   │   │     • Floating action bar for pending changes
-│   │   │   - Layout Management:
-│   │   │     • Responsive height calculations
-│   │   │     • Overflow handling for content scrolling
-│   │   │     • Dark/light mode theming support
-│   │   │     • Conditional rendering based on content state
-│   │   │   - Integration Points:
-│   │   │     • Passes file input reference for image uploads
-│   │   │     • Forwards placeholder activation events
-│   │   │     • Provides context values to child components
-│   │   │   - Performance Features:
-│   │   │     • Derived values to avoid redundant calculations
-│   │   │     • Conditional rendering to prevent unnecessary DOM
-│   │   │     • Smart fallbacks for missing content values
-│   │   │   Dependencies:
-│   │   │   - EmailPreviewControls component
-│   │   │   - PendingChangesBar component
-│   │   │   - EmailPreview main renderer component
-│   │   │   - EditorContext for state management
-│   │   │   State Management:
-│   │   │   - Uses EditorContext for all state values
-│   │   │   - Local derived values for optimized rendering
-│   │
-│   └── [More components will be documented as we review them]
-│
+│   │   ├── 📄 InitialPromptScreen.tsx
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   ├── 📄 LoadingScreen.tsx
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   ├── 📄 PendingChangesBar.tsx
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   └── 📄 PlaceholderEditModal.tsx
+│   │       Purpose:
+│   │       Details:
+│   └── 📁 ui/
+│       // Base UI components used across the application
+├── 📁 core/
+│   Purpose: Application bootstrap and entry point
+│   Details:
+│   ├── 📄 App.css
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 App.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 main.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 vite-env.d.ts
+│   │   Purpose:
+│   │   Details:
+│   └── 📄 index.css
+│       Purpose:
+│       Details:
+├── 📁 features/
+│   Purpose: Business logic by domain
+│   Details:
+│   ├── 📁 auth/
+│   │   Purpose:
+│   │   Details:
+│   │   └── 📄 useAuth.tsx
+│   │       Purpose:
+│   │       Details:
+│   ├── 📁 contexts/
+│   │   Purpose:
+│   │   Details:
+│   │   └── 📄 EditorContext.tsx
+│   │       Purpose:
+│   │       Details:
+│   ├── 📁 services/
+│   │   Purpose:
+│   │   Details:
+│   │   ├── 📄 differ.ts
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   ├── 📄 htmlGenerator.ts
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   ├── 📄 projectService.ts
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   └── 📄 semanticParser.ts
+│   │       Purpose:
+│   │       Details:
+│   ├── 📁 types/
+│   │   Purpose:
+│   │   Details:
+│   │   ├── 📄 ai.ts
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   ├── 📄 editor.ts
+│   │   │   Purpose:
+│   │   │   Details:
+│   │   └── 📄 index.ts
+│   │       Purpose:
+│   │       Details:
+│   └── 📁 utils/
+│       Purpose:
+│       Details:
+│       └── 📄 placeholderUtils.ts
+│           Purpose:
+│           Details:
 ├── 📁 hooks/
-│   ├── 📄 use-mobile.tsx
-│   │   Purpose: Comprehensive device detection system for adaptive UI
-│   │   Details:
-│   │   - Primary Features:
-│   │     • Device type detection (small-phone/large-phone/tablet/desktop)
-│   │     • Orientation awareness (portrait/landscape)
-│   │     • Touch capability detection
-│   │     • Real-time viewport tracking
-│   │   - Implementation:
-│   │     • Multiple detection factors (width, touch, orientation)
-│   │     • Configurable breakpoints
-│   │     • TypeScript interfaces for type safety
-│   │     • Event-based updates
-│   │   - Use Cases:
-│   │     • Different layouts per device type
-│   │     • Orientation-specific content
-│   │     • Touch-optimized interactions
-│   │     • Responsive behavior beyond CSS
-│   │   Dependencies:
-│   │   - React hooks (useState, useEffect)
-│   │   - Browser APIs (resize, orientationchange)
-│   │   Exports:
-│   │   - useMobileDetection: Complete device info
-│   │   - useIsMobile: Simple boolean check (legacy)
-│   │
+│   Purpose: Reusable React hooks
+│   Details:
 │   ├── 📄 use-toast.ts
-│   │   Purpose: Global toast notification system for application feedback
+│   │   Purpose:
 │   │   Details:
-│   │   - Architecture:
-│   │     • Singleton pattern with global state
-│   │     • Pub/sub model for cross-component notifications
-│   │     • Reducer-based state management
-│   │     • Self-managing toast lifecycle
-│   │   - Features:
-│   │     • Create, update, and dismiss toasts
-│   │     • Configurable toast limits
-│   │     • Automatic toast cleanup
-│   │     • Toast prioritization
-│   │     • Action support in toasts
-│   │   - API Usage:
-│   │     • Hook-based: useToast()
-│   │     • Direct function: toast()
-│   │     • Programmatic dismissal
-│   │     • Toast updating
-│   │   Dependencies:
-│   │   - React (useState, useEffect)
-│   │   - UI components: ToastAction, Toast
-│   │   Exports:
-│   │   - useToast: Hook for component integration
-│   │   - toast: Standalone function for utility use
-│   │
-│   ├── 📄 useAuth.tsx
-│   │   Purpose: Central authentication system built on Supabase
-│   │   Details:
-│   │   - Authentication Flow:
-│   │     • Sign-in with email/password
-│   │     • User registration with profile creation
-│   │     • Session management and persistence
-│   │     • Secure sign-out process
-│   │   - Architecture:
-│   │     • Context-based state distribution
-│   │     • Real-time auth state synchronization
-│   │     • Protected route integration
-│   │     • User profile database integration
-│   │   - User Experience:
-│   │     • Toast notifications for auth events
-│   │     • Error handling and user feedback
-│   │     • Loading states during authentication
-│   │     • Rate limiting protection
-│   │   Dependencies:
-│   │   - External: Supabase auth service
-│   │   - Internal: useToast for notifications
-│   │   Exports:
-│   │   - useAuth: Hook for accessing auth context
-│   │   - AuthProvider: Context provider component
-│   │
-│   └── [More hooks will be documented as we review them]
-│
+│   └── 📄 use-mobile.tsx
+│       Purpose:
+│       Details:
 ├── 📁 integrations/
-│   ├── 📁 supabase/
-│   │   ├── 📄 client.ts
-│   │   │   Purpose: Primary Supabase integration and client configuration
-│   │   │   Details:
-│   │   │   - Core Functionality:
-│   │   │     • Initializes the global Supabase client
-│   │   │     • Validates environment configuration
-│   │   │     • Provides utility functions for Supabase operations
-│   │   │     • Handles error standardization
-│   │   │   - Configuration:
-│   │   │     • Loads credentials from environment variables
-│   │   │     • Performs validation checks on startup
-│   │   │     • Terminates application on missing configuration
-│   │   │   - Utilities:
-│   │   │     • toJson: Robust JSON parsing with comment handling
-│   │   │     • handleSupabaseError: Standardized error handling
-│   │   │   Dependencies:
-│   │   │   - External: @supabase/supabase-js
-│   │   │   - Environment: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-│   │   │   Exports:
-│   │   │   - supabase: Primary client instance
-│   │   │   - toJson: JSON utility function
-│   │   │   - handleSupabaseError: Error handler
-│   │   │
-│   │   ├── 📄 types.ts
-│   │   │   Purpose: TypeScript type definitions for Supabase database schema
-│   │   │   Details:
-│   │   │   - Schema Mapping:
-│   │   │     • Comprehensive type representation of database tables
-│   │   │     • Table relationships and foreign keys
-│   │   │     • Row, Insert, and Update type definitions
-│   │   │     • JSON and custom data types
-│   │   │   - Type Helpers:
-│   │   │     • Tables<> - For type-safe row access
-│   │   │     • TablesInsert<> - For type-safe record creation
-│   │   │     • TablesUpdate<> - For type-safe record updates
-│   │   │     • Enums<> and CompositeTypes<> for advanced types
-│   │   │   - Database Structure:
-│   │   │     • chat_messages: Conversation history
-│   │   │     • email_versions: Email version control
-│   │   │     • pending_changes: Staged modifications
-│   │   │     • projects: Main email projects
-│   │   │     • user_info: User profiles
-│   │   │   Note: This file is typically generated from the Supabase schema
-│   │   │   and should be updated when database changes occur
-│   │
-└── 📁 lib/
-    ├── 📄 utils.ts
-    │   Purpose: Core utility functions for UI operations
-    │   Details:
-    │   - Class Name Utility (cn):
-    │     • Merges CSS classnames intelligently
-    │     • Resolves Tailwind CSS conflicts
-    │     • Handles conditional class application
-    │     • Supports complex conditional expressions
-    │   - Implementation:
-    │     • Combines clsx (for conditional logic)
-    │     • Uses tailwind-merge (for conflict resolution)
-    │     • Supports all ClassValue types (strings, objects, arrays)
-    │   - Used Throughout:
-    │     • Component styling
-    │     • Conditional UI states
-    │     • Dynamic class application
-    │     • Variant-based styling
-    │   Dependencies:
-    │   - External: clsx, tailwind-merge
-    │   Exports:
-    │   - cn: Primary classnames utility function
-    │
-    ├── 📄 uuid-utils.ts
-    │   Purpose: UUID sanitization and processing utilities
-    │   Details:
-    │   - cleanUuid Function:
-    │     • Sanitizes potentially malformed UUIDs
-    │     • Handles trailing spaces, digits, comments 
-    │     • Validates against standard UUID format
-    │     • Provides fallback for non-UUID inputs
-    │   - Use Cases:
-    │     • Processing AI-generated IDs
-    │     • Sanitizing external data sources
-    │     • Pre-processing before database operations
-    │     • Defensive programming for ID handling
-    │   - Implementation:
-    │     • Uses regex pattern matching
-    │     • Performs type checking
-    │     • Maintains data integrity
-    │     • Graceful error handling
-    │   Dependencies:
-    │   - No external dependencies
-    │   Exports:
-    │   - cleanUuid: Primary UUID cleaning function
-    │
-    ├── 📄 uuid.ts
-    │   Purpose: UUID generation functionality for the application
-    │   Details:
-    │   - generateId Function:
-    │     • Creates cryptographically strong UUIDs (v4)
-    │     • Provides cross-platform compatibility
-    │     • Ensures collision resistance
-    │     • Simple wrapper around industry-standard library
-    │   - Use Cases:
-    │     • Database record creation
-    │     • React component keys
-    │     • New email element identifiers
-    │     • Temporary IDs for unsaved entities
-    │   - Implementation:
-    │     • Leverages uuid npm package
-    │     • Uses v4 (random-based) algorithm
-    │     • Server and browser compatible
-    │     • Clean API with single function export
-    │   Dependencies:
-    │   - External: uuid npm package
-    │   Exports:
-    │   - generateId: Function to create new UUIDs
-    │
-└── [More directories will be added as we review them]
-
-Note: This map will grow as we review more files together.
-
+│   Purpose: External service connections
+│   Details:
+│   └── 📁 supabase/
+│       Purpose:
+│       Details:
+│       ├── 📄 client.ts
+│       │   Purpose:
+│       │   Details:
+│       └── 📄 types.ts
+│           Purpose:
+│           Details:
+├── 📁 lib/
+│   Purpose: General utilities
+│   Details:
+│   ├── 📄 utils.ts
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 uuid-utils.ts
+│   │   Purpose:
+│   │   Details:
+│   └── 📄 uuid.ts
+│       Purpose:
+│       Details:
 ├── 📁 pages/
-│   ├── 📄 Index.tsx
-│   │   Purpose: Main landing page and entry point for the application
-│   │   Details:
-│   │   - Layout Structure:
-│   │     • Vertical flex container with full viewport height
-│   │     • Navbar header for navigation
-│   │     • Main content area with marketing sections
-│   │     • Footer with site links and information
-│   │   - Content Organization:
-│   │     • HeroSection: Primary call-to-action and value proposition
-│   │     • FeaturesSection: Product capabilities and benefits
-│   │     • TestimonialsSection: Social proof from customers
-│   │   - Design Approach:
-│   │     • Component-based architecture for maintainability
-│   │     • Clean separation of marketing sections
-│   │     • Responsive layout with flex positioning
-│   │   Dependencies:
-│   │   - Component imports: Navbar, HeroSection, FeaturesSection, TestimonialsSection, Footer
-│   │   - No direct state management or hooks
-│   │   - Uses Tailwind CSS for styling
-│   │
-│   ├── 📄 Login.tsx
-│   │   Purpose: User authentication page for account sign-in
-│   │   Details:
-│   │   - Form Structure:
-│   │     • Email and password fields with validation
-│   │     • Remember me checkbox (UI only)
-│   │     • Forgot password link (placeholder)
-│   │     • Submit button with loading states
-│   │   - Authentication Flow:
-│   │     • Form submission with preventDefault
-│   │     • Integration with useAuth hook for signIn functionality
-│   │     • Loading state management during authentication
-│   │     • Error handling for failed login attempts
-│   │   - Navigation Options:
-│   │     • Home link via logo
-│   │     • Sign up link for new users
-│   │     • Post-login redirection handled by auth hook and router
-│   │   - Visual Design:
-│   │     • Centered card layout on light background
-│   │     • Consistent brand styling with monketer-purple theme
-│   │     • Responsive sizing with breakpoints
-│   │   Dependencies:
-│   │   - External: React, react-router-dom
-│   │   - Internal: useAuth hook, Button component
-│   │   - UI: Lucide-react for icons, Tailwind CSS for styling
-│   │   State Management:
-│   │   - Local state: email, password, loading
-│   │   - Auth state: handled by useAuth hook
-│   │
-│   ├── 📄 Signup.tsx
-│   │   Purpose: User registration page for creating new accounts
-│   │   Details:
-│   │   - Form Structure:
-│   │     • Email and password fields with validation
-│   │     • Terms and conditions acceptance checkbox
-│   │     • Responsive submit button with loading state
-│   │   - Registration Flow:
-│   │     • Form submission with preventDefault
-│   │     • Account creation via useAuth hook
-│   │     • Loading state management during signup
-│   │     • Error handling with specific messaging for rate limits
-│   │     • Automatic navigation to editor on success
-│   │   - Navigation Options:
-│   │     • Home link via logo
-│   │     • Login link for existing users
-│   │   - Visual Design:
-│   │     • Centered card layout on light background
-│   │     • Consistent brand styling with monketer-purple theme
-│   │     • Focus states for input fields
-│   │     • Responsive sizing with breakpoints
-│   │   Dependencies:
-│   │   - External: React, react-router-dom
-│   │   - Internal: useAuth hook, useToast hook, Button component
-│   │   - UI: Lucide-react for Mail icon, Tailwind CSS for styling
-│   │   State Management:
-│   │   - Local state: email, password, loading
-│   │   - Auth state: handled by useAuth hook
-│   │
-│   ├── 📄 NotFound.tsx
-│   │   Purpose: 404 error page for handling navigation to non-existent routes
-│   │   Details:
-│   │   - User Experience:
-│   │     • Clear error messaging with 404 status code
-│   │     • Context-aware navigation options
-│   │     • Simplified interface focused on recovery
-│   │   - Adaptive Behavior:
-│   │     • Displays different navigation options based on auth state
-│   │     • Primary button routes to dashboard or home page depending on user status
-│   │     • Shows additional editor link option for authenticated users
-│   │   - Error Handling:
-│   │     • Logs attempted access to invalid routes
-│   │     • Captures pathname for debugging purposes
-│   │     • Provides clear visual indication of error state
-│   │   - Visual Design:
-│   │     • Centered card on light background for focus
-│   │     • Clean typography with clear visual hierarchy
-│   │     • Consistent brand styling with monketer-purple theme
-│   │   Dependencies:
-│   │   - External: react-router-dom for location and navigation
-│   │   - Internal: useAuth hook for authentication state
-│   │   - UI: Button component, Tailwind CSS for styling
-│   │   State Management:
-│   │   - Auth state: user status from useAuth hook
-│   │   - No local component state required
-│   │
-│   ├── 📄 PrivacyPolicy.tsx
-│   │   Purpose: Legal page displaying the company's privacy policy and data practices
-│   │   Details:
-│   │   - Content Structure:
-│   │     • Comprehensive policy sections covering data collection, usage, and rights
-│   │     • Auto-updating "last updated" date with current date
-│   │     • Contact information for privacy inquiries
-│   │   - Policy Sections:
-│   │     • Introduction to privacy commitment
-│   │     • Information collection practices
-│   │     • Data usage explanations
-│   │     • Security measures description
-│   │     • User rights enumeration
-│   │     • Policy update procedures
-│   │   - Visual Design:
-│   │     • Branded sections with monketer-purple color theme
-│   │     • Centered card layout on light background
-│   │     • Consistent typography with section hierarchy
-│   │     • Section cards with rounded corners and spacing
-│   │   Dependencies:
-│   │   - Components: Container and Typography UI components
-│   │   - No state management or authentication requirements
-│   │   - Uses Tailwind CSS for styling
-│   │
-│   ├── 📄 TermsOfService.tsx
-│   │   Purpose: Legal page outlining the platform's usage terms and conditions
-│   │   Details:
-│   │   - Content Structure:
-│   │     • Comprehensive terms sections covering usage rules and responsibilities
-│   │     • Auto-updating "last updated" date with current date
-│   │     • Contact information for inquiries
-│   │   - Terms Sections:
-│   │     • Introduction and agreement notice
-│   │     • Service usage rules and restrictions
-│   │     • User account responsibilities
-│   │     • Intellectual property rights clarification
-│   │     • Liability limitations and disclaimers
-│   │     • Terms modification procedures
-│   │   - Visual Design:
-│   │     • Branded sections with monketer-purple color theme
-│   │     • Centered card layout on light background
-│   │     • Consistent typography with section hierarchy
-│   │     • Section cards with rounded corners and spacing
-│   │     • Bulletpoint formatting for lists
-│   │   Dependencies:
-│   │   - Components: Container and Typography UI components
-│   │   - No state management or authentication requirements
-│   │   - Uses Tailwind CSS for styling
-│   │
-│   ├── 📄 SendEmailPage.tsx
-│   │   Purpose: Interface for sending email previews to recipients
-│   │   Details:
-│   │   - Core Functionality:
-│   │     • Retrieves HTML email content from sessionStorage
-│   │     • Allows sending preview emails to specified recipients
-│   │     • Provides HTML viewing and copying capabilities
-│   │     • Validates input and provides user feedback
-│   │   - Integration Points:
-│   │     • Uses Supabase edge functions for email delivery
-│   │     • Connects with session storage for HTML persistence
-│   │     • Implements Clipboard API for copying content
-│   │   - User Experience:
-│   │     • Input validation with clear error messages
-│   │     • Loading states during API operations
-│   │     • Toast notifications for action feedback
-│   │     • Navigation back to editor
-│   │     • Responsive layout with consistent styling
-│   │   - Error Handling:
-│   │     • Checks for missing HTML content
-│   │     • Validates recipient email
-│   │     • Provides clear error messages via toast
-│   │     • Redirects to editor if content is missing
-│   │   Dependencies:
-│   │   - Components: Button, Input, Textarea UI components
-│   │   - Hooks: useNavigate, useToast 
-│   │   - Services: Supabase client for edge function invocation
-│   │   - Icons: Loader2, Copy, Send, ArrowLeft from lucide-react
-│   │   State Management:
-│   │   - Local: recipientEmail, emailHtml, isLoading states
-│   │   - Browser: sessionStorage for HTML content persistence
-│   │
+│   Purpose: Page-level components
+│   Details:
 │   ├── 📄 Dashboard.tsx
-│   │   Purpose: Main user dashboard for managing email projects
+│   │   Purpose:
 │   │   Details:
-│   │   - Core Features:
-│   │     • Project listing with names and last edited dates
-│   │     • Creation of new email projects
-│   │     • Navigation to the email editor
-│   │     • Empty state handling with visual guidance
-│   │     • Loading state with spinner animation
-│   │   - User Interface:
-│   │     • Responsive table layout for project display
-│   │     • Header with sign out functionality
-│   │     • Action buttons for project management
-│   │     • Contextual empty state guidance
-│   │   - Data Management:
-│   │     • Project loading from backend service
-│   │     • Username resolution from user ID
-│   │     • Date formatting and error handling
-│   │     • Defensive coding with optional chaining
-│   │   Dependencies:
-│   │   - Components: Button, Table components from UI library
-│   │   - Icons: Plus, FileText from lucide-react
-│   │   - Services: projectService for data fetching
-│   │   - Hooks: useToast for notifications, useAuth for authentication
-│   │   - Routing: react-router-dom for navigation
-│   │   State Management:
-│   │   - Local: projects, loading, username states
-│   │   - User context: authentication state via useAuth
-│   │   - Navigation: useNavigate for routing
-│
-├── 📁 contexts/
-│   ├── 📄 EditorContext.tsx
-│   │   Purpose: Central state management and business logic for the email editor
+│   ├── 📄 Editor.tsx
+│   │   Purpose:
 │   │   Details:
-│   │   - State Management:
-│   │     • Project data and metadata (title, ID, content)
-│   │     • UI states (loading, progress, modes)
-│   │     • User interactions (chat messages, pending changes)
-│   │     • Email preview settings (dark mode, mobile view)
-│   │     • Placeholder and content editing state
-│   │   - Core Functionality:
-│   │     • AI communication for email generation and editing
-│   │     • Multi-turn clarification conversation flow
-│   │     • Email creation and update operations
-│   │     • Pending changes management (accept/reject)
-│   │     • Property editing for email elements
-│   │   - Integration Points:
-│   │     • Supabase for database operations
-│   │     • File storage for image uploads
-│   │     • API communication for AI interactions
-│   │     • HTML generation from semantic templates
-│   │   Dependencies:
-│   │   - React (context, hooks)
-│   │   - Services (projectService, htmlGenerator)
-│   │   - Supabase client for database and storage
-│   │   - Type definitions from shared types
-│   │   Exports:
-│   │   - EditorContext: Raw context object
-│   │   - EditorProvider: Provider component
-│   │   - useEditor: Custom hook for context consumption
-│   │
+│   ├── 📄 Index.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 Login.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 NotFound.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 PrivacyPolicy.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 SendEmailPage.tsx
+│   │   Purpose:
+│   │   Details:
+│   ├── 📄 Signup.tsx
+│   │   Purpose:
+│   │   Details:
+│   └── 📄 TermsOfService.tsx
+│       Purpose:
+│       Details:
+└── 📁 shared/
+    Purpose: Cross-environment shared code
+    Details:
+    ├── 📁 lib/
+    │   Purpose: Shared utilities
+    │   Details:
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose:
+    │   │   Details:
+    │   └── 📄 uuid.ts
+    │       Purpose:
+    │       Details:
+    ├── 📁 services/
+    │   Purpose: Shared service implementations
+    │   Details:
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core HTML generator implementation
+    │   │   Details:
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core template diffing implementation
+    │   │   Details:
+    │   └── 📄 semanticParser.ts
+    │       Purpose: Core semantic parsing implementation
+    │       Details:
+    └── 📁 types/
+        Purpose: Shared type definitions
+        Details:
+        ├── 📄 common.ts
+        │   Purpose: Common shared types and enums
+        │   Details:
+        ├── 📄 diffs.ts
+        │   Purpose: Template diffing type definitions
+        │   Details:
+        ├── 📄 editor.ts
+        │   Purpose: Editor and chat interface types
+        │   Details:
+        ├── 📄 elements.ts
+        │   Purpose: Email element type definitions
+        │   Details:
+        ├── 📄 index.ts
+        │   Purpose: Type re-exports for module access
+        │   Details:
+        ├── 📄 pendingChangeTypes.ts
+        │   Purpose: Pending change workflow types
+        │   Details:
+        ├── 📄 sections.ts
+        │   Purpose: Email section type definitions
+        │   Details:
+        ├── 📄 template.ts
+        │   Purpose: Email template structure types
+        │   Details:
+        ├── 📄 validators.ts
+        │   Purpose: Template validation schemas
+        │   Details:
+        └── 📁 config/
+            Purpose: Configuration for type implementations
+            Details:
+            └── 📄 elementDefaults.ts
+                Purpose: Default element configurations
+                Details:

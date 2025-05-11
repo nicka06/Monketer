@@ -1,4 +1,4 @@
-import { useEditor } from '@/contexts/EditorContext';
+import { useEditor } from '@/features/contexts/EditorContext';
 import {
   Dialog,
   DialogContent,

@@ -1,5 +1,5 @@
 import { EmailPreview } from '@/components/EmailPreview';
-import { useEditor } from '@/contexts/EditorContext';
+import { useEditor } from '@/features/contexts/EditorContext';
 import EmailPreviewControls from './EmailPreviewControls';
 import PendingChangesBar from './PendingChangesBar';
 import { cn } from '@/lib/utils';

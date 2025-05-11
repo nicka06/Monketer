@@ -24,10 +24,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Plus, FileText } from 'lucide-react';
-import { getUserProjects, getUsernameFromId } from '@/services/projectService';
-import { Project } from '@/types/editor';
+import { getUserProjects, getUsernameFromId } from '@/features/services/projectService';
+import { Project } from '@/features/types/editor';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/features/auth/useAuth';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);

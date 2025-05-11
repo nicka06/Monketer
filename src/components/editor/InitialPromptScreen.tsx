@@ -1,7 +1,7 @@
 import { Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useEditor } from '@/contexts/EditorContext';
+import { useEditor } from '@/features/contexts/EditorContext';
 import { KeyboardEvent, useState } from 'react';
 
 /**
