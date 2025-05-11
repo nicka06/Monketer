@@ -1,5 +1,5 @@
 /**
- * Frontend UUID Utilities
+ * Backend UUID Utilities
  * 
  * This file is a proxy implementation of the shared utility in src/shared/lib/uuid-utils.ts
  * Maintained for backward compatibility with existing imports.

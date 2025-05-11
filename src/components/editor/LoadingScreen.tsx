@@ -1,6 +1,6 @@
 import { Mail } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { useEditor } from '@/contexts/EditorContext';
+import { useEditor } from '@/features/contexts/EditorContext';
 
 /**
  * LoadingScreen Component

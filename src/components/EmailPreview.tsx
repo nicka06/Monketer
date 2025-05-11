@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { EmailPreviewProps, PendingChange } from '@/types/editor';
+import { EmailPreviewProps, PendingChange } from '@/features/types/editor';
 import { cn } from "@/lib/utils";
 import { EmailHtmlRenderer } from './EmailHtmlRenderer';
-import { isPlaceholder } from '@/services/v2/htmlGenerator';
+import { isPlaceholder } from '@/features/services/htmlGenerator';
 import { 
   EmailElement,
   ImageElementProperties, 
   ButtonElementProperties,
-} from '../../supabase/functions/_shared/types/v2/elements';
+} from '@/shared/types';
 
 /**
  * EmailPreview Component

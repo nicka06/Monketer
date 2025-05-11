@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ChatInterface } from '@/components/ChatInterface';
-import { EditorProvider, useEditor } from '@/contexts/EditorContext';
+import { EditorProvider, useEditor } from '@/features/contexts/EditorContext';
 
 // Import our extracted components
 import EditorHeader from '@/components/editor/EditorHeader';

@@ -1,7 +1,7 @@
 import { Sun, Moon, Smartphone, Monitor } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useEditor } from '@/contexts/EditorContext';
+import { useEditor } from '@/features/contexts/EditorContext';
 
 /**
  * EmailPreviewControls Component

@@ -1,37 +1,28 @@
 /**
- * UUID Generation Module
+ * UUID Generation Module - PROXY IMPLEMENTATION
  * 
- * Provides standardized UUID generation functionality throughout the application.
- * Uses the industry-standard uuid package to ensure high-quality, collision-resistant
- * unique identifiers.
+ * @deprecated This module is deprecated and will be removed in a future version.
+ * Please import from '@/shared/lib/uuid.ts' instead.
  * 
- * This module uses UUID v4 (random-based) which provides:
- * - Cryptographically strong random values
- * - Extremely low collision probability (2^122 unique values)
- * - Cross-platform consistency
- * - Server and browser compatibility
+ * IMPORTANT: This file exists only for backward compatibility with existing code.
+ * It proxies all calls to the canonical implementation in the shared directory.
+ * 
+ * Migration Plan:
+ * 1. All new code should import directly from '@/shared/lib/uuid'
+ * 2. Existing code should gradually be updated to use the shared implementation
+ * 3. Once all imports are updated, this proxy will be removed
+ * 
+ * Part of the shared code reorganization initiative to reduce duplication
+ * between frontend and backend code.
  */
 
-// Use uuid package to get server-compatible uuid generation
-import { v4 as uuidv4 } from 'uuid';
+// Import from shared implementation
+import { generateId as sharedGenerateId } from '@/shared/lib/uuid';
 
 /**
- * Generate Unique ID
+ * Generate Unique ID - Proxy Implementation
  * 
- * Creates a new UUID v4 for use as an identifier throughout the application.
- * Provides a standardized way to generate IDs for new entities.
- * 
- * Use Cases:
- * - Creating new database records
- * - Generating keys for React components
- * - Creating unique identifiers for new email elements
- * - Temporary IDs for unsaved entities
- * 
- * @example
- * // Generate a new ID for a project
- * const newProjectId = generateId();
- * // → "123e4567-e89b-12d3-a456-426614174000"
- * 
+ * @deprecated Use the version from shared/lib/uuid.ts instead
  * @returns {string} A new UUID v4 string
  */
-export const generateId = () => uuidv4();
+export const generateId = () => sharedGenerateId();

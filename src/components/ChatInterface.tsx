@@ -10,12 +10,12 @@
  */
 
 import React, { useState, useRef, useEffect, FormEvent } from 'react';
-import { ChatMessage } from '@/types/editor';
+import { ChatMessage } from '@/features/types/editor';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { ClarificationMessage } from '@/types/ai';
+import { ClarificationMessage } from '@/features/types/ai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
