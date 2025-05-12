@@ -36,7 +36,6 @@ const InitialPromptScreen = () => {
     }
     
     console.log('Initial Email Generation. Prompt:', initialInputValue, 'Project ID (current):', actualProjectId);
-    setIsCreatingFirstEmail(true);
     handleSendMessage(initialInputValue, 'major');
     setInitialInputValue('');
     setIsValidationVisible(false);

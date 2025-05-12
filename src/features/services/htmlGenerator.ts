@@ -26,7 +26,7 @@ import type {
     BoxElementProperties
 } from '@shared/types';
 
-import { HtmlGeneratorCore } from '@shared/services/htmlGenerator';
+import { HtmlGeneratorCore } from '../../shared/services/htmlGenerator';
 
 /**
  * Utility function to check for placeholder values in the frontend implementation
