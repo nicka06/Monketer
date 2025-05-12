@@ -28,7 +28,7 @@ import type {
 
 import { HtmlGeneratorCore } from '../../shared/services/htmlGenerator';
 
-/**
+/** 
  * Utility function to check for placeholder values in the frontend implementation
  */
 export function isPlaceholder(value: string | undefined | null): boolean {

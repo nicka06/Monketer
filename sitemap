@@ -1,117 +1,3 @@
-# Email Template Editor - Project Structure
-
-## SIMPLE MAP
-
-```
-src/
-├── backend/         # Supabase serverless functions
-│   ├── .temp/       # Supabase CLI version tracking
-│   ├── functions/   # Edge function implementations
-│   │   ├── _shared/ # Shared utilities and services
-│   │   │   ├── lib/ # Shared utilities
-│   │   │   │   ├── constants.ts    # CORS and configuration
-│   │   │   │   ├── uuid-utils.ts   # UUID validation utilities
-│   │   │   │   └── uuid.ts         # UUID generation
-│   │   │   └── services/ # Shared services
-│   │   │       ├── differ.ts       # Template diffing
-│   │   │       ├── htmlGenerator.ts # HTML generation
-│   │   │       └── semanticParser.ts # HTML parsing
-│   │   ├── clarify-user-intent/    # AI conversation middleware
-│   │   │   └── index.ts            # Main function handler
-│   │   ├── generate-email-changes/ # Email modification handler
-│   │   │   └── index.ts            # Main function handler
-│   │   ├── manage-pending-changes/ # Change workflow manager
-│   │   │   └── index.ts            # Main function handler
-│   │   ├── send-preview-email/     # Email preview sender
-│   │   │   ├── index.ts            # Main function handler
-│   │   │   ├── deno.json           # Deno configuration for send-preview-email
-│   │   │   └── .npmrc              # NPM configuration for send-preview-email
-│   │   └── import_map.json         # Module import path configuration
-│   ├── config.toml  # Edge function configuration
-│   └── deno.jsonc   # Deno runtime configuration
-├── components/      # UI components for the application
-│   ├── editor/                  # Editor-specific UI components
-│   │   ├── EditorHeader.tsx
-│   │   ├── EmailPreviewControls.tsx
-│   │   ├── EmailPreviewPanel.tsx
-│   │   ├── LoadingScreen.tsx
-│   │   ├── InitialPromptScreen.tsx
-│   │   ├── PendingChangesBar.tsx
-│   │   └── PlaceholderEditModal.tsx
-│   ├── ui/                      # All basic UI component files
-│   ├── ChatInterface.tsx
-│   ├── EmailHtmlRenderer.tsx
-│   ├── EmailPreview.tsx
-│   ├── FeaturesSection.tsx
-│   ├── Footer.tsx
-│   ├── HeroSection.tsx
-│   ├── Navbar.tsx
-│   └── TestimonialsSection.tsx
-├── core/            # Application bootstrap and entry point
-│   ├── App.css
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── vite-env.d.ts
-│   └── index.css
-├── features/        # Business logic by domain
-│   ├── auth/
-│   │   └── useAuth.tsx
-│   ├── contexts/
-│   │   └── EditorContext.tsx
-│   ├── services/
-│   │   ├── differ.ts
-│   │   ├── htmlGenerator.ts
-│   │   ├── projectService.ts
-│   │   └── semanticParser.ts
-│   ├── types/
-│   │   ├── ai.ts
-│   │   ├── editor.ts
-│   │   └── index.ts
-│   └── utils/
-│       └── placeholderUtils.ts
-├── hooks/           # Reusable React hooks
-│   ├── use-toast.ts
-│   └── use-mobile.tsx
-├── integrations/    # External service connections
-│   └── supabase/
-│       ├── client.ts
-│       └── types.ts
-├── lib/             # General utilities
-│   ├── utils.ts
-│   ├── uuid-utils.ts
-│   └── uuid.ts
-├── pages/           # Page-level components
-│   ├── Dashboard.tsx
-│   ├── Editor.tsx
-│   ├── Index.tsx
-│   ├── Login.tsx
-│   ├── NotFound.tsx
-│   ├── PrivacyPolicy.tsx
-│   ├── SendEmailPage.tsx
-│   ├── Signup.tsx
-│   └── TermsOfService.tsx
-└── shared/          # Cross-environment shared code
-    ├── lib/         # Shared utilities
-    │   ├── uuid-utils.ts
-    │   └── uuid.ts
-    ├── services/    # Shared service implementations
-    │   ├── htmlGenerator.ts # Core HTML generator implementation
-    │   ├── differ.ts     # Core template diffing implementation
-    │   └── semanticParser.ts # Core semantic parsing implementation
-    └── types/       # Shared type definitions
-        ├── common.ts # Common shared types and enums
-        ├── diffs.ts # Template diffing type definitions
-        ├── editor.ts # Editor and chat interface types
-        ├── elements.ts # Email element type definitions
-        ├── index.ts # Type re-exports for module access
-        ├── pendingChangeTypes.ts # Pending change workflow types
-        ├── sections.ts # Email section type definitions
-        ├── template.ts # Email template structure types
-        ├── validators.ts # Template validation schemas
-        └── config/  # Configuration for type implementations
-            └── elementDefaults.ts # Default element configurations
-```
-
 ## SUMMARY MAP
 
 📁 src/
@@ -122,145 +8,167 @@ src/
 │   │   - Tracks CLI version information
 │   │   - Manages local development state
 │   │   - Used by Supabase CLI for version control
-│   │
+│   │  
 │   ├── 📁 functions/
 │   │   ├── 📁 _shared/
 │   │   │   ├── 📁 lib/
 │   │   │   │   ├── 📄 constants.ts
-│   │   │   │   │   Purpose: CORS and configuration constants
+│   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
 │   │   │   │   │   Details:
-│   │   │   │   │   - CORS headers and settings
-│   │   │   │   │   - API configuration values
-│   │   │   │   │   - Environment-specific constants
+│   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173).
+│   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers. It returns the `requestOrigin` if it's in `ALLOWED_ORIGINS`, otherwise defaults to the primary production origin. This is the recommended method.
+│   │   │   │   │   - Specifies allowed HTTP headers (authorization, x-client-info, apikey, content-type) and methods (GET, POST, PUT, DELETE, OPTIONS).
+│   │   │   │   │   - Sets `Access-Control-Max-Age` to `86400` (24 hours) for preflight request caching.
+│   │   │   │   │   - Includes legacy `corsHeaders` with a wildcard `Access-Control-Allow-Origin: '*'`, which is deprecated but maintained for backward compatibility.
+│   │   │   │   │   Usage:
+│   │   │   │   │   - `corsHeadersFactory` is imported and used by multiple Supabase Edge Functions (`clarify-user-intent`, `generate-email-changes`, `manage-pending-changes`, `send-preview-email`) to set response headers for main requests, error responses, and OPTIONS preflight requests.
+│   │   │   │   │   - The legacy `corsHeaders` is directly used for OPTIONS preflight request handling in `generate-email-changes/index.ts`.
 │   │   │   │   │
 │   │   │   │   ├── 📄 uuid-utils.ts
-│   │   │   │   │   Purpose: UUID validation utilities
+│   │   │   │   │   Purpose: Provides deprecated UUID validation and cleaning utilities; acts as a proxy for the shared implementation for backward compatibility.
 │   │   │   │   │   Details:
-│   │   │   │   │   - UUID validation functions
-│   │   │   │   │   - UUID formatting helpers
-│   │   │   │   │   - Error handling for invalid UUIDs
+│   │   │   │   │   - Marked as `@deprecated`; new code should use `src/shared/lib/uuid-utils.ts`.
+│   │   │   │   │   - `cleanUuid(id: string)`: Sanitizes potentially malformed UUIDs by removing trailing digits/spaces. Returns cleaned UUID if it matches the pattern, otherwise the original trimmed ID.
+│   │   │   │   │   - `isValidUuid(id: string)`: Validates if a string is a properly formatted UUID using a regex.
+│   │   │   │   │   Usage: Likely used in older backend code requiring UUID utilities before the shared version was prioritized.
 │   │   │   │   │
 │   │   │   │   └── 📄 uuid.ts
-│   │   │   │       Purpose: UUID generation implementation
+│   │   │   │       Purpose: Provides a deprecated, backend-specific UUID v4 generation function (`generateId`).
 │   │   │   │       Details:
-│   │   │   │       - UUID v4 generation
-│   │   │   │       - Secure random number generation
-│   │   │   │       - Type-safe UUID handling
+│   │   │   │       - Uses the `uuid` npm package (v4) for generation.
+│   │   │   │       - Marked as `@deprecated`; new code should use `src/shared/lib/uuid.ts`.
+│   │   │   │       - Exists due to historical path resolution issues in the Deno/Supabase environment.
+│   │   │   │       - Functionally identical to the shared implementation.
+│   │   │   │       Usage: Likely not actively used in current backend functions, as services like `semanticParser.ts` import `generateId` from the shared path (`@shared/lib/uuid`). It was intended for backend services requiring unique ID generation before shared path resolution was robust or if direct npm `uuid` usage was not preferred.
 │   │   │   │
 │   │   │   └── 📁 services/
 │   │   │       ├── 📄 differ.ts
-│   │   │       │   Purpose: Template diffing service
+│   │   │       │   Purpose: Provides a Deno/Supabase adapter for the V2 template diffing service.
 │   │   │       │   Details:
-│   │   │       │   - Compares template versions
-│   │   │       │   - Generates change sets
-│   │   │       │   - Handles conflict resolution
+│   │   │       │   - Imports `DifferCore` from `src/shared/services/differ.ts` and re-exports types.
+│   │   │       │   - Extends `DifferCore` to create a `DifferV2` class, passing a lodash instance.
+│   │   │       │   - Primarily acts as a wrapper to make the shared differ service usable in the Deno environment.
+│   │   │       │   - Diffing logic resides in the shared `DifferCore`.
+│   │   │       │   Usage: Imported and used by `src/backend/functions/generate-email-changes/index.ts` to compare template versions and generate a diff result, which is then stored as pending changes.
 │   │   │       │
 │   │   │       ├── 📄 htmlGenerator.ts
-│   │   │       │   Purpose: HTML generation service
+│   │   │       │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
 │   │   │       │   Details:
-│   │   │       │   - Converts templates to HTML
-│   │   │       │   - Handles email-specific formatting
-│   │   │       │   - Manages responsive design
+│   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
+│   │   │       │   - Overrides element generation (e.g., for buttons, images) to:
+│   │   │       │     • Detect placeholder content using an `isPlaceholder` utility.
+│   │   │       │     • Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
+│   │   │       │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
+│   │   │       │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
+│   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
+│   │   │       │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.
 │   │   │       │
 │   │   │       └── 📄 semanticParser.ts
-│   │   │           Purpose: HTML parsing service
+│   │   │           Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
 │   │   │           Details:
-│   │   │           - Parses HTML into structured data
-│   │   │           - Extracts semantic meaning
-│   │   │           - Validates template structure
+│   │   │           - Adapts `SemanticParserCore` (from `src/shared/services/semanticParser.ts`) for the frontend.
+│   │   │           - Uses `JSDOM` to create a DOM from an HTML string for parsing.
+│   │   │           - Implements the `parse(html)` method to convert HTML into a structured `EmailTemplateV2` object.
+│   │   │           - Overrides methods for:
+│   │   │             • Extracting global styles (body styles, content width).
+│   │   │             • Locating the main email container and parsing sections/elements.
+│   │   │             • Determining element types, potentially supporting more frontend-specific types (subtext, quote, code, list).
+│   │   │           - Exports `SemanticParser` class.
+│   │   │           Usage: Used to convert raw HTML (e.g., from an imported email or a previous version) into the structured `EmailTemplateV2` format that the editor and other services can work with.
 │   │   │
-│   │   ├── 📁 clarify-user-intent/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: AI conversation middleware
-│   │   │       Details:
-│   │   │       - Core Functionality:
-│   │   │         • Analyzes user messages for ambiguity
-│   │   │         • Asks targeted clarifying questions
-│   │   │         • Provides structured data for email generation
-│   │   │       - Input Processing:
-│   │   │         • User message analysis
-│   │   │         • Chat history context
-│   │   │         • Current email structure
-│   │   │         • Ongoing clarification context
-│   │   │       - Response Types:
-│   │   │         • Clarification questions with suggestions
-│   │   │         • Complete structured data for email generation
-│   │   │       - Technical Features:
-│   │   │         • Token limit management
-│   │   │         • Context window optimization
-│   │   │         • JSON response validation
-│   │   │         • Error handling and recovery
-│   │   │
-│   │   ├── 📁 generate-email-changes/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Email modification handler
-│   │   │       Details:
-│   │   │       - Processes user requests for changes
-│   │   │       - Generates email modifications
-│   │   │       - Validates changes before application
-│   │   │
-│   │   ├── 📁 manage-pending-changes/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Change workflow manager
-│   │   │       Details:
-│   │   │       - Manages pending changes queue
-│   │   │       - Handles change application
-│   │   │       - Coordinates change conflicts
-│   │   │
-│   │   └── 📁 send-preview-email/
-│   │       └── 📄 index.ts
-│   │           Purpose: Email preview sender
-│   │           Details:
-│   │           - Generates preview emails
-│   │           - Handles email delivery
-│   │           - Manages preview templates
-│   │       ├── 📄 deno.json
-│   │       │   Purpose: Deno configuration for send-preview-email
-│   │       │   Details:
-│   │       └── 📄 .npmrc
-│   │           Purpose: NPM configuration for send-preview-email
-│   │           Details:
 │   │
-│   ├── 📄 import_map.json
-│   │   Purpose: Module import path configuration
-│   │   Details:
-│   │   - Defines import path aliases for Supabase edge functions.
-│   │   - Helps manage module resolution and maintain cleaner import statements.
+│   ├── 📁 clarify-user-intent/
+│   │   └── 📄 index.ts
+│   │       Purpose: AI conversation middleware, served as a Supabase Edge Function.
+│   │       Details:
+│   │       - Core Functionality:
+│   │         • Analyzes user messages for ambiguity
+│   │         • Asks targeted clarifying questions
+│   │         • Provides structured data for email generation
+│   │       - Input Processing:
+│   │         • User message analysis
+│   │         • Chat history context
+│   │         • Current email structure
+│   │         • Ongoing clarification context
+│   │       - Response Types:
+│   │         • Clarification questions with suggestions
+│   │         • Complete structured data for email generation
+│   │       - Technical Features:
+│   │         • Token limit management
+│   │         • Context window optimization
+│   │         • JSON response validation
+│   │         • Error handling and recovery
+│   │       Usage: Invoked as an HTTP POST endpoint by the frontend. It receives user messages, chat history, and current email context. Based on its analysis, it either returns a request for clarification or a structured set of instructions for the `generate-email-changes` function. It utilizes an OpenAI model (e.g., `gpt-4o-mini`) for its core logic.
 │   │
-│   ├── 📄 config.toml
-│   │   Purpose: Edge function configuration and settings
-│   │   Details:
-│   │   - Function-specific settings:
-│   │     • JWT verification requirements
-│   │     • Function enablement flags
-│   │     • Entrypoint specifications
-│   │   - Import configuration:
-│   │     • Import map paths
-│   │     • Static file bundling
-│   │   - Security settings:
-│   │     • Authentication requirements
-│   │     • Access controls
-│   │   Usage:
-│   │   - Configures each edge function's behavior
-│   │   - Manages function dependencies
-│   │   - Controls function security
+│   ├── 📁 generate-email-changes/
+│   │   └── 📄 index.ts
+│   │       Purpose: Supabase Edge Function to apply AI-driven modifications to email templates and save them.
+│   │       Details:
+│   │       - Core Functionality:
+│   │         • Receives a structured `GenerateEmailChangesPayload` (likely from `clarify-user-intent`) detailing the desired email modifications, including a "perfect prompt" and elements to process.
+│   │         • Interacts with an OpenAI model (e.g., `gpt-4o-mini`), providing a system prompt tailored by the operation `mode` ('ask', 'edit', 'major'), to get structured changes or a diff.
+│   │         • Merges AI-suggested changes into the V2 email template.
+│   │         • Validates the updated template using `validateEmailTemplateV2`.
+│   │         • Generates new HTML using the backend `HtmlGenerator`.
+│   │         • Updates the project's `semantic_email_v2` and `current_html` in the Supabase database.
+│   │         • Computes a diff between the old and new template using the backend `DifferV2` and saves it as `pending_changes` in Supabase.
+│   │       - Key Dependencies:
+│   │         • Supabase client (for DB operations).
+│   │         • OpenAI API (for generating changes).
+│   │         • `corsHeadersFactory`, `HtmlGenerator` (adapter), `DifferV2` (adapter) from `../_shared/`.
+│   │         • Shared types (`EmailTemplateV2`, `TemplateDiffResult`).
+│   │         • Internal Helpers: `getProjectDataV2`, `updateProjectV2`, `savePendingChanges` for database interactions.
+│   │       Usage: Invoked as an HTTP POST endpoint, typically after `clarify-user-intent` has produced a clear set of instructions. It returns the newly modified template, its HTML, and any generated pending changes.
 │   │
-│   └── 📄 deno.jsonc
-│       Purpose: Deno runtime configuration
-│       Details:
-│       - Core Configuration:
-│         • Import map resolution
-│         • Module dependency paths
-│         • Runtime settings
-│       - Technical Design:
-│         • JSONC format for comments
-│         • Centralized import management
-│         • Runtime optimization settings
-│       Usage:
-│       - Resolves module imports
-│       - Manages dependencies
-│       - Configures Deno runtime
-│   
+│   ├── 📁 manage-pending-changes/
+│   │   └── 📄 index.ts
+│   │       Purpose: Supabase Edge Function to accept or reject a set of pending V2 template changes for a project.
+│   │       Details:
+│   │       - Core Functionality:
+│   │         • Handles HTTP POST requests with a `projectId` and an `action` ('accept' or 'reject').
+│   │         • Fetches the project's current `semantic_email_v2` and its associated `pending_changes` (which is expected to be a `TemplateDiffResult` containing `oldTemplate` and `newTemplate` states).
+│   │         • If 'accept':
+│   │           - Assumes `pending_changes.diff.newTemplate` is the target state.
+│   │           - Generates HTML from this target state using `HtmlGeneratorCore` (shared).
+│   │           - Calls Supabase RPC `manage_accept_transaction` to update the project with the new template/HTML, mark changes as 'accepted', and increment project version.
+│   │         • If 'reject':
+│   │           - Assumes `pending_changes.diff.oldTemplate` is the target state to revert to.
+│   │           - Generates HTML from this reverted state using `HtmlGeneratorCore` (shared).
+│   │           - Calls Supabase RPC `manage_reject_transaction` to update the project with the reverted template/HTML and mark changes as 'rejected'.
+│   │       - Key Dependencies:
+│   │         • Supabase client (for DB operations and RPC calls).
+│   │         • `corsHeadersFactory` (backend shared).
+│   │         • `HtmlGeneratorCore` (shared service).
+│   │         • Shared types (`EmailTemplate`, `PendingChange`).
+│   │         • Supabase RPCs: `manage_accept_transaction`, `manage_reject_transaction`.
+│   │       - Note: Contains `applyPendingChanges` and `applyRevert` helper functions that manipulate template objects based on change arrays, but these are not directly used by the main 'accept'/'reject' logic of this endpoint, which instead relies on the full old/new templates stored within the pending diff.
+│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to finalize or discard a set of proposed email template modifications.
+│   │
+│   ├── 📁 send-preview-email/
+│   │   └── 📄 index.ts
+│   │       Purpose: Supabase Edge Function to send an email with provided HTML content, typically for preview purposes.
+│   │       Details:
+│   │       - Core Functionality:
+│   │         • Accepts a POST request with `recipientEmail` and `emailHtml` in the JSON payload.
+│   │         • Uses `nodemailer` configured with Gmail SMTP (credentials from environment variables `GMAIL_USER`, `GMAIL_APP_PASSWORD`) to send the email.
+│   │         • The provided `emailHtml` is used directly as the email body.
+│   │       - Key Dependencies:
+│   │         • `nodemailer` npm package.
+│   │         • `corsHeadersFactory` from `../_shared/lib/constants.ts`.
+│   │         • Gmail account credentials stored as Supabase secrets.
+│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to send a rendered HTML email to a user-specified address for previewing.
+│   │   ├── 📄 deno.json
+│   │   │   Purpose: Deno configuration specific to the `send-preview-email` function.
+│   │   │   Details: Manages Deno runtime settings, task scripts, import maps, or permissions, potentially related to its use of npm modules like `nodemailer` via esm.sh or similar.
+│   │   └── 📄 .npmrc
+│   │       Purpose: NPM configuration file for the `send-preview-email` function.
+│   │       Details: Specifies settings for npm package management if direct npm dependencies or private registries are used with Deno for this function.
+│   │
+│   └── 📄 import_map.json
+│       Purpose: Defines path aliases for Deno module imports within the Supabase Edge Functions.
+│       Details: Maps short aliases (like `@/`, `shared/`, `@/types/v2/`, `@/services/v2/`) to their actual relative paths (e.g., `../../src/`, `./_shared/`, `../../src/types/v2/`, `../../src/services/v2/`). This simplifies import statements in the Edge Function code.
+│       Usage: Used by the Deno runtime when executing functions in `src/backend/functions/` to resolve aliased imports. Referenced by `src/backend/deno.jsonc`.
+│
 ├── 📁 components/
 │   ├── 📄 ChatInterface.tsx
 │   │   Purpose: Provides the main chat interface for user-AI interactions
@@ -292,6 +200,7 @@ src/
 │   │   State Management:
 │   │   - Local: Input value, scroll position
 │   │   - Props: Messages, clarification state, loading state, mode selection
+│   │   Usage: Rendered as the right-hand panel within the main `Editor` page (`src/pages/Editor.tsx`). It receives its state (messages, loading states, mode) and callbacks (message sending, mode changes) from the `EditorContext`.
 │   │
 │   ├── 📄 EmailHtmlRenderer.tsx
 │   │   Purpose: Renders email content in an isolated iframe environment
@@ -303,56 +212,46 @@ src/
 │   │   - Implements security measures (HTML escaping)
 │   │   - Uses ResizeObserver for dynamic content
 │   │   Dependencies: React, forwardRef, useEffect, useRef
+│   │   Usage: Likely used by the `EmailPreview` component (`src/components/EmailPreview.tsx`) to render the core HTML content within an iframe and process placeholders.
 │   │
 │   ├── 📄 EmailPreview.tsx
-│   │   Purpose: Provides interactive preview of email content with overlay management
+│   │   Purpose: Renders an interactive email preview within an iframe, displaying overlays for pending changes and clickable placeholders.
 │   │   Details:
-│   │   - Iframe Integration:
-│   │     • Uses EmailHtmlRenderer for content display
-│   │     • Maintains coordinate mapping with parent document
-│   │     • Handles scroll synchronization
-│   │   - Overlay System:
-│   │     • Two-layer architecture for different overlay types
-│   │     • Non-interactive overlays for pending changes
-│   │     • Interactive overlays for placeholders
-│   │     • Absolute positioning with scroll compensation
-│   │   - Responsive Features:
-│   │     • Mobile/desktop preview modes
-│   │     • Dark/light theme switching
-│   │     • Maintains aspect ratios
-│   │   - Performance Optimizations:
-│   │     • RAF-based animations
-│   │     • Batched DOM operations
-│   │     • Efficient event cleanup
-│   │   Dependencies:
-│   │   - Components: EmailHtmlRenderer
-│   │   - Utils: cn, isPlaceholder
-│   │   - Types: EmailElement, ImageElementProperties, ButtonElementProperties
-│   │   State Management:
-│   │   - Refs: overlay container, html renderer
-│   │   - Props: currentHtml, pendingChanges, preview modes, callbacks
+│   │   - Core Functionality:
+│   │     • Uses `EmailHtmlRenderer` to display the base HTML content in an iframe.
+│   │     • Manages an overlay system on top of the iframe for:
+│   │       - Visualizing pending changes (adds/edits) with styled borders.
+│   │       - Creating interactive, clickable overlays for image and link placeholders identified from the `semanticTemplate`.
+│   │     • Handles coordinate mapping between the iframe and the parent document for accurate overlay positioning, accounting for scroll and iframe boundaries.
+│   │   - Props:
+│   │     • `currentHtml`: The HTML string to render.
+│   │     • `pendingChanges`: Array of pending changes to highlight.
+│   │     • `previewMode`: 'light' or 'dark' (applies a CSS filter for dark mode).
+│   │     • `previewDevice`: 'desktop' or 'mobile' (adjusts preview width).
+│   │     • `semanticTemplate`: The structured email template data used to identify placeholders.
+│   │     • `onPlaceholderActivate`: Callback function triggered when a placeholder overlay is clicked, providing element ID, property path, and type.
+│   │   - Key Dependencies:
+│   │     • `EmailHtmlRenderer` (for iframe rendering and initial placeholder transformation).
+│   │     • `isPlaceholder` utility (from `@/features/services/htmlGenerator`).
+│   │     • `cn` utility.
+│   │     • React hooks (`useEffect`, `useRef`, `useCallback`).
+│   │   - Technical Notes:
+│   │     • Uses `requestAnimationFrame` (via `waitForPaintCycle`) for smooth overlay updates.
+│   │     • Listens to iframe scroll and resize events to keep overlays synchronized.
+│   │   Usage: Imported and used by `EmailPreviewPanel` (`src/components/editor/EmailPreviewPanel.tsx`) to display the email content. It receives HTML, template data, and interaction callbacks from the `EditorContext` (via `EmailPreviewPanel`).
 │   │
 │   ├── 📄 FeaturesSection.tsx
-│   │   Purpose: Marketing component displaying key platform features
+│   │   Purpose: Displays key application features in a responsive grid on the main landing page.
 │   │   Details:
-│   │   - Content Structure:
-│   │     • Static features array with 3 key capabilities
-│   │     • Each feature has title, description, and image
-│   │     • Unsplash images for feature illustrations
+│   │   - Content:
+│   │     • Hardcoded array of features: "Create", "Automate", "Analyze", each with a description and an Unsplash image URL.
+│   │     • Section header: "Powerful Features", "Everything you need to excel at email marketing", and a subtitle.
 │   │   - Layout:
-│   │     • Responsive grid (1/2/3 columns)
-│   │     • Centered header section
-│   │     • Card-based feature display
-│   │   - UI Features:
-│   │     • Hover effects on cards
-│   │     • Image zoom animations
-│   │     • Consistent spacing and typography
-│   │   Dependencies:
-│   │   - Styling: Tailwind CSS
-│   │   - No external component dependencies
-│   │   State Management:
-│   │   - Stateless component
-│   │   - Uses static data array
+│   │     • Responsive grid of feature cards (1 to 3 columns).
+│   │     • Each card contains an image (with hover zoom), title, and description.
+│   │   - Styling: Uses Tailwind CSS for styling, including hover effects on cards.
+│   │   Dependencies: None (React functional component with local data).
+│   │   Usage: Rendered on the main landing page (`src/pages/Index.tsx`) as part of the page's marketing content.
 │   │
 │   ├── 📄 Footer.tsx
 │   │   Purpose: Site-wide footer providing navigation and branding
@@ -381,58 +280,46 @@ src/
 │   │   - Uses static navigation data structure
 │   │
 │   ├── 📄 HeroSection.tsx
-│   │   Purpose: Landing page hero section for email generation entry point
+│   │   Purpose: Main hero section for the landing page, capturing initial user email descriptions and guiding them to authentication.
 │   │   Details:
-│   │   - User Flow:
-│   │     • Email content input and persistence
-│   │     • Authentication gating
-│   │     • Seamless navigation to auth routes
-│   │     • Content preservation during auth flow
-│   │   - UI Components:
-│   │     • Decorative gradient background
-│   │     • Centered content layout
-│   │     • Multi-line text input
-│   │     • Animated submit button
-│   │     • Authentication modal
-│   │   - Features:
-│   │     • Session persistence with localStorage
-│   │     • Responsive design across breakpoints
-│   │     • Interactive UI elements
-│   │     • Form validation and handling
+│   │   - Content:
+│   │     • Headline, subtitle.
+│   │     • `Textarea` for user to describe their desired email.
+│   │     • "Generate Email" button.
+│   │   - Functionality:
+│   │     • On "Generate Email" submit:
+│   │       - Shows an authentication dialog ("Sign Up" / "Sign In").
+│   │       - On auth choice, saves the textarea content to `localStorage` (key: `savedEmailContent`) and navigates to `/signup` or `/login`.
+│   │     • Loads `savedEmailContent` from `localStorage` on mount to pre-fill textarea.
+│   │   - Styling: Decorative gradient background, Tailwind CSS.
 │   │   Dependencies:
-│   │   - UI: Button, Textarea, Dialog components
-│   │   - Icons: ArrowRight from lucide-react
-│   │   - Routing: react-router-dom
-│   │   State Management:
-│   │   - Local: emailContent, showAuthDialog
-│   │   - Storage: localStorage for content persistence
-│   │   - Navigation: useNavigate for routing
+│   │   - `ArrowRight` icon (lucide-react).
+│   │   - UI Components: `Textarea`, `Button`, `Dialog` (from `./ui/`).
+│   │   - `useNavigate` (react-router-dom).
+│   │   - React hooks (`useState`, `useEffect`).
+│   │   Usage: Rendered as the primary section in `src/pages/Index.tsx`.
 │   │
 │   ├── 📄 Navbar.tsx
-│   │   Purpose: Responsive navigation bar with authentication options
+│   │   Purpose: Application's main responsive navigation bar.
 │   │   Details:
-│   │   - Layout Modes:
-│   │     • Desktop: Horizontal navigation with brand and auth buttons
-│   │     • Mobile: Collapsible menu with hamburger button
-│   │     • Fixed positioning with blur effect overlay
-│   │   - Visual Elements:
-│   │     • Brand section with Mail icon and text
-│   │     • Semi-transparent background with blur
-│   │     • Animated hamburger menu
-│   │     • Consistent monketer purple theming
-│   │   - Interactive Features:
-│   │     • Responsive breakpoint handling
-│   │     • Smooth menu transitions
-│   │     • Button hover states
-│   │     • Accessible navigation
+│   │   - Content & Branding:
+│   │     • Displays the brand "monketer" with a `Mail` icon, linking to `/`.
+│   │   - Authentication Links:
+│   │     • "Sign in" button linking to `/login`.
+│   │     • "Sign up" button linking to `/signup`.
+│   │   - Responsive Behavior:
+│   │     • Desktop: Horizontal layout with visible auth buttons.
+│   │     • Mobile: Collapsible hamburger menu which, when opened, shows auth buttons vertically.
+│   │   - Styling:
+│   │     • Fixed position at the top.
+│   │     • Semi-transparent background with a blur effect.
+│   │     • Uses Tailwind CSS and "monketer-purple" theme color.
 │   │   Dependencies:
-│   │   - UI: Button component from shadcn/ui
-│   │   - Icons: Mail from lucide-react
-│   │   - Routing: Link from react-router-dom
-│   │   - Styling: Tailwind CSS
-│   │   State Management:
-│   │   - Local: mobileMenuOpen for menu toggle
-│   │   - ARIA states for accessibility
+│   │   - React (`useState`).
+│   │   - `@/components/ui/button`.
+│   │   - `Link` from `react-router-dom`.
+│   │   - `Mail` icon from `lucide-react`.
+│   │   Usage: Rendered at the top of the main landing page (`src/pages/Index.tsx`). Potentially used on other main application pages that require global navigation.
 │   │
 │   ├── 📄 TestimonialsSection.tsx
 │   │   Purpose: Marketing component showcasing customer success stories
@@ -461,219 +348,479 @@ src/
 │   │   State Management:
 │   │   - Stateless component
 │   │   - Uses static testimonial data
+│   │   Usage: Rendered on the main landing page (`src/pages/Index.tsx`) to showcase customer feedback.
 │   │
 │   ├── 📁 editor/
 │   │   Purpose: Editor-specific UI components
 │   │   Details:
 │   │   ├── 📄 EditorHeader.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Displays the top navigation bar for the email editor interface.
 │   │   │   Details:
+│   │   │   - Back Button: Navigates to `/dashboard`.
+│   │   │   - Editable Project Title: Allows inline editing of the project title, synced with `EditorContext`.
+│   │   │   - Settings Button: Placeholder for future project settings functionality (currently disabled).
+│   │   │   - Layout: Sticky header with back (left), title (center), settings (right).
+│   │   │   Dependencies: `lucide-react` (ArrowLeft, Settings), `@/components/ui/button`, `react-router-dom` (`useNavigate`), `@/features/contexts/EditorContext` (`useEditor`).
+│   │   │   Usage: Rendered as the main header within the `EditorContent` component (`src/pages/Editor.tsx`).
+│   │   │
 │   │   ├── 📄 EmailPreviewControls.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Provides UI controls for the email preview panel, allowing users to toggle display modes.
 │   │   │   Details:
+│   │   │   - Dark/Light Mode Toggle: Switch with `Sun` and `Moon` icons, controls `isDarkMode` from `EditorContext`.
+│   │   │   - Device View Toggle: Switch with `Monitor` and `Smartphone` icons, controls `isMobileView` from `EditorContext`.
+│   │   │   - Layout: Sticky, centered controls with adaptive background for dark/light theme. Disabled during loading states.
+│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/switch`, `cn` utility, `useEditor` hook.
+│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to provide preview customization options.
+│   │   │
 │   │   ├── 📄 EmailPreviewPanel.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Displays the rendered email preview along with controls.
 │   │   │   Details:
+│   │   │   - Integrates with `EmailPreview` component for the actual rendering within an iframe and overlay management.
+│   │   │   - Provides UI controls for the preview via `EmailPreviewControls` (toggling dark/light mode, mobile/desktop view), shown only when content is available.
+│   │   │   - Displays a `PendingChangesBar` to manage proposed modifications.
+│   │   │   - Manages the overall layout of the preview area.
+│   │   │   - HTML source: Uses `livePreviewHtml` from context if available, otherwise `projectData.current_html`.
+│   │   │   - Conditionally renders preview and controls based on loading states and content availability (`projectData.semantic_email_v2`).
+│   │   │   - Receives state and callbacks from `EditorContext` (e.g., `livePreviewHtml`, `isDarkMode`, `isMobileView`, `handlePlaceholderActivation`, `pendingChanges`).
+│   │   │   - Accepts an optional `fileInputRef` prop (currently for potential future use by child components like `EmailPreview`).
+│   │   │   Dependencies:
+│   │   │     • `EmailPreview` (from `@/components/EmailPreview`).
+│   │   │     • `EmailPreviewControls` (from `./EmailPreviewControls`).
+│   │   │     • `PendingChangesBar` (from `./PendingChangesBar`).
+│   │   │     • `useEditor` hook.
+│   │   │     • `cn` utility.
+│   │   │   Usage: Rendered as the left-hand panel within the main `EditorContent` component in `src/pages/Editor.tsx`.
+│   │   │
 │   │   ├── 📄 InitialPromptScreen.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Screen for users to input their initial email generation prompt, shown when starting a new project or if an existing project has no email content.
 │   │   │   Details:
+│   │   │   - UI Elements:
+│   │   │     • `Mail` icon.
+│   │   │     • Title and descriptive text.
+│   │   │     • Single `Input` field for the prompt with a placeholder.
+│   │   │     • "Generate Email with AI" `Button`.
+│   │   │   - Functionality:
+│   │   │     • Uses `initialInputValue` from `EditorContext` for the input field.
+│   │   │     • On submit (button click or Enter), calls `handleSendMessage(prompt, 'major')` from `EditorContext`.
+│   │   │     • Shows a validation error if the prompt is empty.
+│   │   │   - Dependencies:
+│   │   │     • `Mail` icon (lucide-react).
+│   │   │     • `Button`, `Input` (from `@/components/ui/`).
+│   │   │     • `useEditor` hook (`@/features/contexts/EditorContext`).
+│   │   │   State Management:
+│   │   │   - Uses `initialInputValue`, `setInitialInputValue`, `handleSendMessage`, `isLoading` from `EditorContext`.
+│   │   │   - Local state for validation visibility.
+│   │   │   Usage: Rendered conditionally within `EditorContent` in `src/pages/Editor.tsx` when `actualProjectId` is not set (and not loading).
+│   │   │
 │   │   ├── 📄 LoadingScreen.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Displays various loading and transitional states for the editor UI
 │   │   │   Details:
+│   │   │   - Adaptable: Shows different messages/animations based on a `type` prop (e.g., "loading", "generating", "clarifying").
+│   │   │   - Visuals: Typically includes a spinner/animation and text.
+│   │   │   - Used during project loading, AI generation, or when AI is clarifying.
+│   │   │   Dependencies: UI components (spinner, text), possibly icons.
+│   │   │   Usage: Rendered conditionally within `EditorContent`
+│   │   │
 │   │   ├── 📄 PendingChangesBar.tsx
-│   │   │   Purpose:
+│   │   │   Purpose: Floating action bar for accepting or rejecting all pending email changes.
 │   │   │   Details:
-│   │   └── 📄 PlaceholderEditModal.tsx
-│   │       Purpose:
-│   │       Details:
-│   └── 📁 ui/
-│       // Base UI components used across the application
-├── 📁 core/
-│   Purpose: Application bootstrap and entry point
-│   Details:
-│   ├── 📄 App.css
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 App.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 main.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 vite-env.d.ts
-│   │   Purpose:
-│   │   Details:
-│   └── 📄 index.css
-│       Purpose:
-│       Details:
-├── 📁 features/
-│   Purpose: Business logic by domain
-│   Details:
-│   ├── 📁 auth/
-│   │   Purpose:
-│   │   Details:
-│   │   └── 📄 useAuth.tsx
-│   │       Purpose:
-│   │       Details:
-│   ├── 📁 contexts/
-│   │   Purpose:
-│   │   Details:
-│   │   └── 📄 EditorContext.tsx
-│   │       Purpose:
-│   │       Details:
-│   ├── 📁 services/
-│   │   Purpose:
-│   │   Details:
-│   │   ├── 📄 differ.ts
-│   │   │   Purpose:
-│   │   │   Details:
-│   │   ├── 📄 htmlGenerator.ts
-│   │   │   Purpose:
-│   │   │   Details:
-│   │   ├── 📄 projectService.ts
-│   │   │   Purpose:
-│   │   │   Details:
-│   │   └── 📄 semanticParser.ts
-│   │       Purpose:
-│   │       Details:
-│   ├── 📁 types/
-│   │   Purpose:
-│   │   Details:
-│   │   ├── 📄 ai.ts
-│   │   │   Purpose:
-│   │   │   Details:
-│   │   ├── 📄 editor.ts
-│   │   │   Purpose:
-│   │   │   Details:
-│   │   └── 📄 index.ts
-│   │       Purpose:
-│   │       Details:
-│   └── 📁 utils/
-│       Purpose:
-│       Details:
-│       └── 📄 placeholderUtils.ts
-│           Purpose:
-│           Details:
-├── 📁 hooks/
-│   Purpose: Reusable React hooks
-│   Details:
-│   ├── 📄 use-toast.ts
-│   │   Purpose:
-│   │   Details:
-│   └── 📄 use-mobile.tsx
-│       Purpose:
-│       Details:
-├── 📁 integrations/
-│   Purpose: External service connections
-│   Details:
-│   └── 📁 supabase/
-│       Purpose:
-│       Details:
-│       ├── 📄 client.ts
-│       │   Purpose:
-│       │   Details:
-│       └── 📄 types.ts
-│           Purpose:
-│           Details:
-├── 📁 lib/
-│   Purpose: General utilities
-│   Details:
-│   ├── 📄 utils.ts
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 uuid-utils.ts
-│   │   Purpose:
-│   │   Details:
-│   └── 📄 uuid.ts
-│       Purpose:
-│       Details:
-├── 📁 pages/
-│   Purpose: Page-level components
-│   Details:
-│   ├── 📄 Dashboard.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 Editor.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 Index.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 Login.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 NotFound.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 PrivacyPolicy.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 SendEmailPage.tsx
-│   │   Purpose:
-│   │   Details:
-│   ├── 📄 Signup.tsx
-│   │   Purpose:
-│   │   Details:
-│   └── 📄 TermsOfService.tsx
-│       Purpose:
-│       Details:
-└── 📁 shared/
-    Purpose: Cross-environment shared code
+│   │   │   - Visibility: Only shown if there are pending changes.
+│   │   │   - Layout: Absolutely positioned at the bottom-center of its parent, styled as a floating bar.
+│   │   │   - Controls:
+│   │   │     • "Reject All" button (red, `X` icon), calls `handleRejectAll` from context.
+│   │   │     • "Accept All" button (green, `Check` icon), calls `handleAcceptAll` from context.
+│   │   │   - Both buttons are disabled during loading states.
+│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/button`, `useEditor` hook.
+│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to allow bulk actions on pending template modifications.
+│   │   │
+│   │   └── 📁 ui/
+│   │       Purpose: Collection of foundational, reusable UI components (e.g., Button, Input, Dialog, Card, Switch).
+│   │       Details: These are typically generic building blocks, often sourced from or inspired by a UI library like shadcn/ui, styled with Tailwind CSS. They ensure a consistent look and feel across the application. Specific props and behaviors follow common UI component patterns. Detailed documentation for each individual primitive is omitted for brevity.
+│   │
+└── 📁 features/
+    Purpose: Business logic by domain
     Details:
-    ├── 📁 lib/
-    │   Purpose: Shared utilities
-    │   Details:
-    │   ├── 📄 uuid-utils.ts
-    │   │   Purpose:
-    │   │   Details:
-    │   └── 📄 uuid.ts
-    │       Purpose:
+    ├── 📁 auth/
+    │   Purpose: Handles user authentication and session management using Supabase.
+    │   Details: Provides a React Context and a custom hook (`useAuth`) for auth operations.
+    │   └── 📄 useAuth.tsx
+    │       Purpose: Provides a React Context and custom hook (`useAuth`) for managing user authentication state and interactions with Supabase.
     │       Details:
+    │       - Manages `session`, `user`, and `loading` states.
+    │       - Synchronizes with Supabase auth events (`onAuthStateChange`, `getSession`).
+    │       - Exports `AuthProvider` component to wrap the application or parts of it.
+    │       - Exports `useAuth` hook to access:
+    │         • `session: Session | null`
+    │         • `user: User | null`
+    │         • `loading: boolean`
+    │         • `signIn(email, password)`: Authenticates a user.
+    │         • `signUp(email, password, username)`: Registers a new user (username defaults to email, also attempts to create a `user_info` record).
+    │         • `signOut()`: Logs out the user.
+    │       - Integrates `useToast` for user feedback on auth operations.
+    │       Usage: `AuthProvider` is used in `App.tsx` to provide global auth context. `useAuth` is used by components like `ProtectedRoute`, `RedirectIfAuthenticated`, and pages like `Login.tsx`, `Signup.tsx`, `Dashboard.tsx` to manage auth state and trigger auth actions.
+    │
+    ├── 📁 contexts/
+    │   Purpose: Provides React Context for sharing state across different parts of a feature or the application.
+    │   Details: Centralizes state management for complex UI sections like the email editor.
+    │   └── 📄 EditorContext.tsx
+    │       Purpose: Central React Context (`EditorContext`) and provider (`EditorProvider`) for managing all state and operations of the email editor.
+    │       Details:
+    │       - Manages comprehensive editor state including:
+    │         • Project data (`projectData`, `projectTitle`, `actualProjectId`).
+    │         • UI states (`isLoading`, `isLoadingProject`, `isDarkMode`, `isMobileView`, `selectedMode`).
+    │         • Content (`chatMessages`, `livePreviewHtml`, `pendingChanges`, `EmailTemplateV2` structure).
+    │         • AI clarification flow (`isClarifying`, `clarificationConversation`, `clarificationContext`).
+    │         • Placeholder editing (`editingPlaceholder`, `linkInputValue`).
+    │       - Initializes editor by fetching or creating project data based on URL parameters and user auth.
+    │       - Provides core handler functions for:
+    │         • Sending messages to AI for edits, questions, or generation (`handleSendMessage`).
+    │         • Managing clarification dialogues with AI.
+    │         • Accepting/rejecting pending template changes (`handleAcceptAll`, `handleRejectAll`).
+    │         • Updating project title, element properties (links, images).
+    │         • Navigating to send preview page.
+    │       - Integrates with `projectService`, Supabase client, `HtmlGeneratorV2`, and `useAuth`.
+    │       - Exports `useEditor` hook for components to access context.
+    │       Usage: `EditorProvider` wraps the main `Editor` page component (`src/pages/Editor.tsx`). `useEditor` is consumed by numerous components within the editor UI (e.g., `ChatInterface`, `EmailPreviewPanel`, `EditorHeader`, etc.) to display data and trigger actions.
+    │
     ├── 📁 services/
-    │   Purpose: Shared service implementations
-    │   Details:
-    │   ├── 📄 htmlGenerator.ts
-    │   │   Purpose: Core HTML generator implementation
-    │   │   Details:
+    │   Purpose: Contains modules that provide specific functionalities, often acting as clients or wrappers for backend services, shared core logic, or complex operations.
+    │   Details: These services are typically used by contexts or page components to fetch data, perform actions, and encapsulate business logic.
     │   ├── 📄 differ.ts
-    │   │   Purpose: Core template diffing implementation
+    │   │   Purpose: Frontend (browser) adapter for the V2 template diffing service.
     │   │   Details:
-    │   └── 📄 semanticParser.ts
-    │       Purpose: Core semantic parsing implementation
+    │   │   - Adapts the shared `DifferCore` (from `src/shared/services/differ.ts`) for the frontend environment.
+    │   │   - Uses the standard `lodash` library.
+    │   │   - Exports `DifferV2` class, which instantiates `DifferCore` with lodash.
+    │   │   - The core diffing logic is in the shared `DifferCore`.
+    │   │   - Re-exports diff-related types from the shared service.
+    │   │   Usage: Likely used by `EditorContext` or other frontend services when needing to compute differences between email template versions, for example, to generate `pendingChanges`.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
+    │   │   Details:
+    │   │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
+    │   │   - Overrides element generation (e.g., for buttons, images) to:
+    │   │     • Detect placeholder content using an `isPlaceholder` utility.
+    │   │     • Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
+    │   │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
+    │   │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
+    │   │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
+    │   │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
+    │   │   Details:
+    │   │   - Adapts `SemanticParserCore` (from `src/shared/services/semanticParser.ts`) for the frontend.
+    │   │   - Uses `JSDOM` to create a DOM from an HTML string for parsing.
+    │   │   - Implements the `parse(html)` method to convert HTML into a structured `EmailTemplateV2` object.
+    │   │   - Overrides methods for:
+    │   │     • Extracting global styles (body styles, content width).
+    │   │     • Locating the main email container and parsing sections/elements.
+    │   │     • Determining element types, potentially supporting more frontend-specific types (subtext, quote, code, list).
+    │   │   - Exports `SemanticParser` class.
+    │   │   Usage: Used to convert raw HTML (e.g., from an imported email or a previous version) into the structured `EmailTemplateV2` format that the editor and other services can work with.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and pending changes.
     │       Details:
-    └── 📁 types/
-        Purpose: Shared type definitions
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a crucial V1 to V2 upgrade path which involves client-side HTML generation to prepare V1 templates for the V2 editor.
+    │       - Chat history and pending template changes are also managed through this service.
+    │       - It uses the Supabase client for backend communication.
+    │       Usage:
+    │       - Used throughout the `EditorContext` (`src/features/contexts/EditorContext.tsx`) for most data operations related to projects, templates, and chat.
+    │       - Potentially used by other UI components or hooks that need direct access to project/template data, although primary interaction is expected via `EditorContext`.
+
+└── 📁 Types/
+    ├── 📄 ai.ts
+    │   Purpose: Defines TypeScript interfaces for the AI clarification flow.
+    │   Details:
+    │   - This file exports types that structure the communication between the frontend and the AI backend, particularly for the "clarify user intent" feature.
+    │   - `ClarificationMessage`: Represents a single message in the AI chat, detailing sender, text, suggestions, and whether it's a question. A simpler version, `SimpleClarificationMessage` (defined in `src/features/types/editor.ts`), is often used in the UI.
+    │   - `QuestionResponse`: Structure for when the AI needs more information from the user. Contains the question and suggestions.
+    │   - `CompleteResponse`: Structure for when the AI has enough information and provides the "perfect prompt" and elements to process.
+    │   - `ClarificationApiResponse`: A union type of `QuestionResponse` and `CompleteResponse`.
+    │   Usage:
+    │   - `ClarificationMessage`: Imported in `src/features/contexts/EditorContext.tsx`. The related `SimpleClarificationMessage` (from `src/features/types/editor.ts`) is used by `EditorContext.tsx` for managing the clarification conversation state and by `src/components/ChatInterface.tsx` for rendering messages.
+    │   - `QuestionResponse`, `CompleteResponse`, `ClarificationApiResponse`: These types (or identically named local definitions) are handled in `src/features/contexts/EditorContext.tsx` when processing the response from the `/clarify-user-intent` Supabase Edge Function. The backend function `src/backend/functions/clarify-user-intent/index.ts` also defines and uses these response types.
+    │
+    ├── 📄 editor.ts
+    │   Purpose: Defines various TypeScript interfaces and types primarily used within the frontend email editor's context and UI components.
+    │   Details:
+    │   - Imports `EmailTemplateV2Type` from `../../shared/types/validators`.
+    │   - Defines core email structure elements: `EmailElement`, `EmailSection`, `EmailTemplate`.
+    │   - `PendingChange`: Structure for a pending modification.
+    │   - `ChatMessage`: Base type for chat messages.
+    │   - `ExtendedChatMessage`: Enriched `ChatMessage` for UI (role, type, suggestions).
+    │   - `SimpleClarificationMessage`: Simplified AI clarification message for UI (role, content).
+    │   - `Project`: Data structure for a user's project.
+    │   - `EmailPreviewProps`: Props for the `EmailPreview` component.
+    │   Usage:
+    │   - Fundamental for `EditorContext` (`src/features/contexts/EditorContext.tsx`) for state management (email structure, chat, pending changes, project data).
+    │   - Consumed by UI components like `EmailPreview.tsx` (`EmailPreviewProps`) and `ChatInterface.tsx` (`ExtendedChatMessage`, `SimpleClarificationMessage`).
+    └── 📄 index.ts
+        Purpose: Barrel file re-exporting types from shared and local type modules.
         Details:
-        ├── 📄 common.ts
-        │   Purpose: Common shared types and enums
+        - Re-exports all types from `shared/types/` (elements, sections, template, validators, diffs).
+        - Re-exports all types from `./ai`.
+        - Explicitly re-exports specific types (`Project`, `ChatMessage`, etc.) from `./editor` to avoid potential naming conflicts.
+        Usage: Provides a single entry point (`@/features/types`) for importing commonly used types across the frontend features, simplifying import statements.
+
+└── 📁 utils/
+    └── 📄 placeholderUtils.ts
+        Purpose: Provides utility functions for identifying placeholder image URLs.
+        Details:
+        - Exports `isPlaceholder(src)` function.
+        - Checks for null/empty strings, '#', placeholder service URLs (via.placeholder.com), base64 1x1 pixel GIFs, and '@@PLACEHOLDER_IMAGE@@'.
+        Usage: Used by image rendering/processing logic (e.g., `EmailHtmlRenderer.tsx`, frontend `HtmlGenerator.ts`) to detect and handle placeholder images.
+
+└── 📁 hooks/
+    ├── 📄 use-mobile.tsx
+    │   Purpose: Provides React hooks for detecting mobile environments and related device characteristics.
+    │   Details:
+    │   - Defines `MOBILE_CONFIG` (breakpoints, aspect ratio).
+    │   - Exports `DeviceInfo` interface (`isMobile`, `deviceType`, `orientation`, `hasTouch`, `viewport`).
+    │   - Exports `useMobileDetection()` hook:
+    │     - Tracks device info using `useState`/`useEffect`.
+    │     - Detects touch capability.
+    │     - Listens to `resize` and `orientationchange` events.
+    │     - Determines `deviceType` (small-phone, large-phone, tablet, desktop) and `orientation`.
+    │     - Considers device mobile if width < breakpoint OR has touch.
+    │   - Exports legacy `useIsMobile()` hook returning just the boolean.
+    │   Usage: Used in UI components (`src/pages/`, `src/components/`) for conditional rendering/styling based on device type, orientation, or touch capability.
+    │
+    └── 📄 use-toast.ts
+        Purpose: Implements a custom toast notification system using React state and context/module state.
+        Details:
+        - Defines `TOAST_LIMIT`, `TOAST_REMOVE_DELAY`.
+        - Uses a reducer pattern (`actionTypes`, `Action`, `reducer`) to manage toast state (`memoryState`, `listeners`).
+        - Handles delayed removal for animations (`addToRemoveQueue`).
+        - Exports `toast({...})` function to create toasts (returns object with `id`, `dismiss`, `update`).
+        - Exports `useToast()` hook providing state (`toasts`) and control functions (`toast`, `dismiss`).
+        Usage: `useToast()` hook called in components to trigger notifications via `toast()`. A central `Toaster` component likely consumes the state to render toasts.
+
+└── 📁 integrations/
+    └── 📁 supabase/
+        ├── 📄 client.ts
+        │   Purpose: Initializes and exports the global Supabase client instance. Handles configuration and provides utility functions.
         │   Details:
-        ├── 📄 diffs.ts
-        │   Purpose: Template diffing type definitions
-        │   Details:
-        ├── 📄 editor.ts
-        │   Purpose: Editor and chat interface types
-        │   Details:
-        ├── 📄 elements.ts
-        │   Purpose: Email element type definitions
-        │   Details:
-        ├── 📄 index.ts
-        │   Purpose: Type re-exports for module access
-        │   Details:
-        ├── 📄 pendingChangeTypes.ts
-        │   Purpose: Pending change workflow types
-        │   Details:
-        ├── 📄 sections.ts
-        │   Purpose: Email section type definitions
-        │   Details:
-        ├── 📄 template.ts
-        │   Purpose: Email template structure types
-        │   Details:
-        ├── 📄 validators.ts
-        │   Purpose: Template validation schemas
-        │   Details:
-        └── 📁 config/
-            Purpose: Configuration for type implementations
+        │   - Reads `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` from env.
+        │   - Validates URL and key presence, throws error if missing.
+        │   - Creates and exports singleton `supabase` client.
+        │   - Exports `toJson` utility for safe JSON parsing (handles comments).
+        │   - Exports `handleSupabaseError` for standardized error logging.
+        │   Usage: The `supabase` client is imported globally for all Supabase interactions (auth, DB, functions, etc.). Helpers used as needed.
+        │
+        └── 📄 types.ts
+            Purpose: Provides TypeScript definitions generated from the Supabase database schema for type safety.
             Details:
-            └── 📄 elementDefaults.ts
-                Purpose: Default element configurations
-                Details:
+            - Typically generated by Supabase CLI.
+            - Defines main `Database` type mirroring the schema (Tables, Views, Functions, etc.).
+            - Includes detailed types for tables (`chat_messages`, `projects`, etc.) with `Row`, `Insert`, `Update` shapes.
+            - Provides generic helper types (`Tables<T>`, `TablesInsert<T>`, etc.).
+            Usage: Imported across the application (e.g., services, components) for type-safe database interactions via the Supabase client.
+
+└── 📁 lib/
+    ├── 📄 utils.ts
+    │   Purpose: UI utility functions, focusing on CSS class handling with Tailwind CSS.
+    │   Details:
+    │   - Exports the `cn` function.
+    │   - Uses `clsx` for conditional class joining and `tailwind-merge` to resolve Tailwind conflicts.
+    │   Usage: Widely used in `.tsx` components for clean and dynamic class name management.
+    │
+    ├── 📄 uuid-utils.ts
+    │   Purpose: Deprecated frontend UUID validation/cleaning utilities (proxy/duplicate of shared version).
+    │   Details:
+    │   - Marked `@deprecated`, advises using `src/shared/lib/uuid-utils.ts`.
+    │   - Implements `cleanUuid` and `isValidUuid`.
+    │   - Duplicated from shared lib due to historical import issues.
+    │   Usage: Used in older frontend code requiring UUID validation.
+    │
+    └── 📄 uuid.ts
+        Purpose: Deprecated frontend UUID v4 generation function (proxy to shared version).
+        Details:
+        - Marked `@deprecated`, advises using `@/shared/lib/uuid.ts`.
+        - Imports and re-exports `generateId` from the shared library.
+        - Exists for backward compatibility.
+        Usage: Used in older frontend code needing UUID generation.
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   └── 📄 semanticParser.ts
+    │       Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │       Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │       Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │
+    └── 📁 types/
+        Purpose: Shared TypeScript type definitions and configurations used across the entire application.
+        ├── 📁 config/
+        │   Purpose: Default configurations for shared entities.
+        │   └── 📄 elementDefaults.ts
+        │       Purpose: Defines default configurations (styles, layout, properties) for all V2 email element types and provides a factory function.
+        │       Details: Exports `elementDefaults` constant mapping `ElementTypeV2` to default objects (using `@@PLACEHOLDER_...@@` markers). Exports `createNewElement(type, initialContent?)` factory function using `generateId` and deep copying defaults.
+        │       Usage: Used when creating new elements programmatically (AI/backend) or via UI (editor) to ensure consistency.
+        │
+        ├── 📄 common.ts
+        │   Purpose: Defines common, fundamental TypeScript types shared across the application.
+        │   Details: Exports `InteractionMode` union type (`'ask' | 'edit' | 'major'`).
+        │   Usage: Provides basic shared types, imported where needed (e.g., `EditorContext`).
+        │
+        ├── 📄 diffs.ts
+        │   Purpose: Defines TypeScript interfaces for representing the results of diffing email templates.
+        │   Details: Exports `PropertyChange`, `ElementDiff`, `SectionDiff`, `TemplateDiffResult`. Defines the structure returned by `DifferCore`.
+        │   Usage: Used by `DifferCore` service and consumers of diff results (e.g., `EditorContext` for pending changes).
+        │
+        ├── 📄 editor.ts
+        │   Purpose: Defines TypeScript types specific to the editor interface, primarily for chat/messaging.
+        │   Details: Exports `ChatMessage` interface (`id`, `project_id`, `role`, `content`, `timestamp`, `isError`).
+        │   Usage: Used by frontend components (`ChatInterface`, `EditorContext`) for chat data.
+        │
+        ├── 📄 elements.ts
+        │   Purpose: Defines all TypeScript types related to individual email elements within the V2 template structure.
+        │   Details: Exports `ElementType` union. Defines `EmailElementLayout` and specific property interfaces (`HeaderElementProperties`, `ImageElementProperties`, etc.) for all types. Exports the main `EmailElement` discriminated union.
+        │   Usage: Foundational types used by services, contexts, validation, and defaults for defining email content elements.
+        │
+        ├── �� index.ts
+        │   Purpose: Barrel file for the `src/shared/types` directory.
+        │   Details: Explicitly re-exports types from `elements.ts`, `sections.ts`, `template.ts`, `validators.ts`, `diffs.ts`.
+        │   Usage: Provides a single import point (`@shared/types`) for common shared types.
+        │
+        ├── 📄 pendingChangeTypes.ts
+        │   Purpose: Defines TypeScript types for representing proposed template changes awaiting approval.
+        │   Details: Exports `PendingChangeInput` (for creation) and `PendingChange` (for stored record, includes metadata).
+        │   Usage: Structures data for the pending changes workflow (backend functions, frontend context/UI).
+        │
+        ├── 📄 sections.ts
+        │   Purpose: Defines TypeScript types for email template sections.
+        │   Details: Exports `EmailSectionStyles` and `EmailSection` (id, elements array, styles) interfaces.
+        │   Usage: Part of the core `EmailTemplateV2` structure, used by services handling template structure.
+        │
+        ├── 📄 template.ts
+        │   Purpose: Defines the top-level TypeScript types for the V2 email template structure.
+        │   Details: Exports `EmailGlobalStyles` and the main `EmailTemplate` (id, name, version, sections array, globalStyles) interfaces.
+        │   Usage: The central data structure for email content, used extensively by services, contexts, and backend functions.
+        │
+        └── 📄 validators.ts
+            Purpose: Provides Zod schemas and a validation function specifically for the `EmailTemplate` V2 structure.
+            Details: Defines comprehensive Zod schemas for all parts of `EmailTemplateV2`, including layouts, element properties, sections, global styles. Uses placeholders. Exports `validateEmailTemplateV2(templateData)` function using `safeParse`. Requires `version: 2`.
+            Usage: Ensures data integrity, especially for AI-generated content. Used primarily in backend functions (e.g., `generate-email-changes`) before saving data.
+

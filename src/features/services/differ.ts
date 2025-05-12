@@ -11,9 +11,8 @@
 
 import _ from 'lodash'; // Using regular lodash for browser/Node.js environment
 import { DifferCore } from '../../shared/services/differ';
-
 // Import types from the core
-import type {
+import type { 
   EmailTemplate,
   EmailSection,
   EmailElement,
