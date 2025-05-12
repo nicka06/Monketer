@@ -1,0 +1,114 @@
+# Email Template Editor - Project Structure
+
+## SIMPLE MAP
+
+```
+src/
+├── backend/         # Supabase serverless functions
+│   ├── .temp/       # Supabase CLI version tracking
+│   ├── functions/   # Edge function implementations
+│   │   ├── _shared/ # Shared utilities and services
+│   │   │   ├── lib/ # Shared utilities
+│   │   │   │   ├── constants.ts    # CORS and configuration
+│   │   │   │   ├── uuid-utils.ts   # UUID validation utilities
+│   │   │   │   └── uuid.ts         # UUID generation
+│   │   │   └── services/ # Shared services
+│   │   │       ├── differ.ts       # Template diffing
+│   │   │       ├── htmlGenerator.ts # HTML generation
+│   │   │       └── semanticParser.ts # HTML parsing
+│   │   ├── clarify-user-intent/    # AI conversation middleware
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── generate-email-changes/ # Email modification handler
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── manage-pending-changes/ # Change workflow manager
+│   │   │   └── index.ts            # Main function handler
+│   │   ├── send-preview-email/     # Email preview sender
+│   │   │   ├── index.ts            # Main function handler
+│   │   │   ├── deno.json           # Deno configuration for send-preview-email
+│   │   │   └── .npmrc              # NPM configuration for send-preview-email
+│   │   └── import_map.json         # Module import path configuration
+│   ├── config.toml  # Edge function configuration
+│   └── deno.jsonc   # Deno runtime configuration
+├── components/      # UI components for the application
+│   ├── editor/                  # Editor-specific UI components
+│   │   ├── EditorHeader.tsx
+│   │   ├── EmailPreviewControls.tsx
+│   │   ├── EmailPreviewPanel.tsx
+│   │   ├── LoadingScreen.tsx
+│   │   ├── InitialPromptScreen.tsx
+│   │   ├── PendingChangesBar.tsx
+│   │   └── PlaceholderEditModal.tsx
+│   ├── ui/                      # All basic UI component files
+│   ├── ChatInterface.tsx
+│   ├── EmailHtmlRenderer.tsx
+│   ├── EmailPreview.tsx
+│   ├── FeaturesSection.tsx
+│   ├── Footer.tsx
+│   ├── HeroSection.tsx
+│   ├── Navbar.tsx
+│   └── TestimonialsSection.tsx
+├── core/            # Application bootstrap and entry point
+│   ├── App.css
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── vite-env.d.ts
+│   └── index.css
+├── features/        # Business logic by domain
+│   ├── auth/
+│   │   └── useAuth.tsx
+│   ├── contexts/
+│   │   └── EditorContext.tsx
+│   ├── services/
+│   │   ├── differ.ts
+│   │   ├── htmlGenerator.ts
+│   │   ├── projectService.ts
+│   │   └── semanticParser.ts
+│   ├── types/
+│   │   ├── ai.ts
+│   │   ├── editor.ts
+│   │   └── index.ts
+│   └── utils/
+│       └── placeholderUtils.ts
+├── hooks/           # Reusable React hooks
+│   ├── use-toast.ts
+│   └── use-mobile.tsx
+├── integrations/    # External service connections
+│   └── supabase/
+│       ├── client.ts
+│       └── types.ts
+├── lib/             # General utilities
+│   ├── utils.ts
+│   ├── uuid-utils.ts
+│   └── uuid.ts
+├── pages/           # Page-level components
+│   ├── Dashboard.tsx
+│   ├── Editor.tsx
+│   ├── Index.tsx
+│   ├── Login.tsx
+│   ├── NotFound.tsx
+│   ├── PrivacyPolicy.tsx
+│   ├── SendEmailPage.tsx
+│   ├── Signup.tsx
+│   └── TermsOfService.tsx
+└── shared/          # Cross-environment shared code
+    ├── lib/         # Shared utilities
+    │   ├── uuid-utils.ts
+    │   └── uuid.ts
+    ├── services/    # Shared service implementations
+    │   ├── htmlGenerator.ts # Core HTML generator implementation
+    │   ├── differ.ts     # Core template diffing implementation
+    │   └── semanticParser.ts # Core semantic parsing implementation
+    └── types/       # Shared type definitions
+        ├── common.ts # Common shared types and enums
+        ├── diffs.ts # Template diffing type definitions
+        ├── editor.ts # Editor and chat interface types
+        ├── elements.ts # Email element type definitions
+        ├── index.ts # Type re-exports for module access
+        ├── pendingChangeTypes.ts # Pending change workflow types
+        ├── sections.ts # Email section type definitions
+        ├── template.ts # Email template structure types
+        ├── validators.ts # Template validation schemas
+        └── config/  # Configuration for type implementations
+            └── elementDefaults.ts # Default element configurations
+```
+

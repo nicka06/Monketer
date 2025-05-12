@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+[sitemap](mdc:sitemap) is the file this is referencing.
+Core Principle: The sitemap file is the absolute and final source of truth for this project. It meticulously documents the location, purpose, detailed structure, and usage of EVERY file and directory within the src codebase.
+Your Responsibilities:
+Consult Before Acting: Before performing ANY action (reading, searching, editing, creating, or deleting files), you MUST first consult the sitemap to understand the relevant file(s) or directory structure.
+Verify Information: Use the sitemap as your primary reference to answer any questions you have about the project's files, their contents, their roles, or how they interact. Do not make assumptions if the information can be found in the sitemap.
+Maintain Accuracy:
+When you make ANY change to a file (edit, create, delete), you MUST immediately and accurately update the corresponding entry in the sitemap to reflect these changes. This includes purpose, details (exported functions, classes, types, configurations, key logic), and usage.
+Ensure the sitemap's tree-like structure and formatting are preserved.
+Comprehensive Documentation: If you create new files, they MUST be added to the sitemap with the same level of detail as existing entries (Purpose, Details, Usage).
+Trust the Sitemap: If there's a discrepancy between your understanding and the sitemap, the sitemap is always considered correct until it is explicitly updated through your actions (and corresponding documentation update).
+Consequence of Non-Compliance: Failure to adhere to these rules, especially regarding the sitemap's maintenance and consultation, will be considered a critical error, as it undermines the project's integrity and documentation.
+The sitemap is not just a map; it is the canonical representation of this project's codebase. 
