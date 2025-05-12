@@ -10,12 +10,11 @@
  */
 
 import React, { useState, useRef, useEffect, FormEvent } from 'react';
-import { ChatMessage } from '@/features/types/editor';
+import { ExtendedChatMessage, SimpleClarificationMessage } from '@/features/types/editor';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2 } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-import { ClarificationMessage } from '@/features/types/ai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -28,9 +27,9 @@ type InteractionMode = 'ask' | 'edit' | 'major';
  */
 interface ChatInterfaceProps {
   // Array of chat messages to display
-  messages: ChatMessage[];
+  messages: ExtendedChatMessage[];
   // Optional array of clarification messages when AI needs more info
-  clarificationMessages?: ClarificationMessage[];
+  clarificationMessages?: SimpleClarificationMessage[];
   // Whether the AI is currently asking for clarification
   isClarifying?: boolean;
   // Callback when user sends a message
@@ -103,8 +102,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     isClarifying && 
     clarificationMessages && 
     clarificationMessages.length > 0 && 
-    clarificationMessages[clarificationMessages.length - 1].sender === 'ai' &&
-    clarificationMessages[clarificationMessages.length - 1].isQuestion === true;
+    clarificationMessages[clarificationMessages.length - 1].role === 'assistant';
 
   // Handle message submission
   const handleSubmit = (e?: FormEvent) => {
@@ -124,19 +122,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
    * Renders a single message (either chat or clarification)
    * Handles different message types, styling, and suggestion buttons
    */
-  const renderMessage = (msg: ChatMessage | ClarificationMessage, isClarificationMsg: boolean) => {
-    const isUser = ('role' in msg && msg.role === 'user') || ('sender' in msg && msg.sender === 'user');
-    const content = 'content' in msg ? msg.content : msg.text;
-    const id = msg.id;
+  const renderMessage = (msg: ExtendedChatMessage | SimpleClarificationMessage, isClarificationMsg: boolean) => {
+    const isUser = msg.role === 'user';
+    const content = msg.content;
+    const id = 'id' in msg ? msg.id : `simple-${Date.now()}-${Math.random()}`;
     const isError = 'isError' in msg && msg.isError;
 
-    // Extract suggestions if this is an AI clarification message
-    let suggestions: ClarificationMessage['suggestions'] = undefined;
-    if (isClarificationMsg && 'sender' in msg && msg.sender === 'ai') {
-      suggestions = (msg as ClarificationMessage).suggestions;
+    let suggestions: ExtendedChatMessage['suggestions'] = undefined;
+    if (!isClarificationMsg && 'suggestions' in msg && msg.role === 'assistant') {
+      suggestions = (msg as ExtendedChatMessage).suggestions;
     }
 
-    // Determine message styling based on type
     const messageStyle = isClarificationMsg ? 'bg-blue-50 dark:bg-blue-900/30' : 
                          isUser ? 'bg-primary/5 dark:bg-primary/10' : 'bg-background';
 
@@ -150,27 +146,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           isError ? "border-red-500 border" : "border border-transparent"
         )}
       >
-        {/* Message content with markdown support */}
         <div className="prose dark:prose-invert prose-sm max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {content}
+            {content || ''}
           </ReactMarkdown>
         </div>
-        {/* Error message if applicable */}
         {isError && <p className="text-xs text-red-500 mt-1">An error occurred.</p>}
-        {/* Suggestion buttons for AI clarifications */}
-        {suggestions && suggestions.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700 flex flex-wrap gap-2">
-            {suggestions.map((suggestion, index) => (
+        {suggestions && suggestions.length > 0 && onSuggestionClick && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-2">
+            {suggestions.map((suggestionText, index) => (
               <Button
                 key={index}
                 variant="outline"
                 size="sm"
-                onClick={() => onSuggestionClick && onSuggestionClick(suggestion.value)}
+                onClick={() => onSuggestionClick(suggestionText)}
                 disabled={isLoading}
-                className="text-xs bg-blue-100 hover:bg-blue-200 dark:bg-blue-800 dark:hover:bg-blue-700 dark:text-blue-200 border-blue-300 dark:border-blue-600"
+                className="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600"
               >
-                {suggestion.text}
+                {suggestionText}
               </Button>
             ))}
           </div>
@@ -181,13 +174,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700">
-      {/* Interaction Mode Selection Header */}
       <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Interaction Mode:</h3>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          {/* Major Edit Mode Button */}
           <Button 
             variant={selectedMode === 'major' ? 'default' : 'outline'} 
             size="sm" 
@@ -197,7 +188,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           >
             <Wand2 className="mr-1.5 h-3.5 w-3.5" />Major Edit
           </Button>
-          {/* Minor Edit Mode Button */}
           <Button 
             variant={selectedMode === 'edit' ? 'default' : 'outline'} 
             size="sm" 
@@ -207,7 +197,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           >
             <Paperclip className="mr-1.5 h-3.5 w-3.5 transform -rotate-45" />Minor Edit
           </Button>
-          {/* Just Ask Mode Button */}
           <Button 
             variant={selectedMode === 'ask' ? 'default' : 'outline'} 
             size="sm" 
@@ -220,13 +209,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
       </div>
 
-      {/* Message Display Area */}
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
-        {/* Regular chat messages */}
-        {messages.map(msg => renderMessage(msg, false))}
-        {/* Clarification messages when active */}
-        {isClarifying && clarificationMessages && clarificationMessages.map(msg => renderMessage(msg, true))}
-        {/* Loading indicator */}
+        {messages.map((msg, index) => renderMessage(msg, false))}
+        {isClarifying && clarificationMessages && clarificationMessages.map((msg, index) => renderMessage(msg, true))}
         {isLoading && (
           <div className="flex items-center justify-start p-3 mb-3 text-gray-500 dark:text-gray-400 animate-pulse">
             <div className="h-2.5 bg-gray-300 dark:bg-gray-600 rounded-full w-8 mr-2"></div>
@@ -235,16 +220,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
       </ScrollArea>
 
-      {/* Input Area */}
       <div className="p-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-800">
-        {/* Clarification Banner */}
         {showClarificationBanner && (
           <div className="mb-2 p-2 text-xs text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 rounded-md flex items-center">
             <AlertTriangle className="h-4 w-4 mr-2 flex-shrink-0" />
             <span>Please answer the AI's question above to continue.</span>
           </div>
         )}
-        {/* Message Input Form */}
         <form onSubmit={handleSubmit} className="flex items-start space-x-2">
           <Textarea
             ref={textareaRef}
@@ -261,7 +243,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             rows={1}
             disabled={isLoading}
           />
-          {/* Send Button */}
           <Button type="submit" size="icon" disabled={isLoading || !inputValue.trim()} className="h-10 w-10 flex-shrink-0 rounded-md">
             {isLoading ? 
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div> : 
@@ -270,7 +251,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <span className="sr-only">Send</span>
           </Button>
         </form>
-        {/* Keyboard Shortcut Hint */}
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 flex items-center">
           <CornerDownLeft className="h-3 w-3 mr-1" /> Shift+Enter for new line.
         </p>

@@ -24,7 +24,7 @@ import {
   exportEmailAsHtmlV2
 } from '@/features/services/projectService';
 // Type definitions for core data structures
-import { Project, PendingChange, ChatMessage } from '@/features/types/editor';
+import { Project, PendingChange, ChatMessage, ExtendedChatMessage, SimpleClarificationMessage } from '@/features/types/editor';
 // Import for email template type definition from the Supabase functions shared types
 import { EmailTemplate as EmailTemplateV2 } from '../../shared/types/template';
 // Type for AI clarification messages
@@ -45,32 +45,12 @@ import { HtmlGeneratorV2 } from '@/features/services/htmlGenerator';
 type InteractionMode = 'ask' | 'edit' | 'major';
 
 /**
- * Simplified message structure for the AI clarification flow
- * Used in the conversation history between user and AI during the
- * email requirements gathering phase
- */
-interface SimpleClarificationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-/**
  * Local definition of the API response structure for the clarification endpoints
  * Contains fields needed to handle the multi-turn conversation for email creation
  */
 interface ClarificationApiResponse {
   message?: string;
   context?: any;
-  suggestions?: string[];
-}
-
-/**
- * Extended chat message interface that builds upon the base ChatMessage type
- * from the database, adding UI-specific properties needed in the editor
- */
-interface ExtendedChatMessage extends Omit<ChatMessage, 'project_id'> {
-  role: 'user' | 'assistant';
-  type?: 'question' | 'edit_request' | 'clarification' | 'success' | 'error' | 'answer' | 'edit_response';
   suggestions?: string[];
 }
 
@@ -429,6 +409,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         else {
           console.log('No project identifiers in URL, starting fresh');
           setIsLoadingProject(false);
+          setIsCreatingFirstEmail(true);
           
           // Check for initial content that might have been passed from landing page
           const storedPrompt = localStorage.getItem('initialEmailPrompt');
@@ -543,34 +524,22 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (isCreatingFirstEmail) {
         setProgress(20);
         
-        // Create project if it doesn't exist yet
-        let projectId = actualProjectId;
-        if (!projectId) {
-          console.log("Creating a new project...");
+        let currentProjectId = actualProjectId; // Use a local var that can be updated
+        if (!currentProjectId) {
+          console.log("Creating a new project for first email flow...");
           setProgress(30);
-          
           try {
-            // Create a new project in the database
-            const newProject = await createProject({
-              name: projectTitle,
-              user_id: user?.id || ''
-            } as unknown as string); // Type cast to match API
-            
+            const newProject = await createProject(projectTitle); // Assuming projectTitle is suitable
             if (!newProject?.id) {
-              throw new Error("Failed to create project");
+              throw new Error("Failed to create project for first email flow");
             }
-            
-            // Update state with the new project
             setActualProjectId(newProject.id);
             setProjectData(newProject);
-            projectId = newProject.id;
-            
-            // Update URL with new project ID
+            currentProjectId = newProject.id; // Update local var
             window.history.replaceState({}, '', `/editor/${newProject.id}`);
-            
             console.log("Created new project with ID:", newProject.id);
           } catch (error) {
-            console.error("Error creating project:", error);
+            console.error("Error creating project in first email flow:", error);
             toast({ title: 'Error', description: 'Failed to create project', variant: 'destructive' });
             setIsLoading(false);
             setProgress(0);
@@ -578,122 +547,132 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           }
         }
         
+        if (!currentProjectId) {
+          toast({ title: 'Error', description: 'Project ID missing after creation attempt.', variant: 'destructive' });
+          setIsLoading(false); return;
+        }
+
         setProgress(40);
-        
-        // Begin clarification flow for first email
-        setIsClarifying(true);
-        setClarificationConversation([
-          { role: 'user', content: message }
-        ]);
-        
-        // Make API call to start email creation
-        try {
-          setProgress(50);
+        console.log(`[EditorContext] Initiating 'clarify-user-intent' for project ${currentProjectId}`);
+
+        // Step 1: Call 'clarify-user-intent'
+        const clarifyPayload = { // Conforms to ClarifyUserIntentPayload
+          userMessage: message,
+          mainChatHistory: chatMessages.slice(-5), // Send recent history
+          currentSemanticEmailV2: null,
+          ongoingClarificationContext: null, // No prior clarification for the very first message
+          projectId: currentProjectId,
+          mode: 'major', 
+        };
+
+        const clarifyResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+          },
+          body: JSON.stringify(clarifyPayload),
+        });
+
+        setProgress(60);
+
+        if (!clarifyResponse.ok) {
+          const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent' }));
+          console.error("Error from clarify-user-intent:", clarifyResponse.status, errorData);
+          throw new Error(errorData.error || errorData.message || `Failed to clarify intent (status ${clarifyResponse.status})`);
+        }
+
+        const clarifyData = await clarifyResponse.json(); // QuestionResponse or CompleteResponse
+
+        if (clarifyData.status === 'requires_clarification') {
+          console.log("[EditorContext] 'clarify-user-intent' requires clarification.");
+          setIsClarifying(true); // Enter clarification mode
+          setClarificationContext(clarifyData.aiSummaryForNextTurn);
           
-          // Call the email generation endpoint with the initial prompt
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-generation-v2`, {
+          const questionMessage: ExtendedChatMessage = {
+            id: generateId(),
+            content: clarifyData.question.text,
+            role: 'assistant',
+            timestamp: new Date(),
+            type: 'clarification',
+            suggestions: clarifyData.question.suggestions?.map(s => s.text) || [], // Assuming suggestions are just text arrays for UI
+          };
+          setChatMessages(prev => [...prev, questionMessage]);
+          // Add to clarificationConversation as well for dedicated display if needed
+          setClarificationConversation(prev => [
+            ...prev,
+            { role: 'user', content: message }, // User's initial prompt
+            { role: 'assistant', content: clarifyData.question.text } // AI's question
+          ]);
+
+        } else if (clarifyData.status === 'complete') {
+          console.log("[EditorContext] 'clarify-user-intent' complete. Proceeding to 'generate-email-changes'.");
+          setProgress(70);
+
+          // Step 2: Call 'generate-email-changes'
+          const generatePayload = { // Conforms to GenerateEmailChangesPayload
+            projectId: currentProjectId,
+            mode: 'major', // As expected by generate-email-changes
+            perfectPrompt: clarifyData.perfectPrompt,
+            elementsToProcess: clarifyData.elementsToProcess,
+            currentSemanticEmailV2: null, // No existing email for the first creation
+            // newTemplateName: projectTitle, // Optional: use current project title or derive
+          };
+
+          const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
             },
-            body: JSON.stringify({
-              projectId,
-              prompt: message,
-              mode: 'create',
-            }),
+            body: JSON.stringify(generatePayload),
           });
-          
-          setProgress(80);
-          
-          // Handle error responses
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.message || 'Failed to generate email');
+
+          setProgress(90);
+
+          if (!generateResponse.ok) {
+            const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes' }));
+            console.error("Error from generate-email-changes:", generateResponse.status, errorData);
+            throw new Error(errorData.error || errorData.message || `Failed to generate email (status ${generateResponse.status})`);
           }
-          
-          const data = await response.json() as ExtendedClarificationResponse;
-          
-          // Case 1A: AI needs clarification before generating the email
-          if (data.needsClarification) {
-            // Continue clarification flow
-            setClarificationConversation(prev => [
-              ...prev,
-              { role: 'assistant', content: data.message || "I need more details to create your email. Can you provide more information?" }
-            ]);
-            
-            // Store context for continuation
-            if (data.context) {
-              setClarificationContext(data.context);
+
+          const generateData = await generateResponse.json(); // Expects { newSemanticEmail, newHtml, newPendingChanges }
+
+          if (generateData.newHtml && generateData.newSemanticEmail) {
+            console.log("[EditorContext] Email generated successfully by 'generate-email-changes'.");
+            const updatedProjectData = await updateProject(currentProjectId, {
+              current_html: generateData.newHtml,
+              semantic_email_v2: generateData.newSemanticEmail,
+              name: generateData.newSemanticEmail.name || projectTitle, // Update project name if template name changed
+            });
+
+            if (updatedProjectData) {
+              setProjectData(updatedProjectData);
+              setLivePreviewHtml(generateData.newHtml);
+              setPendingChanges(generateData.newPendingChanges || []); // Assuming it can be null
+              setHasCode(true);
+              setHasFirstDraft(true);
+              setIsCreatingFirstEmail(false); // Exit first email creation flow
+              setIsClarifying(false); // Ensure clarification mode is exited
+
+              const successMessage: ExtendedChatMessage = {
+                id: generateId(),
+                content: clarifyData.finalSummary || "I've created your email based on your description!",
+                role: 'assistant',
+                timestamp: new Date(),
+                type: 'success',
+              };
+              setChatMessages(prev => [...prev, successMessage]);
+            } else {
+              throw new Error("Failed to update project with generated email data.");
             }
-            
-            // Add AI message to chat to request more information
-            const newAiMessage: ExtendedChatMessage = {
-              id: generateId(),
-              content: data.message || "I need more details to create your email.",
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'clarification',
-              suggestions: data.suggestions || [],
-            };
-            
-            setChatMessages(prev => [...prev, newAiMessage]);
-          } 
-          // Case 1B: AI can generate the email immediately without clarification
-          else if (data.emailData) {
-            // Direct email generation succeeded
-            console.log("Email data received directly:", data.emailData);
-            
-            // Update project with new email data
-            if (projectId) {
-              const updatedProject = await updateProject(projectId, {
-                current_html: data.emailData.html,
-                semantic_email_v2: data.emailData.semantic,
-              });
-              
-              if (updatedProject) {
-                // Update state with the generated email
-                setLivePreviewHtml(data.emailData.html);
-                setProjectData(updatedProject);
-                setHasCode(true);
-                setHasFirstDraft(true);
-                setIsClarifying(false);
-                setIsCreatingFirstEmail(false);
-                
-                // Add AI response to chat confirming creation
-                const successMessage: ExtendedChatMessage = {
-                  id: generateId(),
-                  content: data.message || "I've created your email based on your description!",
-                  role: 'assistant',
-                  timestamp: new Date(),
-                  type: 'success',
-                };
-                
-                setChatMessages(prev => [...prev, successMessage]);
-              }
-            }
+          } else {
+            console.error("Invalid response from 'generate-email-changes':", generateData);
+            throw new Error("Received invalid data after email generation.");
           }
-        } catch (error) {
-          // Handle errors during email generation
-          console.error("Error in email generation:", error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to generate email';
-          
-          toast({
-            title: 'Generation Error',
-            description: errorMessage,
-            variant: 'destructive',
-          });
-          
-          // Add error message to chat
-          const aiErrorMessage: ExtendedChatMessage = {
-            id: generateId(),
-            content: `Sorry, I encountered an error: ${errorMessage}`,
-            role: 'assistant',
-            timestamp: new Date(),
-            type: 'error',
-          };
-          
-          setChatMessages(prev => [...prev, aiErrorMessage]);
+        } else {
+          console.error("Unknown status from 'clarify-user-intent':", clarifyData.status);
+          throw new Error(`Unknown status from clarification: ${clarifyData.status}`);
         }
       } 
       // Flow 2: Continuing an existing clarification conversation

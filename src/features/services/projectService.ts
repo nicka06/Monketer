@@ -422,7 +422,7 @@ export async function getProject(projectId: string) {
     // Fetch related pending changes
     const { data: pendingChanges, error: changesError } = await supabase
       .from('pending_changes')
-      .select('id, element_id, change_type, old_content, new_content, status')
+      .select('id, change_type, old_content, new_content, status, diff')
       .eq('project_id', projectId)
       .eq('status', 'pending') // Only fetch pending changes
       .order('created_at', { ascending: true });
@@ -454,7 +454,6 @@ export async function getProject(projectId: string) {
     // Convert pending changes
     const formattedChanges: PendingChange[] = (pendingChanges || []).map((chg: any) => ({
       id: chg.id,
-      elementId: chg.element_id,
       changeType: chg.change_type,
       oldContent: chg.old_content,
       newContent: chg.new_content,

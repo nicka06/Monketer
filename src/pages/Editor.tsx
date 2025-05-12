@@ -48,7 +48,8 @@ const EditorContent = () => {
     handleModeChange,
     handleSendMessage,
     handleSuggestionSelected,
-    handleFileSelected
+    handleFileSelected,
+    actualProjectId
   } = useEditor();
 
   // Reference to file input for image uploads from placeholders
@@ -91,8 +92,8 @@ const EditorContent = () => {
       {/* Main content with conditional rendering based on state */}
       {isLoadingProject ? (
         <LoadingScreen type="loading" />
-      ) : (!projectData?.semantic_email_v2 && !isClarifying && !isCreatingFirstEmail) ? (
-        // Initial prompt for creating the first email
+      ) : !actualProjectId ? (
+        // Show InitialPromptScreen if no project ID is set and not loading
         <InitialPromptScreen />
       ) : (
         // Main Editor UI with resizable panels
