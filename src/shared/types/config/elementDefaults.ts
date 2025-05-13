@@ -23,7 +23,7 @@
  */
 
 import { EmailElement as EmailElementTypeV2, ElementType as ElementTypeV2, SocialPlatform } from '../elements.ts';
-import { generateId } from '../../lib/uuid';
+import { generateId } from '../../lib/uuid.ts';
 
 /**
  * Standard default configuration for all email element types.

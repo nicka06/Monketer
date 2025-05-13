@@ -41,7 +41,8 @@ interface QuestionResponse {
     text: string;                                   // Question text to display to user
     suggestions?: Array<{ text: string; value: string }>; // Optional clickable suggestions
   };
-  aiSummaryForNextTurn: string;                     // Context to be passed to the next interaction
+  aiSummaryForNextTurn: string;                     // Context to be passed to the *AI* in the next interaction
+  updatedClarificationContext: ClarificationContext; // Context (with incremented count) to be passed back to the *frontend* for the next interaction
 }
 
 /**
@@ -65,6 +66,17 @@ interface CompleteResponse {
 const MAX_CHAT_HISTORY_TOKENS = 2000;               // Limit for chat history context
 const MAX_EMAIL_CONTEXT_TOKENS = 1500;              // Limit for email structure context
 
+// Define the maximum number of clarification questions allowed
+const MAX_CLARIFICATION_QUESTIONS = 8;
+
+/**
+ * Structure for the context passed between clarification turns.
+ */
+interface ClarificationContext {
+  summary: string;
+  questionCount: number;
+}
+
 /**
  * Helper function to roughly estimate token count for AI models
  * A simple approximation (1 token ≈ 4 characters)
@@ -73,6 +85,8 @@ const MAX_EMAIL_CONTEXT_TOKENS = 1500;              // Limit for email structure
  * @returns Estimated number of tokens
  */
 function estimateTokens(text: string): number {
+  // A simple approximation (1 token ≈ 4 characters) may not be accurate for all models.
+  // Consider using a more sophisticated tokenizer library if precision is critical.
   return Math.ceil(text.length / 4);
 }
 
@@ -137,28 +151,7 @@ serve(async (req) => {
 
     // --- 3. Construct System Prompt (Detailed system prompt will be complex) ---
     // The system prompt defines the AI's role, available element types, and expected response formats
-    let baseSystemPrompt = `
-Your Role: You are an expert email design assistant. Your primary goal is to deeply and accurately understand the user's request for creating or modifying an email. If their request is ambiguous or lacks critical details, you MUST ask concise, targeted clarifying questions. Once all necessary information is gathered and the user's intent is clear, you will summarize the complete request into a "perfect prompt" and a structured list of "elements to process" that will be used by a separate Email Generation AI.
-
-Your Inputs for Analysis:
-1.  \`userMessage\`: The most recent message from the user.
-2.  \`mainChatHistory\`: The preceding conversation history (if any).
-3.  \`currentSemanticEmailV2\`: The JSON structure of the current email being edited (if any).
-4.  \`ongoingClarificationContext\`: A summary of our previous clarification interaction if this is a follow-up to a question you asked.
-5.  \`mode\`: The current mode of operation ('ask', 'edit', or 'major').
-
-${MODE_PROMPTS[payload.mode]}
-
-IMPORTANT CONTEXT HANDLING:
-- When users mention background colors, this refers to the email's global background (bodyBackgroundColor in globalStyles).
-- Always maintain style preferences (like colors, fonts, alignment) throughout the clarification flow.
-- Your aiSummaryForNextTurn MUST include ALL style preferences mentioned so far, even when asking about other details.
-
-ELEMENT TYPES AND DEFAULTS:
-The following are the available element types and their default properties. You MUST use these exact types and property structures:
-
-header: {
-  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
+    let baseSystemPrompt = `\nYour Role: You are an expert email design assistant. Your primary goal is to deeply and accurately understand the user\\\'s request for creating or modifying an email. If their request is ambiguous or lacks critical details, you MUST ask concise, targeted clarifying questions. Once all necessary information is gathered and the user\\\'s intent is clear, you will summarize the complete request into a \\\"perfect prompt\\\" and a structured list of \\\"elements to process\\\" that will be used by a separate Email Generation AI.\n\nYour Inputs for Analysis:\n1.  \\\`userMessage\\\`: The most recent message from the user.\n2.  \\\`mainChatHistory\\\`: The preceding conversation history (if any).\n3.  \\\`currentSemanticEmailV2\\\`: The JSON structure of the current email being edited (if any).\n4.  \\\`ongoingClarificationContext\\\`: A structured object containing \\\`summary\\\` from the previous turn and \\\`questionCount\\\`.\n5.  \\\`mode\\\`: The current mode of operation (\\\'ask\\\', \\\'edit\\\', or \\\'major\\\').\n\n${MODE_PROMPTS[payload.mode]}\n\nIMPORTANT CONTEXT HANDLING:\n- When users mention background colors, this refers to the email\\\'s global background (bodyBackgroundColor in globalStyles).\n- Always maintain style preferences (like colors, fonts, alignment) throughout the clarification flow.\n- Your aiSummaryForNextTurn MUST include ALL style preferences mentioned so far, even when asking about other details.\n\n**QUESTION STRATEGY:**\n- **Prioritize Broad Questions:** Start by asking broad questions about the overall goal, target audience, or main call to action. Only ask about specific details like fonts or exact padding *after* the main structure is clear, unless the user initiates the detail.\n- **Limit:** Aim to resolve ambiguity within a maximum of ${MAX_CLARIFICATION_QUESTIONS} clarification questions. Check the \\\`questionCount\\\` in the ongoing context. If you have reached the limit, you MUST provide a 'complete' response.\n\nELEMENT TYPES AND DEFAULTS:\nThe following are the available element types and their default properties. You MUST use these exact types and property structures:\n\nheader: {\n  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
   properties: { 
     level: 'h1', 
     text: string,
@@ -172,10 +165,7 @@ header: {
       lineHeight: string | null
     }
   }
-}
-
-text: {
-  layout: { align: 'center', padding: { top: '5px', bottom: '5px' } },
+}\ntext: {\n  layout: { align: 'center', padding: { top: '5px', bottom: '5px' } },
   properties: { 
     text: string,
     typography: { 
@@ -184,14 +174,10 @@ text: {
       fontWeight: string | null,
       fontStyle: string | null,
       color: string | null,
-      textAlign: 'center',
       lineHeight: '1.5'
     }
   }
-}
-
-button: {
-  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
+}\nbutton: {\n  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
   properties: {
     button: {
       href: string,
@@ -207,10 +193,7 @@ button: {
       fontWeight: 'bold'
     }
   }
-}
-
-image: {
-  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
+}\nimage: {\n  layout: { align: 'center', padding: { top: '10px', bottom: '10px' } },
   properties: {
     image: {
       src: string,
@@ -221,10 +204,7 @@ image: {
       linkTarget: '_blank' | '_self' | null
     }
   }
-}
-
-divider: {
-  layout: { padding: { top: '10px', bottom: '10px' } },
+}\ndivider: {\n  layout: { padding: { top: '10px', bottom: '10px' } },
   properties: {
     divider: {
       color: string | null,
@@ -232,83 +212,13 @@ divider: {
       width: string | null
     }
   }
-}
-
-spacer: {
-  layout: {},
+}\nspacer: {\n  layout: {},
   properties: {
     spacer: {
       height: string
     }
   }
-}
-
-Your Response MUST be one of two JSON object structures described below. Do NOT add any explanatory text outside of the JSON structure.
-
-// ---- RESPONSE OPTION 1: CLARIFICATION IS NEEDED ---- //
-If the user's request is unclear, ambiguous, or missing information essential for generating or modifying email elements, you MUST ask for clarification.
-
-Key Instructions for Clarification:
-- Ask only ONE concise question at a time.
-- Your question should aim to resolve the most critical ambiguity first.
-- Ensure your question is a logical continuation based on the \`ongoingClarificationContext\` and the user's most recent answer. 
-  **Do not repeat a question if the \`ongoingClarificationContext\` shows it was already answered.**
-- For each question, if appropriate, provide 2-3 short, clickable \`suggestions\` (as \`{text: string, value: string}\` objects) that represent likely or common answers. The \`value\` should be what is sent back if the user clicks it.
-
-Required JSON Structure for Clarification Response:
-\`\`\`json
-{
-  "status": "requires_clarification",
-  "question": {
-    "id": "q_unique_identifier_for_this_question",
-    "text": "Your concise clarifying question here?",
-    "suggestions": [
-      {"text": "Suggested Answer A", "value": "value_for_a"},
-      {"text": "Suggested Answer B", "value": "value_for_b"}
-    ]
-  },
-  "aiSummaryForNextTurn": "A brief summary reflecting your NEW understanding AFTER processing the user's current answer. Critically, this summary MUST incorporate ALL style preferences and design choices mentioned so far, including colors, fonts, alignments, etc. Then state what specific information is STILL missing or what the NEXT most critical ambiguity is that your NEW question (above) aims to resolve. This summary will be provided back to you as ongoingClarificationContext in the next interaction. If the user's answer fully resolves your previous point of confusion, this summary must reflect that, and your next question should move to a new topic of ambiguity."
-}
-\`\`\`
-
-// ---- RESPONSE OPTION 2: CLARIFICATION COMPLETE / REQUEST IS CLEAR ---- //
-If you are confident that you have all the necessary details from the \`userMessage\` (potentially augmented by \`mainChatHistory\`, \`currentSemanticEmailV2\`, or previous clarification turns via \`ongoingClarificationContext\`) and the user's intent is clear, respond with a completion object:
-
-Required JSON Structure for Completion Response:
-\`\`\`json
-{
-  "status": "complete",
-  "perfectPrompt": "A concise, clear summary of the user's complete request",
-  "elementsToProcess": [
-    {
-      "type": "header" | "text" | "button" | "image" | "divider" | "spacer",
-      "action": "add" | "modify" | "delete",
-      "userPreferences": {
-        // Must match the exact structure from ELEMENT TYPES AND DEFAULTS above
-        // Example for a header:
-        "layout": { "align": "center", "padding": { "top": "10px", "bottom": "10px" } },
-        "properties": {
-          "level": "h1",
-          "text": "Example Header",
-          "typography": {
-            "fontFamily": null,
-            "fontSize": null,
-            "fontWeight": null,
-            "fontStyle": null,
-            "color": null,
-            "textAlign": "center",
-            "lineHeight": null
-          }
-        }
-      },
-      "targetId": "optional-target-id",
-      "placeholderId": "optional-placeholder-id"
-    }
-  ],
-  "finalSummary": "A summary of all the changes to be made"
-}
-\`\`\`
-`;
+}\n\nYour Response MUST be one of two JSON object structures described below. Do NOT add any explanatory text outside of the JSON structure.\n\n// ---- RESPONSE OPTION 1: CLARIFICATION IS NEEDED ---- //\nIf the user's request is unclear, ambiguous, or missing information essential for generating or modifying email elements, you MUST ask for clarification.\n\nKey Instructions for Clarification:\n- Ask only ONE concise question at a time.\n- Your question should aim to resolve the most critical ambiguity first, following the **QUESTION STRATEGY** above.\n- Ensure your question is a logical continuation based on the \\\`ongoingClarificationContext.summary\\\` and the user\\\'s most recent answer.\n  **Do not repeat a question if the context shows it was already answered.**\n- For each question, if appropriate, provide 2-3 short, clickable \\\`suggestions\\\` (as \\\`{text: string, value: string}\\\` objects) that represent likely or common answers. The \\\`value\\\` should be what is sent back if the user clicks it.\n\nRequired JSON Structure for Clarification Response:\n\\\`\\\`\\\`json\n{\n  \\\"status\\\": \\\"requires_clarification\\\",\n  \\\"question\\\": {\n    \\\"id\\\": \\\"q_unique_identifier_for_this_question\\\",\n    \\\"text\\\": \\\"Your concise clarifying question here?\\\",\n    \\\"suggestions\\\": [\n      {\\\"text\\\": \\\"Suggested Answer A\\\", \\\"value\\\": \\\"value_for_a\\\"},\n      {\\\"text\\\": \\\"Suggested Answer B\\\", \\\"value\\\": \\\"value_for_b\\\"}\n    ]\n  },\n  \\\"aiSummaryForNextTurn\\\": \\\"A brief summary reflecting your NEW understanding AFTER processing the user\'s current answer. \\\nCritically, this summary MUST incorporate ALL style preferences and design choices mentioned so far, \\\nincluding colors, fonts, alignments, etc. Then state what specific information is STILL missing or \\\nwhat the NEXT most critical ambiguity is that your NEW question (above) aims to resolve. \\\nThis summary will be provided back to you as the \'summary\' part of ongoingClarificationContext \\\nin the next interaction. If the user\'s answer fully resolves your previous point of confusion, \\\nthis summary must reflect that, and your next question should move to a new topic of ambiguity.\\\"\n}\n\\\`\\\`\\\`\n\n// ---- RESPONSE OPTION 2: CLARIFICATION COMPLETE / REQUEST IS CLEAR ---- //\nIf you are confident that you have all the necessary details from the \\\`userMessage\\\` (potentially augmented by \\\`mainChatHistory\\\`, \\\`currentSemanticEmailV2\\\`, or previous clarification turns via \\\`ongoingClarificationContext\\\`) and the user's intent is clear, respond with a completion object:\n\nRequired JSON Structure for Completion Response:\n\`\`\`json\n{\n  \"status\": \"complete\",\n  \"perfectPrompt\": \"A concise, clear summary of the user\'s complete request\",\n  \"elementsToProcess\": [\n    {\n      \"type\": \"header\" | \"text\" | \"button\" | \"image\" | \"divider\" | \"spacer\",\n      \"action\": \"add\" | \"modify\" | \"delete\",\n      \"userPreferences\": {\n        // Must match the exact structure from ELEMENT TYPES AND DEFAULTS above\n        // Example for a header:\n        \"layout\": { \"align\": \"center\", \"padding\": { \"top\": \"10px\", \"bottom\": \"10px\" } },\n        \"properties\": {\n          \"level\": \"h1\",\n          \"text\": \"Example Header\",\n          \"typography\": {\n            \"fontFamily\": null,\n            \"fontSize\": null,\n            \"fontWeight\": null,\n            \"fontStyle\": null,\n            \"color\": null,\n            \"textAlign\": \"center\",\n            \"lineHeight\": null\n          }\n        }\n      },\n      \"targetId\": \"optional-target-id\",\n      \"placeholderId\": \"optional-placeholder-id\"\n    }\n    // ... more elements if needed ...\n  ],\n  \"finalSummary\": \"A summary of all the changes to be made\"\n}\n\`\`\`\n`;
 
     // Append V2 Type Definitions and key user preferences hints
     // This section provides additional guidance about element types and properties
@@ -363,22 +273,46 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
       }
     }
 
-    // --- 6. Add Previous Clarification Context ---
-    // If we're in a multi-turn clarification flow, include the context from previous turns
+    // --- 6. Process Clarification Context & Question Count ---
+    let currentQuestionCount = 0;
+    let previousSummary = 'No previous clarification context.';
+
     if (payload.ongoingClarificationContext) {
-      let contextText = '';
       try {
-        contextText = typeof payload.ongoingClarificationContext === 'string' 
-          ? payload.ongoingClarificationContext 
-          : JSON.stringify(payload.ongoingClarificationContext);
-      } catch (e) { contextText = 'Could not stringify previous context.'; }
-      
-      // Add as an assistant message to represent previous understanding
-      messagesForAI.push({ role: 'assistant', content: `Assistant summary from previous turn: ${contextText}` });
+        let parsedContext: Partial<ClarificationContext> = {};
+        if (typeof payload.ongoingClarificationContext === 'string') {
+          // Attempt to parse if it's a JSON string
+          parsedContext = JSON.parse(payload.ongoingClarificationContext);
+        } else if (typeof payload.ongoingClarificationContext === 'object' && payload.ongoingClarificationContext !== null) {
+          // Use directly if it's already an object
+          parsedContext = payload.ongoingClarificationContext;
+        }
+        
+        if (parsedContext.summary && typeof parsedContext.summary === 'string') {
+            previousSummary = parsedContext.summary;
+        }
+        if (parsedContext.questionCount && typeof parsedContext.questionCount === 'number') {
+            currentQuestionCount = parsedContext.questionCount;
+        }
+        console.log(`[Context] Extracted question count: ${currentQuestionCount}, Previous summary: ${previousSummary.substring(0, 50)}...`);
+
+      } catch (e) {
+        console.warn('Could not parse ongoingClarificationContext, treating as simple string or resetting count.', e);
+        // Fallback: Treat the whole context as the summary string if parsing fails
+        previousSummary = typeof payload.ongoingClarificationContext === 'string' 
+            ? payload.ongoingClarificationContext 
+            : 'Could not interpret previous context.';
+        currentQuestionCount = 0; // Reset count if context is unparseable
+      }
+       // Add parsed previous summary as an assistant message
+       messagesForAI.push({ role: 'assistant', content: `Assistant summary from previous turn: ${previousSummary}` });
+       // Add current question count for AI awareness (as system message for emphasis)
+       messagesForAI.push({ role: 'system', content: `Internal Note: Current question count is ${currentQuestionCount} (max ${MAX_CLARIFICATION_QUESTIONS}).` });
+    } else {
+        messagesForAI.push({ role: 'system', content: `Internal Note: Current question count is 0 (max ${MAX_CLARIFICATION_QUESTIONS}). No previous clarification context provided.` });
     }
 
     // --- 7. Add Current User Message ---
-    // Add the user's current message as the most recent part of the conversation
     messagesForAI.push({ role: 'user', content: payload.userMessage });
 
     // --- 8. Add Current Email Context ---
@@ -419,6 +353,17 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
         content: m.content.substring(0,100) + '...' 
       }))
     );
+
+    // --- 8.5. Enforce Question Limit (Before API Call) ---
+    if (currentQuestionCount >= MAX_CLARIFICATION_QUESTIONS) {
+      console.log(`[Limit] Question limit (${MAX_CLARIFICATION_QUESTIONS}) reached. Forcing 'complete' response.`);
+      // Add a strong directive to the AI to provide a complete response
+      messagesForAI.push({ 
+        role: 'system', 
+        content: `You have reached the maximum question limit (${MAX_CLARIFICATION_QUESTIONS}). You MUST now provide a 'complete' response based on the information gathered so far, making reasonable assumptions where necessary. Do NOT ask another question.`
+      });
+      // Optionally, could modify the main system prompt here specifically for this call too
+    }
 
     // --- 9. Make API Call to Clarification AI ---
     // @ts-ignore: Deno global is available at runtime in Supabase Edge Functions
@@ -485,7 +430,7 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
           typeof aiApiResponse.question.id !== 'string' || 
           typeof aiApiResponse.question.text !== 'string' || 
           typeof aiApiResponse.aiSummaryForNextTurn !== 'string') {
-        throw new Error('Invalid clarification response structure');
+        throw new Error('Invalid clarification response structure from AI');
       }
       
       if (aiApiResponse.question.suggestions) {
@@ -499,6 +444,13 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
           }
         }
       }
+
+      // *** Add the updated context for the frontend ***
+      aiApiResponse.updatedClarificationContext = {
+        summary: aiApiResponse.aiSummaryForNextTurn,
+        questionCount: currentQuestionCount + 1 // Increment the count
+      };
+
     } else if (aiApiResponse.status === 'complete') {
       if (typeof aiApiResponse.perfectPrompt !== 'string' || 
           !Array.isArray(aiApiResponse.elementsToProcess) || 

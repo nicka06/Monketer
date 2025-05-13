@@ -1,0 +1,7 @@
+[functions.clarify-user-intent]
+entrypoint = "../src/backend/functions/clarify-user-intent/index.ts"
+import_map = "../src/backend/functions/import_map.json" 
+
+[functions.generate-email-changes]
+entrypoint = "../src/backend/functions/generate-email-changes/index.ts"
+import_map = "../src/backend/functions/import_map.json" # Assuming it uses the same import map 

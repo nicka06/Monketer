@@ -19,8 +19,10 @@
  * between frontend and backend code.
  */
 
-// Use uuid package to get server-compatible uuid generation
-import { v4 as uuidv4 } from 'uuid';
+// Use uuid package via esm.sh for Deno/browser compatibility
+// @deno-types="https://deno.land/x/uuid/mod.ts"
+// @ts-ignore: Linter error for URL import, but types are resolved at runtime
+import { v4 as uuidv4 } from 'https://esm.sh/uuid';
 
 /**
  * Generate Unique ID

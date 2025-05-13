@@ -560,7 +560,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           userMessage: message,
           mainChatHistory: chatMessages.slice(-5), // Send recent history
           currentSemanticEmailV2: null,
-          ongoingClarificationContext: null, // No prior clarification for the very first message
+          ongoingClarificationContext: clarificationContext, // Pass the current context back
           projectId: currentProjectId,
           mode: 'major', 
         };
@@ -587,7 +587,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (clarifyData.status === 'requires_clarification') {
           console.log("[EditorContext] 'clarify-user-intent' requires clarification.");
           setIsClarifying(true); // Enter clarification mode
-          setClarificationContext(clarifyData.aiSummaryForNextTurn);
+          setClarificationContext(clarifyData.updatedClarificationContext);
           
           const questionMessage: ExtendedChatMessage = {
             id: generateId(),
@@ -608,6 +608,9 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else if (clarifyData.status === 'complete') {
           console.log("[EditorContext] 'clarify-user-intent' complete. Proceeding to 'generate-email-changes'.");
           setProgress(70);
+          // Reset clarification state as we are proceeding to generation
+          setIsClarifying(false); 
+          setClarificationContext(null); 
 
           // Step 2: Call 'generate-email-changes'
           const generatePayload = { // Conforms to GenerateEmailChangesPayload
@@ -675,7 +678,8 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           throw new Error(`Unknown status from clarification: ${clarifyData.status}`);
         }
       } 
-      // Flow 2: Continuing an existing clarification conversation
+      // Flow 2: Continuing an existing clarification conversation (DEPRECATED by unified flow above, but kept for reference/potential reuse)
+      /*
       else if (isClarifying) {
         // Add user message to clarification conversation
         setClarificationConversation(prev => [
@@ -686,8 +690,9 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setProgress(40);
         
         try {
-          // Send to clarification endpoint with the ongoing context
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-clarification-v2`, {
+          // Send to *OLD* clarification endpoint with the ongoing context
+          // NOTE: This block might need removal or updating if the unified flow above works
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-clarification-v2`, { 
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -696,7 +701,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             body: JSON.stringify({
               projectId: actualProjectId,
               message,
-              context: clarificationContext,
+              context: clarificationContext, // Pass current context
               conversation: clarificationConversation,
             }),
           });
@@ -711,15 +716,18 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           const data = await response.json() as ExtendedClarificationResponse;
           
-          // Update clarification context with new information
+          // Update clarification context with new information from backend
           if (data.context) {
-            setClarificationContext(data.context);
+            // ** Potentially where the updatedClarificationContext logic should live if separate flows are kept **
+            // Example: setClarificationContext(data.updatedClarificationContext || data.context); 
+            setClarificationContext(data.context); 
           }
           
           // Case 2A: Clarification is complete, can generate email
           if (data.completed) {
             // Clarification completed, email can be generated
             setIsClarifying(false);
+            setClarificationContext(null); // Reset context
             
             // Add final response to chat
             const assistantMessage: ExtendedChatMessage = {
@@ -733,7 +741,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             setChatMessages(prev => [...prev, assistantMessage]);
             
             // Start email generation with collected information
-            await handleFinalEmailGeneration(data.context);
+            await handleFinalEmailGeneration(data.context); // Pass final context
           } 
           // Case 2B: Continue clarification to gather more information
           else {
@@ -778,8 +786,16 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setChatMessages(prev => [...prev, aiErrorMessage]);
         }
       } 
+      */
       // Flow 3: Normal message handling for questions or edits
-      else {
+      else { 
+        // This flow should only trigger if !isCreatingFirstEmail AND !isClarifying
+        if (isClarifying) {
+          console.warn("Attempting normal message send while still in clarification mode. This shouldn't happen with the unified flow.");
+          setIsClarifying(false); // Force exit clarification mode
+          setClarificationContext(null);
+        }
+          
         try {
           // Ensure we have a project ID
           if (!actualProjectId) {

@@ -1,5 +1,17 @@
 ## SUMMARY MAP
 
+📁 supabase/
+  Purpose: Configuration and local development files for Supabase.
+  Details: This directory typically holds CLI-generated files, migrations, and project-specific Supabase settings.
+  ├── 📄 config.toml
+  │   Purpose: Main configuration file for the Supabase CLI, overriding default behaviors and specifying project structure.
+  │   Details:
+  │   - Defines function-specific settings for `clarify-user-intent`.
+  │   - `entrypoint`: Specifies the direct path to the main `index.ts` file for the `clarify-user-intent` function, relative to the `supabase` directory itself (e.g., `../src/backend/functions/clarify-user-intent/index.ts`). This tells the CLI where to find the function code if it's not in the default `supabase/functions` location.
+  │   - `import_map`: Specifies the path to the `import_map.json` file used by Deno for this function, also relative to the `supabase` directory (e.g., `../src/backend/functions/import_map.json`). This ensures correct module resolution during bundling and deployment.
+  │   - **Also defines similar `entrypoint` and `import_map` settings for the `generate-email-changes` function.**
+  │   Usage: Crucial for deploying Edge Functions when they are not located in the default `supabase/functions` directory. Ensures the Supabase CLI can locate the function code and its dependencies correctly.
+
 📁 src/
 ├── 📁 backend/
 │   ├── 📁 .temp/
@@ -8,14 +20,14 @@
 │   │   - Tracks CLI version information
 │   │   - Manages local development state
 │   │   - Used by Supabase CLI for version control
-│   │  
+│   │
 │   ├── 📁 functions/
 │   │   ├── 📁 _shared/
 │   │   │   ├── 📁 lib/
 │   │   │   │   ├── 📄 constants.ts
 │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
 │   │   │   │   │   Details:
-│   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173).
+│   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173, localhost:8080).
 │   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers. It returns the `requestOrigin` if it's in `ALLOWED_ORIGINS`, otherwise defaults to the primary production origin. This is the recommended method.
 │   │   │   │   │   - Specifies allowed HTTP headers (authorization, x-client-info, apikey, content-type) and methods (GET, POST, PUT, DELETE, OPTIONS).
 │   │   │   │   │   - Sets `Access-Control-Max-Age` to `86400` (24 hours) for preflight request caching.
@@ -25,21 +37,14 @@
 │   │   │   │   │   - The legacy `corsHeaders` is directly used for OPTIONS preflight request handling in `generate-email-changes/index.ts`.
 │   │   │   │   │
 │   │   │   │   ├── 📄 uuid-utils.ts
-│   │   │   │   │   Purpose: Provides deprecated UUID validation and cleaning utilities; acts as a proxy for the shared implementation for backward compatibility.
-│   │   │   │   │   Details:
-│   │   │   │   │   - Marked as `@deprecated`; new code should use `src/shared/lib/uuid-utils.ts`.
-│   │   │   │   │   - `cleanUuid(id: string)`: Sanitizes potentially malformed UUIDs by removing trailing digits/spaces. Returns cleaned UUID if it matches the pattern, otherwise the original trimmed ID.
-│   │   │   │   │   - `isValidUuid(id: string)`: Validates if a string is a properly formatted UUID using a regex.
-│   │   │   │   │   Usage: Likely used in older backend code requiring UUID utilities before the shared version was prioritized.
+│   │   │   │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+│   │   │   │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+│   │   │   │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
 │   │   │   │   │
 │   │   │   │   └── 📄 uuid.ts
-│   │   │   │       Purpose: Provides a deprecated, backend-specific UUID v4 generation function (`generateId`).
-│   │   │   │       Details:
-│   │   │   │       - Uses the `uuid` npm package (v4) for generation.
-│   │   │   │       - Marked as `@deprecated`; new code should use `src/shared/lib/uuid.ts`.
-│   │   │   │       - Exists due to historical path resolution issues in the Deno/Supabase environment.
-│   │   │   │       - Functionally identical to the shared implementation.
-│   │   │   │       Usage: Likely not actively used in current backend functions, as services like `semanticParser.ts` import `generateId` from the shared path (`@shared/lib/uuid`). It was intended for backend services requiring unique ID generation before shared path resolution was robust or if direct npm `uuid` usage was not preferred.
+│   │   │   │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+│   │   │   │       Details: Uses `v4 as uuidv4` imported from a URL (`https://esm.sh/uuid`) for Deno/browser compatibility. A `@ts-ignore` comment is used to suppress a local TypeScript linter error related to resolving types from the URL, as Deno handles this at runtime. Exports `generateId()`.
+│   │   │   │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations that might have used direct npm package imports.
 │   │   │   │
 │   │   │   └── 📁 services/
 │   │   │       ├── 📄 differ.ts
@@ -83,22 +88,23 @@
 │   │       Details:
 │   │       - Core Functionality:
 │   │         • Analyzes user messages for ambiguity
-│   │         • Asks targeted clarifying questions
+│   │         • Asks targeted clarifying questions (prioritizing broad over specific, limited to max 8 rounds)
 │   │         • Provides structured data for email generation
 │   │       - Input Processing:
 │   │         • User message analysis
 │   │         • Chat history context
 │   │         • Current email structure
-│   │         • Ongoing clarification context
+│   │         • Ongoing clarification context (including question count)
 │   │       - Response Types:
-│   │         • Clarification questions with suggestions
+│   │         • Clarification questions with suggestions and updated context (including question count)
 │   │         • Complete structured data for email generation
 │   │       - Technical Features:
 │   │         • Token limit management
 │   │         • Context window optimization
 │   │         • JSON response validation
 │   │         • Error handling and recovery
-│   │       Usage: Invoked as an HTTP POST endpoint by the frontend. It receives user messages, chat history, and current email context. Based on its analysis, it either returns a request for clarification or a structured set of instructions for the `generate-email-changes` function. It utilizes an OpenAI model (e.g., `gpt-4o-mini`) for its core logic.
+│   │         • Question count tracking and limit enforcement
+│   │       Usage: Invoked as an HTTP POST endpoint by the frontend. It receives user messages, chat history, current email context, and ongoing clarification context (with question count). Based on its analysis and the question limit, it either returns a request for clarification or a structured set of instructions for the `generate-email-changes` function. It utilizes an OpenAI model (e.g., `gpt-4o-mini`) for its core logic.
 │   │
 │   ├── 📁 generate-email-changes/
 │   │   └── 📄 index.ts
@@ -106,19 +112,26 @@
 │   │       Details:
 │   │       - Core Functionality:
 │   │         • Receives a structured `GenerateEmailChangesPayload` (likely from `clarify-user-intent`) detailing the desired email modifications, including a "perfect prompt" and elements to process.
-│   │         • Interacts with an OpenAI model (e.g., `gpt-4o-mini`), providing a system prompt tailored by the operation `mode` ('ask', 'edit', 'major'), to get structured changes or a diff.
-│   │         • Merges AI-suggested changes into the V2 email template.
-│   │         • Validates the updated template using `validateEmailTemplateV2`.
-│   │         • Generates new HTML using the backend `HtmlGenerator`.
-│   │         • Updates the project's `semantic_email_v2` and `current_html` in the Supabase database.
-│   │         • Computes a diff between the old and new template using the backend `DifferV2` and saves it as `pending_changes` in Supabase.
-│   │       - Key Dependencies:
-│   │         • Supabase client (for DB operations).
-│   │         • OpenAI API (for generating changes).
-│   │         • `corsHeadersFactory`, `HtmlGenerator` (adapter), `DifferV2` (adapter) from `../_shared/`.
-│   │         • Shared types (`EmailTemplateV2`, `TemplateDiffResult`).
-│   │         • Internal Helpers: `getProjectDataV2`, `updateProjectV2`, `savePendingChanges` for database interactions.
-│   │       Usage: Invoked as an HTTP POST endpoint, typically after `clarify-user-intent` has produced a clear set of instructions. It returns the newly modified template, its HTML, and any generated pending changes.
+│   │         • Fetches the current `EmailTemplateV2` if it exists (`currentV2Template`).
+│   │         • Constructs a system prompt for OpenAI based on whether `currentV2Template` exists:
+│   │           - If creating a new email (`currentV2Template` is null): Instructs the AI to generate a *complete EmailTemplateV2* JSON object based on the prompt, providing a structural example and emphasizing inclusion of all required fields based on `elementDefaults`.
+│   │           - If editing an existing email (`currentV2Template` exists): Instructs the AI to generate a *complete, modified EmailTemplateV2* JSON object reflecting the requested changes.
+│   │           - **Both prompts now explicitly instruct the AI:**
+│   │             1.  To **always include** a top-level `content` field for every element (using `\'\'` if needed).
+│   │             2.  To **OMIT** optional string fields (like image/border properties) entirely if they are not applicable, instead of setting them to `null`.
+│   │         • Calls the OpenAI API (gpt-4o-mini) with the constructed prompt and context.
+│   │         • Parses the AI's JSON response.
+│   │         • Merges the AI-generated element data with `elementDefaults` using a deep merge, ensuring all necessary properties are present.
+│   │         • Crucially, iterates through the merged elements and explicitly sets a default `content` string (e.g., `\'\'` or text derived from properties like `alt` or `button text`) if the AI omitted it, preventing validation errors.
+│   │         • Also converts any `null` values received from the AI for optional string properties (e.g., in image or border settings) to `undefined` to align with the Zod schema's expectation (string | undefined).
+│   │         • Validates the final `EmailTemplateV2` structure using Zod (`validateEmailTemplateV2`). Throws error if invalid.
+│   │         • Generates the final HTML using `HtmlGenerator`.
+│   │         • Calculates the difference between the old and new template using `DifferV2` if `currentV2Template` existed.
+│   │         • Saves the new template (`semantic_email_v2`), HTML (`current_html`), and diff (`diff` in `pending_changes` table) to Supabase, overwriting previous pending changes.
+│   │         • Updates the project's `last_edited_at` timestamp.
+│   │       - Input: `GenerateEmailChangesPayload` (see function code for details).
+│   │       - Output: JSON containing `newSemanticEmail` (EmailTemplateV2), `newHtml` (string), and `newPendingChanges` (TemplateDiffResult | null).
+│   │       Usage: Called by the frontend (`EditorContext`) after the clarification flow (if any) is complete to generate the actual email changes based on the final user intent.
 │   │
 │   ├── 📁 manage-pending-changes/
 │   │   └── 📄 index.ts
@@ -166,9 +179,9 @@
 │   │
 │   └── 📄 import_map.json
 │       Purpose: Defines path aliases for Deno module imports within the Supabase Edge Functions.
-│       Details: Maps short aliases (like `@/`, `shared/`, `@/types/v2/`, `@/services/v2/`) to their actual relative paths (e.g., `../../src/`, `./_shared/`, `../../src/types/v2/`, `../../src/services/v2/`). This simplifies import statements in the Edge Function code.
-│       Usage: Used by the Deno runtime when executing functions in `src/backend/functions/` to resolve aliased imports. Referenced by `src/backend/deno.jsonc`.
-│
+│       Details: Maps short aliases (like `@/`, `shared/`, `@shared/`) to their actual relative paths from this file's location (`src/backend/functions/`). For example, `@/` maps to `../../src/`, `shared/` maps to `./_shared/` (i.e., `src/backend/functions/_shared/`), and `@shared/` maps to `../../shared/` (i.e., `src/shared/`). This simplifies import statements in the Edge Function code.
+│       Usage: Used by the Deno runtime when executing functions in `src/backend/functions/` to resolve aliased imports. Referenced by `src/backend/deno.jsonc` (if present) and `supabase/config.toml`.
+│   
 ├── 📁 components/
 │   ├── 📄 ChatInterface.tsx
 │   │   Purpose: Provides the main chat interface for user-AI interactions
@@ -487,7 +500,7 @@
     │   Details: These services are typically used by contexts or page components to fetch data, perform actions, and encapsulate business logic.
     │   ├── 📄 differ.ts
     │   │   Purpose: Frontend (browser) adapter for the V2 template diffing service.
-    │   │   Details:
+│   │   Details:
     │   │   - Adapts the shared `DifferCore` (from `src/shared/services/differ.ts`) for the frontend environment.
     │   │   - Uses the standard `lodash` library.
     │   │   - Exports `DifferV2` class, which instantiates `DifferCore` with lodash.
@@ -497,7 +510,7 @@
     │   │
     │   ├── 📄 htmlGenerator.ts
     │   │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
-    │   │   Details:
+│   │   Details:
     │   │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
     │   │   - Overrides element generation (e.g., for buttons, images) to:
     │   │     • Detect placeholder content using an `isPlaceholder` utility.
@@ -509,7 +522,7 @@
     │   │
     │   ├── 📄 semanticParser.ts
     │   │   Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
-    │   │   Details:
+│   │   Details:
     │   │   - Adapts `SemanticParserCore` (from `src/shared/services/semanticParser.ts`) for the frontend.
     │   │   - Uses `JSDOM` to create a DOM from an HTML string for parsing.
     │   │   - Implements the `parse(html)` method to convert HTML into a structured `EmailTemplateV2` object.
@@ -522,305 +535,10 @@
     │   │
     │   └── 📄 projectService.ts
     │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and pending changes.
-    │       Details:
-    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+│       Details:
+    │       - This service is a key part of the frontend\'s data management. It includes logic for fetching, creating, updating, and deleting project data.
     │       - It also manages email templates, including a crucial V1 to V2 upgrade path which involves client-side HTML generation to prepare V1 templates for the V2 editor.
-    │       - Chat history and pending template changes are also managed through this service.
+    │       - **Fetches pending changes correctly using the V2 structure (selecting `id`, `status`, `diff` from `pending_changes` table).**
     │       - It uses the Supabase client for backend communication.
     │       Usage:
-    │       - Used throughout the `EditorContext` (`src/features/contexts/EditorContext.tsx`) for most data operations related to projects, templates, and chat.
-    │       - Potentially used by other UI components or hooks that need direct access to project/template data, although primary interaction is expected via `EditorContext`.
-
-└── 📁 Types/
-    ├── 📄 ai.ts
-    │   Purpose: Defines TypeScript interfaces for the AI clarification flow.
-    │   Details:
-    │   - This file exports types that structure the communication between the frontend and the AI backend, particularly for the "clarify user intent" feature.
-    │   - `ClarificationMessage`: Represents a single message in the AI chat, detailing sender, text, suggestions, and whether it's a question. A simpler version, `SimpleClarificationMessage` (defined in `src/features/types/editor.ts`), is often used in the UI.
-    │   - `QuestionResponse`: Structure for when the AI needs more information from the user. Contains the question and suggestions.
-    │   - `CompleteResponse`: Structure for when the AI has enough information and provides the "perfect prompt" and elements to process.
-    │   - `ClarificationApiResponse`: A union type of `QuestionResponse` and `CompleteResponse`.
-    │   Usage:
-    │   - `ClarificationMessage`: Imported in `src/features/contexts/EditorContext.tsx`. The related `SimpleClarificationMessage` (from `src/features/types/editor.ts`) is used by `EditorContext.tsx` for managing the clarification conversation state and by `src/components/ChatInterface.tsx` for rendering messages.
-    │   - `QuestionResponse`, `CompleteResponse`, `ClarificationApiResponse`: These types (or identically named local definitions) are handled in `src/features/contexts/EditorContext.tsx` when processing the response from the `/clarify-user-intent` Supabase Edge Function. The backend function `src/backend/functions/clarify-user-intent/index.ts` also defines and uses these response types.
-    │
-    ├── 📄 editor.ts
-    │   Purpose: Defines various TypeScript interfaces and types primarily used within the frontend email editor's context and UI components.
-    │   Details:
-    │   - Imports `EmailTemplateV2Type` from `../../shared/types/validators`.
-    │   - Defines core email structure elements: `EmailElement`, `EmailSection`, `EmailTemplate`.
-    │   - `PendingChange`: Structure for a pending modification.
-    │   - `ChatMessage`: Base type for chat messages.
-    │   - `ExtendedChatMessage`: Enriched `ChatMessage` for UI (role, type, suggestions).
-    │   - `SimpleClarificationMessage`: Simplified AI clarification message for UI (role, content).
-    │   - `Project`: Data structure for a user's project.
-    │   - `EmailPreviewProps`: Props for the `EmailPreview` component.
-    │   Usage:
-    │   - Fundamental for `EditorContext` (`src/features/contexts/EditorContext.tsx`) for state management (email structure, chat, pending changes, project data).
-    │   - Consumed by UI components like `EmailPreview.tsx` (`EmailPreviewProps`) and `ChatInterface.tsx` (`ExtendedChatMessage`, `SimpleClarificationMessage`).
-    └── 📄 index.ts
-        Purpose: Barrel file re-exporting types from shared and local type modules.
-        Details:
-        - Re-exports all types from `shared/types/` (elements, sections, template, validators, diffs).
-        - Re-exports all types from `./ai`.
-        - Explicitly re-exports specific types (`Project`, `ChatMessage`, etc.) from `./editor` to avoid potential naming conflicts.
-        Usage: Provides a single entry point (`@/features/types`) for importing commonly used types across the frontend features, simplifying import statements.
-
-└── 📁 utils/
-    └── 📄 placeholderUtils.ts
-        Purpose: Provides utility functions for identifying placeholder image URLs.
-        Details:
-        - Exports `isPlaceholder(src)` function.
-        - Checks for null/empty strings, '#', placeholder service URLs (via.placeholder.com), base64 1x1 pixel GIFs, and '@@PLACEHOLDER_IMAGE@@'.
-        Usage: Used by image rendering/processing logic (e.g., `EmailHtmlRenderer.tsx`, frontend `HtmlGenerator.ts`) to detect and handle placeholder images.
-
-└── 📁 hooks/
-    ├── 📄 use-mobile.tsx
-    │   Purpose: Provides React hooks for detecting mobile environments and related device characteristics.
-    │   Details:
-    │   - Defines `MOBILE_CONFIG` (breakpoints, aspect ratio).
-    │   - Exports `DeviceInfo` interface (`isMobile`, `deviceType`, `orientation`, `hasTouch`, `viewport`).
-    │   - Exports `useMobileDetection()` hook:
-    │     - Tracks device info using `useState`/`useEffect`.
-    │     - Detects touch capability.
-    │     - Listens to `resize` and `orientationchange` events.
-    │     - Determines `deviceType` (small-phone, large-phone, tablet, desktop) and `orientation`.
-    │     - Considers device mobile if width < breakpoint OR has touch.
-    │   - Exports legacy `useIsMobile()` hook returning just the boolean.
-    │   Usage: Used in UI components (`src/pages/`, `src/components/`) for conditional rendering/styling based on device type, orientation, or touch capability.
-    │
-    └── 📄 use-toast.ts
-        Purpose: Implements a custom toast notification system using React state and context/module state.
-        Details:
-        - Defines `TOAST_LIMIT`, `TOAST_REMOVE_DELAY`.
-        - Uses a reducer pattern (`actionTypes`, `Action`, `reducer`) to manage toast state (`memoryState`, `listeners`).
-        - Handles delayed removal for animations (`addToRemoveQueue`).
-        - Exports `toast({...})` function to create toasts (returns object with `id`, `dismiss`, `update`).
-        - Exports `useToast()` hook providing state (`toasts`) and control functions (`toast`, `dismiss`).
-        Usage: `useToast()` hook called in components to trigger notifications via `toast()`. A central `Toaster` component likely consumes the state to render toasts.
-
-└── 📁 integrations/
-    └── 📁 supabase/
-        ├── 📄 client.ts
-        │   Purpose: Initializes and exports the global Supabase client instance. Handles configuration and provides utility functions.
-        │   Details:
-        │   - Reads `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` from env.
-        │   - Validates URL and key presence, throws error if missing.
-        │   - Creates and exports singleton `supabase` client.
-        │   - Exports `toJson` utility for safe JSON parsing (handles comments).
-        │   - Exports `handleSupabaseError` for standardized error logging.
-        │   Usage: The `supabase` client is imported globally for all Supabase interactions (auth, DB, functions, etc.). Helpers used as needed.
-        │
-        └── 📄 types.ts
-            Purpose: Provides TypeScript definitions generated from the Supabase database schema for type safety.
-            Details:
-            - Typically generated by Supabase CLI.
-            - Defines main `Database` type mirroring the schema (Tables, Views, Functions, etc.).
-            - Includes detailed types for tables (`chat_messages`, `projects`, etc.) with `Row`, `Insert`, `Update` shapes.
-            - Provides generic helper types (`Tables<T>`, `TablesInsert<T>`, etc.).
-            Usage: Imported across the application (e.g., services, components) for type-safe database interactions via the Supabase client.
-
-└── 📁 lib/
-    ├── 📄 utils.ts
-    │   Purpose: UI utility functions, focusing on CSS class handling with Tailwind CSS.
-    │   Details:
-    │   - Exports the `cn` function.
-    │   - Uses `clsx` for conditional class joining and `tailwind-merge` to resolve Tailwind conflicts.
-    │   Usage: Widely used in `.tsx` components for clean and dynamic class name management.
-    │
-    ├── 📄 uuid-utils.ts
-    │   Purpose: Deprecated frontend UUID validation/cleaning utilities (proxy/duplicate of shared version).
-    │   Details:
-    │   - Marked `@deprecated`, advises using `src/shared/lib/uuid-utils.ts`.
-    │   - Implements `cleanUuid` and `isValidUuid`.
-    │   - Duplicated from shared lib due to historical import issues.
-    │   Usage: Used in older frontend code requiring UUID validation.
-    │
-    └── 📄 uuid.ts
-        Purpose: Deprecated frontend UUID v4 generation function (proxy to shared version).
-        Details:
-        - Marked `@deprecated`, advises using `@/shared/lib/uuid.ts`.
-        - Imports and re-exports `generateId` from the shared library.
-        - Exists for backward compatibility.
-        Usage: Used in older frontend code needing UUID generation.
-
-└── 📁 pages/
-    Purpose: Top-level components representing distinct application pages or views.
-    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
-    ├── 📄 Dashboard.tsx
-    │   Purpose: Main user dashboard for managing email projects.
-    │   Details:
-    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
-    │   - Uses `useState` for projects, loading state, and username.
-    │   - Uses `useAuth` for user context and sign out.
-    │   - Uses `useToast` for error feedback.
-    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
-    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
-    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
-    │   - Handles loading and empty states.
-    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
-    │
-    ├── 📄 Editor.tsx
-    │   Purpose: Main entry point and layout component for the email editor interface.
-    │   Details:
-    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
-    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
-    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
-    │   - Manages different UI states based on context (loading, prompting, generating, editing).
-    │   - Handles file input for image uploads via a `useRef`.
-    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
-    │
-    ├── 📄 Index.tsx
-    │   Purpose: Main public landing page for the application.
-    │   Details:
-    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
-    │   - Uses a flex column layout to structure the page.
-    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
-    │
-    ├── 📄 Login.tsx
-    │   Purpose: Authentication page for users to sign in.
-    │   Details:
-    │   - Renders a login form with email and password fields (`input`).
-    │   - Uses `useState` for form state and loading indicator.
-    │   - Calls `signIn` from `useAuth` hook on submission.
-    │   - Includes links to signup (`/signup`) and potentially password reset.
-    │   - Uses `@/components/ui/button` and `lucide-react` icon.
-    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
-    │
-    ├── 📄 NotFound.tsx
-    │   Purpose: Displays a 404 error page for non-existent routes.
-    │   Details:
-    │   - Displays a standard "404 Page not found" message.
-    │   - Uses `useAuth` to check user authentication status.
-    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
-    │   - Conditionally shows a link to `/editor` for authenticated users.
-    │   - Uses `useLocation` to log the invalid path.
-    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
-    │
-    ├── 📄 PrivacyPolicy.tsx
-    │   Purpose: Displays the company's privacy policy.
-    │   Details:
-    │   - Static content page.
-    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
-    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
-    │   - Dynamically sets the "Last updated" date.
-    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
-    │
-    ├── 📄 SendEmailPage.tsx
-    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
-    │   Details:
-    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
-    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
-    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
-    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
-    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
-    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
-    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
-    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
-    │
-    ├── 📄 Signup.tsx
-    │   Purpose: User registration page for creating new accounts.
-    │   Details:
-    │   - Renders a signup form with email, password, and terms agreement checkbox.
-    │   - Uses `useState` for form state and loading indicator.
-    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
-    │   - Includes specific error handling for rate limiting (`useToast`).
-    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
-    │   - Uses `@/components/ui/button` and `lucide-react` icon.
-    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
-    │
-    └── 📄 TermsOfService.tsx
-        Purpose: Displays the company's terms of service.
-        Details:
-        - Static content page, similar structure to `PrivacyPolicy.tsx`.
-        - Uses `@/components/ui/container` and `@/components/ui/typography`.
-        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
-        - Dynamically sets the "Last updated" date.
-        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
-
-└── 📁 shared/
-    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
-    Details: Contains core services logic, utility functions, and type definitions used across the application.
-    ├── 📁 lib/
-    │   Purpose: Shared, low-level utility functions.
-    │   ├── 📄 uuid-utils.ts
-    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-    │   │
-    │   └── 📄 uuid.ts
-    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
-    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
-    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
-    │
-    ├── 📁 services/
-    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
-    │   ├── 📄 differ.ts
-    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
-    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
-    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
-    │   │
-    │   ├── 📄 htmlGenerator.ts
-    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
-    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
-    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
-    │   │
-    │   └── 📄 semanticParser.ts
-    │       Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
-    │       Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
-    │       Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
-    │
-    └── 📁 types/
-        Purpose: Shared TypeScript type definitions and configurations used across the entire application.
-        ├── 📁 config/
-        │   Purpose: Default configurations for shared entities.
-        │   └── 📄 elementDefaults.ts
-        │       Purpose: Defines default configurations (styles, layout, properties) for all V2 email element types and provides a factory function.
-        │       Details: Exports `elementDefaults` constant mapping `ElementTypeV2` to default objects (using `@@PLACEHOLDER_...@@` markers). Exports `createNewElement(type, initialContent?)` factory function using `generateId` and deep copying defaults.
-        │       Usage: Used when creating new elements programmatically (AI/backend) or via UI (editor) to ensure consistency.
-        │
-        ├── 📄 common.ts
-        │   Purpose: Defines common, fundamental TypeScript types shared across the application.
-        │   Details: Exports `InteractionMode` union type (`'ask' | 'edit' | 'major'`).
-        │   Usage: Provides basic shared types, imported where needed (e.g., `EditorContext`).
-        │
-        ├── 📄 diffs.ts
-        │   Purpose: Defines TypeScript interfaces for representing the results of diffing email templates.
-        │   Details: Exports `PropertyChange`, `ElementDiff`, `SectionDiff`, `TemplateDiffResult`. Defines the structure returned by `DifferCore`.
-        │   Usage: Used by `DifferCore` service and consumers of diff results (e.g., `EditorContext` for pending changes).
-        │
-        ├── 📄 editor.ts
-        │   Purpose: Defines TypeScript types specific to the editor interface, primarily for chat/messaging.
-        │   Details: Exports `ChatMessage` interface (`id`, `project_id`, `role`, `content`, `timestamp`, `isError`).
-        │   Usage: Used by frontend components (`ChatInterface`, `EditorContext`) for chat data.
-        │
-        ├── 📄 elements.ts
-        │   Purpose: Defines all TypeScript types related to individual email elements within the V2 template structure.
-        │   Details: Exports `ElementType` union. Defines `EmailElementLayout` and specific property interfaces (`HeaderElementProperties`, `ImageElementProperties`, etc.) for all types. Exports the main `EmailElement` discriminated union.
-        │   Usage: Foundational types used by services, contexts, validation, and defaults for defining email content elements.
-        │
-        ├── �� index.ts
-        │   Purpose: Barrel file for the `src/shared/types` directory.
-        │   Details: Explicitly re-exports types from `elements.ts`, `sections.ts`, `template.ts`, `validators.ts`, `diffs.ts`.
-        │   Usage: Provides a single import point (`@shared/types`) for common shared types.
-        │
-        ├── 📄 pendingChangeTypes.ts
-        │   Purpose: Defines TypeScript types for representing proposed template changes awaiting approval.
-        │   Details: Exports `PendingChangeInput` (for creation) and `PendingChange` (for stored record, includes metadata).
-        │   Usage: Structures data for the pending changes workflow (backend functions, frontend context/UI).
-        │
-        ├── 📄 sections.ts
-        │   Purpose: Defines TypeScript types for email template sections.
-        │   Details: Exports `EmailSectionStyles` and `EmailSection` (id, elements array, styles) interfaces.
-        │   Usage: Part of the core `EmailTemplateV2` structure, used by services handling template structure.
-        │
-        ├── 📄 template.ts
-        │   Purpose: Defines the top-level TypeScript types for the V2 email template structure.
-        │   Details: Exports `EmailGlobalStyles` and the main `EmailTemplate` (id, name, version, sections array, globalStyles) interfaces.
-        │   Usage: The central data structure for email content, used extensively by services, contexts, and backend functions.
-        │
-        └── 📄 validators.ts
-            Purpose: Provides Zod schemas and a validation function specifically for the `EmailTemplate` V2 structure.
-            Details: Defines comprehensive Zod schemas for all parts of `EmailTemplateV2`, including layouts, element properties, sections, global styles. Uses placeholders. Exports `validateEmailTemplateV2(templateData)` function using `safeParse`. Requires `version: 2`.
-            Usage: Ensures data integrity, especially for AI-generated content. Used primarily in backend functions (e.g., `generate-email-changes`) before saving data.
-
+    │       - Used throughout the `

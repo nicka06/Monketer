@@ -420,14 +420,21 @@ export async function getProject(projectId: string) {
     if (chatError) handleSupabaseError(chatError);
 
     // Fetch related pending changes
-    const { data: pendingChanges, error: changesError } = await supabase
+    const { data: pendingChangesData, error: pendingChangesError } = await supabase
       .from('pending_changes')
-      .select('id, change_type, old_content, new_content, status, diff')
+      // Select only the relevant V2 columns: id, status, and the diff object
+      .select('id, status, diff')
       .eq('project_id', projectId)
-      .eq('status', 'pending') // Only fetch pending changes
+      .eq('status', 'pending')
       .order('created_at', { ascending: true });
 
-    if (changesError) handleSupabaseError(changesError);
+    if (pendingChangesError) {
+      // Log the specific error, but don't necessarily throw, project might still exist
+      // console.error(`Error fetching pending changes for project ${projectId}:`, pendingChangesError);
+      handleSupabaseError(pendingChangesError); // Use the helper to log/handle
+      // Depending on requirements, you might still return projectData without changes
+      // throw new Error(`Failed to fetch pending changes: ${pendingChangesError.message}`);
+    }
 
     // Map project data
     const project: Project = {
@@ -452,13 +459,16 @@ export async function getProject(projectId: string) {
     }));
 
     // Convert pending changes
-    const formattedChanges: PendingChange[] = (pendingChanges || []).map((chg: any) => ({
+    const formattedChanges: PendingChange[] = (pendingChangesData || []).map((chg: any) => ({
       id: chg.id,
       changeType: chg.change_type,
       oldContent: chg.old_content,
       newContent: chg.new_content,
       status: chg.status
     }));
+
+    // Ensure V2 conversion: If semantic_email_v2 is null, but V1 exists, attempt conversion
+    let finalSemanticEmail: EmailTemplateV2 | null = null;
 
     return {
       project,
