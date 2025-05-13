@@ -678,115 +678,6 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           throw new Error(`Unknown status from clarification: ${clarifyData.status}`);
         }
       } 
-      // Flow 2: Continuing an existing clarification conversation (DEPRECATED by unified flow above, but kept for reference/potential reuse)
-      /*
-      else if (isClarifying) {
-        // Add user message to clarification conversation
-        setClarificationConversation(prev => [
-          ...prev,
-          { role: 'user', content: message }
-        ] as SimpleClarificationMessage[]);
-        
-        setProgress(40);
-        
-        try {
-          // Send to *OLD* clarification endpoint with the ongoing context
-          // NOTE: This block might need removal or updating if the unified flow above works
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-clarification-v2`, { 
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-            },
-            body: JSON.stringify({
-              projectId: actualProjectId,
-              message,
-              context: clarificationContext, // Pass current context
-              conversation: clarificationConversation,
-            }),
-          });
-          
-          setProgress(70);
-          
-          // Handle error responses
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.message || 'Failed to process clarification');
-          }
-          
-          const data = await response.json() as ExtendedClarificationResponse;
-          
-          // Update clarification context with new information from backend
-          if (data.context) {
-            // ** Potentially where the updatedClarificationContext logic should live if separate flows are kept **
-            // Example: setClarificationContext(data.updatedClarificationContext || data.context); 
-            setClarificationContext(data.context); 
-          }
-          
-          // Case 2A: Clarification is complete, can generate email
-          if (data.completed) {
-            // Clarification completed, email can be generated
-            setIsClarifying(false);
-            setClarificationContext(null); // Reset context
-            
-            // Add final response to chat
-            const assistantMessage: ExtendedChatMessage = {
-              id: generateId(),
-              content: data.message || "Great! I have enough information to create your email now.",
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'clarification',
-            };
-            
-            setChatMessages(prev => [...prev, assistantMessage]);
-            
-            // Start email generation with collected information
-            await handleFinalEmailGeneration(data.context); // Pass final context
-          } 
-          // Case 2B: Continue clarification to gather more information
-          else {
-            // Continue clarification by adding AI response
-            setClarificationConversation(prev => [
-              ...prev,
-              { role: 'assistant', content: data.message || "I need more information." }
-            ] as SimpleClarificationMessage[]);
-            
-            // Add AI message to chat requesting more information
-            const newAiMessage: ExtendedChatMessage = {
-              id: generateId(),
-              content: data.message || "I need more information.",
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'clarification',
-              suggestions: data.suggestions || [],
-            };
-            
-            setChatMessages(prev => [...prev, newAiMessage]);
-          }
-        } catch (error) {
-          // Handle errors during clarification
-          console.error("Error in clarification flow:", error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to process your request';
-          
-          toast({
-            title: 'Error',
-            description: errorMessage,
-            variant: 'destructive',
-          });
-          
-          // Add error message to chat
-          const aiErrorMessage: ExtendedChatMessage = {
-            id: generateId(),
-            content: `Sorry, I encountered an error: ${errorMessage}`,
-            role: 'assistant',
-            timestamp: new Date(),
-            type: 'error',
-          };
-          
-          setChatMessages(prev => [...prev, aiErrorMessage]);
-        }
-      } 
-      */
       // Flow 3: Normal message handling for questions or edits
       else { 
         // This flow should only trigger if !isCreatingFirstEmail AND !isClarifying
@@ -804,39 +695,155 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           
           setProgress(40);
           
-          // Determine endpoint based on interaction mode
-          const endpoint = mode === 'ask' 
-            ? 'email-question'  // Just answering a question
-            : mode === 'major' 
-              ? 'email-edit-major'  // Major edits to the email
-              : 'email-edit-minor';  // Minor adjustments
-          
-          // Call the appropriate endpoint based on mode
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-            },
-            body: JSON.stringify({
+          // --- START REFACTORED EDIT/MAJOR MODE HANDLING ---
+          if (mode === 'edit' || mode === 'major') {
+            console.log(`[EditorContext] Initiating 'clarify-user-intent' for existing project ${actualProjectId} (Mode: ${mode})`);
+
+            // Step 1: Call 'clarify-user-intent'
+            const clarifyPayload = { // Conforms to ClarifyUserIntentPayload
+              userMessage: message,
+              mainChatHistory: chatMessages.slice(-5), // Send recent history
+              currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass existing template
+              ongoingClarificationContext: clarificationContext, // Pass the current context back
               projectId: actualProjectId,
-              message,
-              mode,
-            }),
-          });
-          
-          setProgress(75);
-          
-          // Handle error responses
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || errorData.message || 'Failed to process message');
-          }
-          
-          const data = await response.json();
-          
-          // Handle response based on interaction mode
-          if (mode === 'ask') {
+              mode: mode, // Pass the current mode
+            };
+
+            const clarifyResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+              },
+              body: JSON.stringify(clarifyPayload),
+            });
+
+            setProgress(60);
+
+            if (!clarifyResponse.ok) {
+              const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent' }));
+              console.error("Error from clarify-user-intent (edit flow):", clarifyResponse.status, errorData);
+              throw new Error(errorData.error || errorData.message || `Failed to clarify intent (edit flow, status ${clarifyResponse.status})`);
+            }
+
+            const clarifyData = await clarifyResponse.json(); // QuestionResponse or CompleteResponse
+
+            if (clarifyData.status === 'requires_clarification') {
+              console.log("[EditorContext] 'clarify-user-intent' requires clarification (edit flow).");
+              setIsClarifying(true); // Enter clarification mode
+              setClarificationContext(clarifyData.updatedClarificationContext);
+              
+              const questionMessage: ExtendedChatMessage = {
+                id: generateId(),
+                content: clarifyData.question.text,
+                role: 'assistant',
+                timestamp: new Date(),
+                type: 'clarification',
+                suggestions: clarifyData.question.suggestions?.map(s => s.text) || [],
+              };
+              setChatMessages(prev => [...prev, questionMessage]);
+              setClarificationConversation(prev => [
+                ...prev,
+                { role: 'user', content: message },
+                { role: 'assistant', content: clarifyData.question.text }
+              ]);
+
+            } else if (clarifyData.status === 'complete') {
+              console.log("[EditorContext] 'clarify-user-intent' complete (edit flow). Proceeding to 'generate-email-changes'.");
+              setProgress(70);
+              setIsClarifying(false); 
+              setClarificationContext(null); 
+
+              // Step 2: Call 'generate-email-changes'
+              const generatePayload = { // Conforms to GenerateEmailChangesPayload
+                projectId: actualProjectId,
+                mode: mode, // Pass the original mode
+                perfectPrompt: clarifyData.perfectPrompt,
+                elementsToProcess: clarifyData.elementsToProcess,
+                currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass existing template
+              };
+
+              const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+                },
+                body: JSON.stringify(generatePayload),
+              });
+
+              setProgress(90);
+
+              if (!generateResponse.ok) {
+                const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes' }));
+                console.error("Error from generate-email-changes (edit flow):", generateResponse.status, errorData);
+                throw new Error(errorData.error || errorData.message || `Failed to generate email changes (edit flow, status ${generateResponse.status})`);
+              }
+
+              const generateData = await generateResponse.json(); // Expects { newSemanticEmail, newHtml, newPendingChanges }
+
+              if (generateData.newHtml && generateData.newSemanticEmail) {
+                console.log("[EditorContext] Email changes generated successfully by 'generate-email-changes' (edit flow).");
+                // Note: updateProject might overwrite changes if called concurrently. 
+                // Consider fetching latest project data before updating locally, or relying on subscription.
+                setProjectData(prev => prev ? { ...prev, semantic_email_v2: generateData.newSemanticEmail } : null);
+                setLivePreviewHtml(generateData.newHtml);
+                setPendingChanges(generateData.newPendingChanges || []); // Overwrite pending changes
+                setHasCode(true);
+                // Update the chat
+                const successMessage: ExtendedChatMessage = {
+                  id: generateId(),
+                  content: clarifyData.finalSummary || "I've updated the email based on your request.",
+                  role: 'assistant',
+                  timestamp: new Date(),
+                  type: 'success',
+                };
+                setChatMessages(prev => [...prev, successMessage]);
+              } else {
+                console.error("Invalid response from 'generate-email-changes' (edit flow):", generateData);
+                throw new Error("Received invalid data after email change generation.");
+              }
+            } else {
+              console.error("Unknown status from 'clarify-user-intent' (edit flow):", clarifyData.status);
+              throw new Error(`Unknown status from clarification (edit flow): ${clarifyData.status}`);
+            }
+          } 
+          // --- END REFACTORED EDIT/MAJOR MODE HANDLING ---
+
+          // --- START ORIGINAL 'ask' MODE HANDLING ---
+          else if (mode === 'ask') {
+            // Determine endpoint based on interaction mode
+            // For now, keep the separate 'ask' endpoint if needed
+            const endpoint = 'email-question'; // Or potentially integrate into clarify-user-intent later
+            
+            // Call the appropriate endpoint based on mode
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+              },
+              body: JSON.stringify({
+                projectId: actualProjectId,
+                message,
+                mode,
+                // Add relevant context if needed for the 'ask' endpoint
+                // currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+                // chatHistory: chatMessages.slice(-5), 
+              }),
+            });
+            
+            setProgress(75);
+            
+            // Handle error responses
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from email-question' }));
+              console.error("Error from email-question:", response.status, errorData);
+              throw new Error(errorData.error || errorData.message || `Failed to process question (status ${response.status})`);
+            }
+            
+            const data = await response.json();
+            
             // Case 3A: Just a question - add response to chat
             const aiResponse: ExtendedChatMessage = {
               id: generateId(),
@@ -847,28 +854,11 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             };
             
             setChatMessages(prev => [...prev, aiResponse]);
-          } else {
-            // Case 3B: Edit modes - update project data and pending changes
-            if (data.pendingChanges) {
-              setPendingChanges(data.pendingChanges);
-            }
-            
-            if (data.previewHtml) {
-              setLivePreviewHtml(data.previewHtml);
-            }
-            
-            // Add response to chat with the edit results
-            const editResponse: ExtendedChatMessage = {
-              id: generateId(),
-              content: data.message || "I've made the requested changes.",
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'edit_response',
-              suggestions: data.suggestions || [],
-            };
-            
-            setChatMessages(prev => [...prev, editResponse]);
           }
+          // --- END ORIGINAL 'ask' MODE HANDLING ---
+          
+          // Old 'edit'/'major' logic removed here
+          
         } catch (error) {
           // Handle errors during regular message processing
           console.error("Error processing message:", error);

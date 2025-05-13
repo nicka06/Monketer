@@ -486,6 +486,25 @@ serve(async (req) => {
               }
               // *** END: Convert nulls to undefined ***
 
+              // *** START: Ensure required border properties exist if border object is present ***
+              if (mergedElement.properties?.border && typeof mergedElement.properties.border === 'object') {
+                // Ensure required string properties have defaults if missing
+                if (mergedElement.properties.border.width === undefined) {
+                  mergedElement.properties.border.width = '1px'; // Default width
+                }
+                if (mergedElement.properties.border.style === undefined) {
+                  mergedElement.properties.border.style = 'solid'; // Default style
+                }
+                if (mergedElement.properties.border.color === undefined) {
+                  mergedElement.properties.border.color = '#000000'; // Default color
+                }
+                // Optional: ensure radius has a default if needed, though it's truly optional in schema
+                // if (mergedElement.properties.border.radius === undefined) { 
+                //   mergedElement.properties.border.radius = '0px'; 
+                // }
+              }
+              // *** END: Ensure required border properties exist ***
+
               // Original attempt to map aiElement.content (KEEP this for backward compatibility/edge cases?)
               if (aiElement.content && typeof aiElement.content === 'string' && !mergedElement.properties.text) {
                   if (elementType === 'header' || elementType === 'text' || elementType === 'subtext') {
@@ -513,9 +532,9 @@ serve(async (req) => {
     // For now, we rely on `templateToProcess` being correctly formed or an error being thrown.
 
     // Validate the final template structure
-    // console.log("Validating final merged template:", JSON.stringify(emailTemplateToUpdate, null, 2)); // Debugging log
     const validationResult = validateEmailTemplateV2(emailTemplateToUpdate);
     if (!validationResult.valid) {
+      console.error(`[validateEmailTemplateV2] Zod validation failed: ${JSON.stringify(validationResult.errors, null, 2)}`); 
       throw new Error(`Final merged template failed validation: ${JSON.stringify(validationResult.errors)}`);
     }
     // Generate HTML from the template

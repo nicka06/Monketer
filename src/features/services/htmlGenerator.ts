@@ -218,34 +218,66 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
    * Generate HTML for button elements with placeholder support
    */
   protected generateButtonElementHtml(element: EmailElement): string {
-    const layoutStyles = this.generateLayoutStyle(element.layout);
+    const layoutStyles = this.generateLayoutStyle(element.layout); // Outer TD styles
     const buttonProps = element.properties as ButtonElementProperties;
-    const btn = buttonProps.button || { href: '#' }; // Default href
-    const btnTypography = this.generateTypographyStyle(buttonProps.typography);
-    const btnStyles = `display:inline-block; color:${btn.textColor || '#ffffff'}; background-color:${btn.backgroundColor || '#007bff'}; border-radius:${btn.borderRadius || '5px'}; padding:12px 25px; text-decoration:none; ${btn.border ? `border:${btn.border};` : 'border:none;'} ${btnTypography}`;
-    
-    // Add data attributes if href is a placeholder
-    const isButtonLinkPlaceholder = isPlaceholder(btn.href);
-    const buttonDataAttrs = isButtonLinkPlaceholder
-        ? `data-element-id="${element.id}" data-property-path="button.href" data-placeholder="true" data-placeholder-type="link"` 
-        : '';
-    const finalButtonHref = isButtonLinkPlaceholder ? '#' : btn.href;
 
-    // Render a non-clickable span if the link is a placeholder
-    let elementContent;
+    // Defaults (same as core)
+    const defaultText = 'Button';
+    const defaultHref = '#';
+    const defaultTarget = '_blank';
+    const defaultTextColor = '#ffffff';
+    const defaultBgColor = '#007bff';
+    const defaultBorderRadius = '0px';
+    const defaultPadding = { top: '10px', right: '25px', bottom: '10px', left: '25px' };
+    const defaultBorder = undefined;
+
+    // Style for the <a> tag or <span> placeholder
+    const elementStyle = `display:inline-block; 
+      ${this.generateBorderStyle(buttonProps.button?.border ?? defaultBorder)} 
+      padding:${element.layout?.padding?.top ?? defaultPadding.top} ${element.layout?.padding?.right ?? defaultPadding.right} ${element.layout?.padding?.bottom ?? defaultPadding.bottom} ${element.layout?.padding?.left ?? defaultPadding.left}; 
+      color:${buttonProps.button?.textColor ?? defaultTextColor}; 
+      background-color:${buttonProps.button?.backgroundColor ?? defaultBgColor}; 
+      text-decoration:none; 
+      border-radius:${buttonProps.button?.borderRadius ?? defaultBorderRadius};
+      ${this.generateTypographyStyle(buttonProps.typography)}`;
+
+    const buttonText = element.content || defaultText;
+    const buttonHref = buttonProps.button?.href ?? defaultHref;
+    const buttonTarget = buttonProps.button?.target ?? defaultTarget;
+
+    // Add data attributes if href is a placeholder
+    const isButtonLinkPlaceholder = isPlaceholder(buttonHref);
+    const placeholderDataAttrs = isButtonLinkPlaceholder
+        ? `data-element-id="${element.id}" data-property-path="properties.button.href" data-placeholder="true" data-placeholder-type="link"` 
+        : '';
+    const finalButtonHref = isButtonLinkPlaceholder ? '#' : buttonHref;
+
+    // Render a non-clickable span if the link is a placeholder, otherwise the <a> tag
+    let buttonHtmlContent;
     if (isButtonLinkPlaceholder) {
-        // Add data-placeholder="true" ONLY if href is placeholder
-        const placeholderButtonAttrs = `data-element-id="${element.id}" data-property-path="button.href" data-placeholder="true" data-placeholder-type="link"`;
-        elementContent = `<span style="${btnStyles} cursor:default;" ${placeholderButtonAttrs}>${element.content} (Link Required)</span>`;
+        buttonHtmlContent = `<span style="${elementStyle} cursor:default;" ${placeholderDataAttrs}>${buttonText} (Link Required)</span>`;
     } else {
-        elementContent = `<a href="${finalButtonHref}" target="${btn.target || '_blank'}" style="${btnStyles}" ${buttonDataAttrs}>${element.content}</a>`;
+        // Add data attributes to the <a> tag only if NOT placeholder (for completeness, though maybe not needed)
+        const linkDataAttrs = `data-element-id="${element.id}"`; // Basic ID
+        buttonHtmlContent = `<a href="${finalButtonHref}" target="${buttonTarget}" style="${elementStyle}" ${linkDataAttrs}>${buttonText}</a>`;
     }
     
-    // Wrap element content in a table row/cell structure
+    // --- FIX: Re-introduce inner table for robust centering --- 
+    const finalAlign = element.layout?.align || 'left';
+    const innerTableHtml = `
+      <table border="0" cellspacing="0" cellpadding="0" role="presentation" style="display: inline-table;">
+        <tr>
+          <td align="${finalAlign}" bgcolor="${buttonProps.button?.backgroundColor ?? defaultBgColor}">
+            ${buttonHtmlContent} <!-- Use the generated span or a tag here -->
+          </td>
+        </tr>
+      </table>`;
+
+    // Wrap the inner table content in the outer table row/cell structure
     return `
       <tr>
-        <td id="element-${element.id}" style="${layoutStyles}">
-          ${elementContent}
+        <td id="element-${element.id}" style="${layoutStyles}"> <!-- Outer TD with layout styles (including text-align) -->
+          ${innerTableHtml} <!-- Embed the centering table here -->
         </td>
       </tr>`;
   }
@@ -383,7 +415,19 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
   }
   
   protected generateLayoutStyle(layout: EmailElementLayout | undefined): string {
-    return this.generateStyleString(layout);
+    if (!layout) return '';
+    
+    // Create a mutable copy of the layout styles
+    const styles: Record<string, any> = { ...layout };
+
+    // Check if 'align' property exists and map it to 'text-align'
+    if (styles.align) {
+      styles.textAlign = styles.align; // Map to correct CSS property
+      delete styles.align;             // Remove the original invalid property
+    }
+    
+    // Generate the style string using the corrected styles object
+    return this.generateStyleString(styles);
   }
   
   protected generateTypographyStyle(typography: any, defaults: Record<string, any> = {}): string {

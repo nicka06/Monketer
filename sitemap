@@ -48,22 +48,22 @@
 │   │   │   │
 │   │   │   └── 📁 services/
 │   │   │       ├── 📄 differ.ts
-│   │   │       │   Purpose: Provides a Deno/Supabase adapter for the V2 template diffing service.
+│   │   │       │   Purpose: Backend-specific adapter for the V2 template diffing service.
 │   │   │       │   Details:
-│   │   │       │   - Imports `DifferCore` from `src/shared/services/differ.ts` and re-exports types.
-│   │   │       │   - Extends `DifferCore` to create a `DifferV2` class, passing a lodash instance.
-│   │   │       │   - Primarily acts as a wrapper to make the shared differ service usable in the Deno environment.
-│   │   │       │   - Diffing logic resides in the shared `DifferCore`.
-│   │   │       │   Usage: Imported and used by `src/backend/functions/generate-email-changes/index.ts` to compare template versions and generate a diff result, which is then stored as pending changes.
+│   │   │       │   - Extends `DifferV2Core` from `src/shared/services/differ.ts`.
+│   │   │       │   - Currently provides no backend-specific overrides, simply inherits core diffing logic.
+│   │   │       │   - Exports `DifferV2` class.
+│   │   │       │   Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
 │   │   │       │
 │   │   │       ├── 📄 htmlGenerator.ts
 │   │   │       │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
 │   │   │       │   Details:
 │   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
-│   │   │       │   - Overrides element generation (e.g., for buttons, images) to:
-│   │   │       │     • Detect placeholder content using an `isPlaceholder` utility.
-│   │   │       │     • Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
-│   │   │       │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
+│   │   │       │   - Overrides element generation (`generateElementHtml`) specifically for `button` and `image` types to:
+│   │   │       │   - Detect placeholder content using an `isPlaceholder` utility.
+│   │   │       │   - Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
+│   │   │       │   - Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
+│   │   │       │   - Crucially, its `generateLayoutStyle` helper now correctly maps the semantic `layout.align` property (e.g., 'center') to the CSS `text-align` property for the wrapping table cell (`<td>`), ensuring correct alignment in the preview.
 │   │   │       │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
 │   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
 │   │   │       │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.
@@ -124,6 +124,7 @@
 │   │         • Merges the AI-generated element data with `elementDefaults` using a deep merge, ensuring all necessary properties are present.
 │   │         • Crucially, iterates through the merged elements and explicitly sets a default `content` string (e.g., `\'\'` or text derived from properties like `alt` or `button text`) if the AI omitted it, preventing validation errors.
 │   │         • Also converts any `null` values received from the AI for optional string properties (e.g., in image or border settings) to `undefined` to align with the Zod schema's expectation (string | undefined).
+│   │         • **Also ensures that if a `properties.border` object exists after merging, the required `width`, `style`, and `color` properties have default string values (e.g., '1px', 'solid', '#000000') if they are `undefined`. This happens before the final Zod validation and has been confirmed to work correctly.**
 │   │         • Validates the final `EmailTemplateV2` structure using Zod (`validateEmailTemplateV2`). Throws error if invalid.
 │   │         • Generates the final HTML using `HtmlGenerator`.
 │   │         • Calculates the difference between the old and new template using `DifferV2` if `currentV2Template` existed.
@@ -512,10 +513,11 @@
     │   │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
 │   │   Details:
     │   │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
-    │   │   - Overrides element generation (e.g., for buttons, images) to:
+    │   │   - Overrides element generation (`generateElementHtml`) specifically for `button` and `image` types to:
     │   │     • Detect placeholder content using an `isPlaceholder` utility.
     │   │     • Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
     │   │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
+    │   │   - Crucially, its `generateLayoutStyle` helper now correctly maps the semantic `layout.align` property (e.g., 'center') to the CSS `text-align` property for the wrapping table cell (`<td>`), ensuring correct alignment in the preview.
     │   │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
     │   │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
     │   │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.

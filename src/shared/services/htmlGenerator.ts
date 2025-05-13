@@ -221,12 +221,48 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         break;
 
       case 'button':
-        const buttonProps = element.properties as ButtonElementProperties;
-        const btn = buttonProps.button || { href: '#' }; // Default href
-        const btnTypography = this.generateTypographyStyle(buttonProps.typography);
-        const btnStyles = `display:inline-block; color:${btn.textColor || '#ffffff'}; background-color:${btn.backgroundColor || '#007bff'}; border-radius:${btn.borderRadius || '5px'}; padding:12px 25px; text-decoration:none; ${btn.border ? `border:${btn.border};` : 'border:none;'} ${btnTypography}`;
-        elementContent = `<a href="${btn.href}" target="${btn.target || '_blank'}" style="${btnStyles}">${element.content}</a>`;
-        break;
+        const btnProps = element.properties as ButtonElementProperties;
+        // Use optional chaining directly on btnProps.button for accessing nested properties
+        // Provide defaults for everything
+
+        // Defaults
+        const defaultText = 'Button';
+        const defaultHref = '#';
+        const defaultTarget = '_blank';
+        const defaultTextColor = '#ffffff';
+        const defaultBgColor = '#007bff';
+        const defaultBorderRadius = '0px';
+        const defaultPadding = { top: '10px', right: '25px', bottom: '10px', left: '25px' };
+        const defaultBorder = undefined; // Or specific default like 'none'
+
+        // Style for the <a> tag itself
+        const buttonStyle = `display:inline-block; 
+          ${this.generateBorderStyle(btnProps.button?.border ?? defaultBorder)} 
+          padding:${element.layout?.padding?.top ?? defaultPadding.top} ${element.layout?.padding?.right ?? defaultPadding.right} ${element.layout?.padding?.bottom ?? defaultPadding.bottom} ${element.layout?.padding?.left ?? defaultPadding.left}; 
+          color:${btnProps.button?.textColor ?? defaultTextColor}; 
+          background-color:${btnProps.button?.backgroundColor ?? defaultBgColor}; 
+          text-decoration:none; 
+          border-radius:${btnProps.button?.borderRadius ?? defaultBorderRadius};
+          ${this.generateTypographyStyle(btnProps.typography)}`;
+
+        const buttonText = element.content || defaultText; // Button text doesn't rely on btnProps.button
+        const buttonHref = btnProps.button?.href ?? defaultHref;
+        const buttonTarget = btnProps.button?.target ?? defaultTarget;
+
+        const buttonHtml = `<a href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
+
+        const finalAlign = element.layout?.align || 'left';
+        console.log(`[HtmlGeneratorCore] Button (ID: ${element.id}): element.layout.align is '${element.layout?.align}', finalAlign for inner TD is '${finalAlign}'.`);
+
+        elementContent = `
+          <table border="0" cellspacing="0" cellpadding="0" role="presentation" style="display: inline-table;">
+            <tr>
+              <td align="${finalAlign}" bgcolor="${btnProps.button?.backgroundColor ?? defaultBgColor}">
+                ${buttonHtml}
+              </td>
+            </tr>
+          </table>`;
+        break; // End case 'button'
 
       case 'image':
         const imageProps = element.properties as ImageElementProperties;
@@ -426,11 +462,28 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
   
   /**
    * Helper to generate layout style strings.
+   * Correctly maps semantic alignment properties to the 'text-align' CSS property.
    * @param layout Element layout properties.
    * @returns An inline style string for layout.
    */
   protected generateLayoutStyle(layout: EmailElementLayout | undefined): string {
-    return this.generateStyleString(layout);
+    console.log("[HtmlGeneratorCore] generateLayoutStyle input:", JSON.stringify(layout));
+    if (!layout) return '';
+    
+    // Create a mutable copy of the layout styles
+    const styles: Record<string, any> = { ...layout };
+
+    // Check if 'align' property exists and map it to 'text-align'
+    if (styles.align) {
+      console.log(`[HtmlGeneratorCore] Mapping layout.align ('${styles.align}') to textAlign.`);
+      styles.textAlign = styles.align; // Map to correct CSS property
+      delete styles.align;             // Remove the original invalid property
+    }
+    
+    // Generate the style string using the corrected styles object
+    const styleString = this.generateStyleString(styles);
+    console.log("[HtmlGeneratorCore] generateLayoutStyle output:", styleString);
+    return styleString;
   }
   
   /**
