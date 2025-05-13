@@ -215,6 +215,49 @@ export type Database = {
         }
         Relationships: []
       }
+      /**
+       * Blog Posts Table
+       * Stores blog post content and metadata
+       */
+      blog_posts: {
+        Row: {
+          id: string
+          created_at: string
+          title: string
+          slug: string
+          content: string
+          author: string | null
+          category: string | null
+          image_url: string | null
+          excerpt: string | null
+          published_at: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          title: string
+          slug: string
+          content: string
+          author?: string | null
+          category?: string | null
+          image_url?: string | null
+          excerpt?: string | null
+          published_at?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          title?: string
+          slug?: string
+          content?: string
+          author?: string | null
+          category?: string | null
+          image_url?: string | null
+          excerpt?: string | null
+          published_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
