@@ -9,7 +9,7 @@
 // Import only the specific types needed for this implementation
 import type { EmailTemplate } from '@shared/types';
 // Import the core implementation that contains all the shared HTML generation logic
-import { HtmlGeneratorCore } from '@shared/services/htmlGenerator';
+import { HtmlGeneratorCore } from '@shared/services/htmlGenerator.ts';
 
 /**
  * Backend-specific implementation of HTML generator for email templates.

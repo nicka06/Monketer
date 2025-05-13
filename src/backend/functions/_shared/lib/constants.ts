@@ -16,6 +16,7 @@ export const ALLOWED_ORIGINS = [
   'https://www.monketer.com',
   'http://localhost:3000',
   'http://localhost:5173', // Vite's default port
+  'http://localhost:8080', // Added origin for local development
 ];
 
 /**

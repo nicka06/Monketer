@@ -211,7 +211,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         {messages.map((msg, index) => renderMessage(msg, false))}
-        {isClarifying && clarificationMessages && clarificationMessages.map((msg, index) => renderMessage(msg, true))}
         {isLoading && (
           <div className="flex items-center justify-start p-3 mb-3 text-gray-500 dark:text-gray-400 animate-pulse">
             <div className="h-2.5 bg-gray-300 dark:bg-gray-600 rounded-full w-8 mr-2"></div>
