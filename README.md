@@ -1,73 +1,42 @@
-# Welcome to your Lovable project
+# Emailore WOW Maker - AI-Powered Content Platform
 
-## Project info
+Welcome to Emailore WOW Maker! This project integrates an AI-driven email template editor with an autonomous AI agent for blog content generation.
 
-**URL**: https://lovable.dev/projects/477cee6a-756e-4e87-b20f-8278cca061ba
+## Core Components
 
-## How can I edit this code?
+### 1. AI Email Editor (React Frontend)
 
-There are several ways of editing your application.
+*   **Purpose**: Provides an AI-assisted interface for designing and customizing HTML email templates.
+*   **Key Technologies**: React, Vite, TypeScript, Tailwind CSS, shadcn/ui, Supabase (Auth, Database, Edge Functions).
+*   **Setup & Running**:
+    1.  Ensure Node.js and npm are installed.
+    2.  Install dependencies: `npm install`
+    3.  Configure Supabase: Set up a Supabase project, create a `.env` file in the root with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, and deploy Edge Functions from `src/backend/functions/`.
+    4.  Run development server: `npm run dev`
 
-**Use Lovable**
+### 2. Autonomous AI Blog Agent (Python Backend)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/477cee6a-756e-4e87-b20f-8278cca061ba) and start prompting.
+*   **Purpose**: Autonomously generates blog content, from news sourcing to publication, with a Telegram-based approval workflow.
+*   **Key Technologies**: Python, Langchain, OpenAI API, Perplexity API, Telegram Bot API, Supabase.
+*   **Detailed Information**: For full setup, configuration, and usage instructions, please see the dedicated [AI Blog Agent README](./ai_blog_agent/README.md).
 
-Changes made via Lovable will be committed automatically to this repo.
+## Prerequisites
 
-**Use your preferred IDE**
+*   Node.js and npm (for the frontend)
+*   Python 3.x and pip (for the AI Blog Agent)
+*   Supabase Account & API keys (OpenAI, Perplexity, Telegram Bot Token)
+*   Git
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## High-Level Directory Structure
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+-   `./` (Root)
+    -   `src/`: Frontend React application and Supabase Edge Functions.
+    -   `ai_blog_agent/`: Python AI Blog Agent (includes its own `README.md`).
+    -   `supabase/`: Supabase CLI configuration.
 
-Follow these steps:
+## Getting Started
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/477cee6a-756e-4e87-b20f-8278cca061ba) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+1.  **Clone the repository.**
+2.  **Set up Supabase**: Create your project, configure tables, and deploy Edge Functions.
+3.  **Configure Frontend**: Create `.env` with Supabase keys in the root and run `npm install` then `npm run dev`.
+4.  **Configure AI Blog Agent**: Navigate to `ai_blog_agent/`, create a venv, `pip install -r requirements.txt`, create `.env` with API keys and Supabase function URL, then run `python3 main.py`. Refer to `ai_blog_agent/README.md` for details.
