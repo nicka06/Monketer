@@ -1,0 +1,104 @@
+# config.yaml - Configuration for the AI Blog Agent
+
+# Perplexity API settings
+perplexity:
+  api_key_env: "PERPLEXITY_API_KEY" # Environment variable name for the API key
+  model_name: "llama-3.1-sonar-small-128k-online"   # For research and news queries
+  # News Sourcing Settings
+  news_query_keywords: "latest AI in marketing, generative AI breakthroughs, AI content creation tools, future of digital advertising with AI"
+  news_recency_prompt_addon: "focus on information from the last 7 days, ideally breaking news or very recent announcements"
+  news_max_results_to_consider: 3 # How many top items from Perplexity to evaluate for a blog topic
+  news_topic_decision_model: "gpt-3.5-turbo" # A cost-effective model for deciding if a news item is a good blog topic
+
+# OpenAI API settings
+openai:
+  api_key_env: "OPENAI_API_KEY"
+  # research_model_name: "gpt-4o-mini" # No longer used by research_service
+  writing_model_name: "gpt-4o-mini"  # Model for blog post generation
+
+# Telegram Bot settings
+telegram:
+  bot_token_env: "TELEGRAM_BOT_TOKEN"
+  chat_id_env: "TELEGRAM_CHAT_ID"
+
+# Supabase settings (for create-blog-post function)
+supabase_function:
+  url: "https://nvlkyadiqucpjjgnhujm.supabase.co/functions/v1/create-blog-post" # e.g., https://<your-project-ref>.supabase.co/functions/v1/create-blog-post
+  # If your function requires an anon key or service_role key for auth, add it here or handle securely
+  # headers: 
+  #   "Authorization": "Bearer YOUR_SUPABASE_ANON_KEY_OR_SERVICE_KEY"
+  #   "Content-Type": "application/json"
+
+# Prompts (examples, expand and refine these)
+prompts:
+  perplexity_research_system: "You are an AI research assistant using the Perplexity API. Provide a comprehensive and well-sourced research brief on the given topic, suitable for informing a blog post. Focus on key points, recent developments, diverse perspectives, and potential angles. Ensure your response is detailed and directly usable for content creation."
+  
+  # Prompt for Perplexity when initially searching for news topics
+  perplexity_news_sourcing_system: "You are an AI assistant helping to identify breaking news or significant recent developments that would make compelling blog post topics."
+  # The user prompt for news sourcing will be constructed in perplexity_service.py using news_query_keywords and news_recency_prompt_addon
+
+  # Prompts for an optional OpenAI LLM call to evaluate/refine a news item into a blog topic
+  news_relevance_check_system: "You are an editor assessing if a news item is suitable and interesting enough for a blog post for an audience interested in AI and marketing."
+  news_relevance_check_user_template: |
+    News Item Summary/Content:
+    ---
+    {news_item_content}
+    ---
+    Based on this news item, answer the following:
+    1. Is this a genuinely new development or significant update (not just a generic article or old news)? (Yes/No)
+    2. Is it directly relevant and interesting to an audience focused on AI in marketing, generative AI, or content creation? (Yes/No)
+    3. If yes to both, formulate a concise and engaging blog post topic (max 15 words) based on this news. Otherwise, output "N/A".
+    
+    Provide your answer structured like this:
+    NewDevelopment: [Yes/No]
+    Relevant: [Yes/No]
+    ProposedTopic: [Your concise blog topic or N/A]
+
+  # Prompts for openai_blog_writing_service (component-wise generation)
+  title_generation_system: "You are an expert copywriter. Your task is to create a compelling blog post title."
+  title_generation_user_template: |
+    Topic: {topic}
+    Research Brief Overview:
+    {research_brief_overview}
+    
+    Generate one engaging blog post title. The title should be a maximum of 10 words and capture the essence of the topic and research.
+    Output only the title text.
+
+  content_generation_system: "You are an expert blog writer specializing in AI and marketing. Your tone is insightful, engaging, and slightly informal, avoiding overly robotic or generic AI language."
+  content_generation_user_template: |
+    Blog Post Topic: {topic}
+    Blog Post Title: {title}
+    Supporting Research Brief:
+    {research_brief}
+    
+    Write a comprehensive blog post of 500-1000 words. Use Markdown for formatting (headings, subheadings, lists, bold text for readability).
+    Ensure the content directly expands on the provided topic and title, using the research brief for factual support and depth.
+    Output only the Markdown content for the blog post body.
+
+  category_generation_system: "You are an AI content classifier."
+  category_generation_user_template: |
+    Blog Post Topic: {topic}
+    Blog Post Content Summary (first 100 words):
+    {content_summary}
+    
+    Suggest one relevant category for this blog post (e.g., "AI Insights", "Marketing Technology", "Future of Work", "Content Strategy").
+    Output only the category name.
+
+  excerpt_generation_system: "You are a skilled summary writer."
+  excerpt_generation_user_template: |
+    Blog Post Title: {title}
+    Blog Post Content Summary (first 150 words):
+    {content_summary}
+    
+    Write a concise and engaging excerpt for this blog post, suitable for social media previews (2-3 sentences).
+    Output only the excerpt text.
+
+  # slug_generation_system: "You are an SEO expert specializing in URL slugs." # Optional: if LLM is used for slugs
+  # slug_generation_user_template: "Blog Post Title: {title}\n\nGenerate an SEO-friendly slug (kebab-case, max 7 words)." # Optional
+
+  openai_social_snippet_system: "You are a social media expert. Given a blog post URL and its content, generate a short, engaging snippet suitable for platforms like X and LinkedIn, including relevant hashtags."
+
+# Job Management settings
+job_manager:
+  pending_jobs_file: "pending_jobs.json"
+  max_iterations: 3 # Max times to re-attempt content generation based on feedback 
