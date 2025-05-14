@@ -4,9 +4,9 @@ export interface BlogPost {
   title: string;
   slug: string;
   content: string; // For Markdown/MDX
-  author?: string | null;
-  category?: string | null;
-  image_url?: string | null;
+  author_id: string;
+  featured_image_url?: string | null;
   excerpt?: string | null;
   published_at?: string | null;
+  is_published?: boolean;
 } 

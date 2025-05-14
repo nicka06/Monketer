@@ -101,9 +101,9 @@ const BlogPostPage: React.FC = () => {
         </Link>
 
         <article className="prose prose-lg lg:prose-xl max-w-none">
-          {post.image_url && (
+          {post.featured_image_url && (
             <img 
-              src={post.image_url}
+              src={post.featured_image_url}
               alt={`Header image for ${post.title}`}
               className="w-full rounded-lg mb-8 shadow-md object-cover aspect-video"
             />
@@ -114,11 +114,9 @@ const BlogPostPage: React.FC = () => {
           </h1>
 
           <div className="text-gray-500 text-sm mb-8 border-b pb-4">
-            {post.author && <span>By {post.author}</span>}
-            {post.author && post.published_at && <span className="mx-2">&bull;</span>}
+            {post.author_id && <span>By {post.author_id}</span>}
+            {post.author_id && post.published_at && <span className="mx-2">&bull;</span>}
             {post.published_at && <span>Published on {new Date(post.published_at).toLocaleDateString()}</span>}
-            {post.category && <span className="mx-2">&bull;</span>}
-            {post.category && <span className="bg-gray-100 text-monketer-purple font-medium px-2 py-0.5 rounded-full">{post.category}</span>}
           </div>
 
           <ReactMarkdown 

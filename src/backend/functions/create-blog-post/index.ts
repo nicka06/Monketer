@@ -1,4 +1,3 @@
-
 // @ts-ignore: Deno-specific import
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 // @ts-ignore: Deno-specific import
@@ -20,25 +19,25 @@ serve(async (req: Request) => {
   let supabase: SupabaseClient;
 
   try {
+    // Use non-VITE prefixed names for backend environment variables
+    // These should be set in your Edge Function's settings in the Supabase dashboard
+    // and in your local .env file (e.g., in supabase/.env) for local development.
     // @ts-ignore: Deno-specific environment variable access
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL'); 
     // @ts-ignore: Deno-specific environment variable access
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY'); // Use Anon key for inserts from trusted functions for now
-    // For production/more secure scenarios, consider using the Service Role Key
-    // const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'); 
     
-    if (!supabaseUrl || !supabaseAnonKey) { // || !supabaseServiceKey) {
-      throw new Error("Supabase environment variables (URL, Anon Key) are not set.");
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Supabase environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not set.");
+      throw new Error("Supabase environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not set.");
     }
 
+    // Initialize client with Service Role Key to bypass RLS for this trusted function
     // @ts-ignore: createClient is from a Deno-specific import
-    supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      // Pass auth header if necessary, though for creating public blog posts, anon might be fine
-      // global: { headers: { Authorization: req.headers.get('Authorization')! } }
-    });
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 2. Parse and validate request body
-    let postData: Partial<BlogPost>;
+    let postData: Partial<BlogPost>; // Assuming BlogPost type aligns with expected fields
     try {
       postData = await req.json();
     } catch (jsonError) {
@@ -50,24 +49,33 @@ serve(async (req: Request) => {
     }
 
     // Basic validation - ensure required fields are present
-    if (!postData.title || !postData.slug || !postData.content) {
-       console.error("Validation Error: Missing required fields", { title: postData.title, slug: postData.slug, content: !!postData.content });
-      return new Response(JSON.stringify({ error: 'Missing required fields: title, slug, content' }), {
+    // Ensure your BlogPost type or Partial<BlogPost> allows for author_id and featured_image_url
+    if (!postData.title || !postData.slug || !postData.content || !postData.author_id) { // Added author_id check
+       console.error("Validation Error: Missing required fields", { 
+         title: postData.title, 
+         slug: postData.slug, 
+         content: !!postData.content,
+         author_id: postData.author_id // Added for logging
+       });
+      return new Response(JSON.stringify({ error: 'Missing required fields: title, slug, content, author_id' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Prepare data for insertion (remove potentially client-sent id/created_at)
+    // Prepare data for insertion, aligning with your table schema
+    // and the payload sent by the Python script.
     const insertData = {
       title: postData.title,
       slug: postData.slug,
       content: postData.content,
-      author: postData.author,
-      category: postData.category,
-      image_url: postData.image_url,
+      author_id: postData.author_id, // Expecting author_id from Python script
+      featured_image_url: postData.featured_image_url, // Expecting featured_image_url
       excerpt: postData.excerpt,
-      published_at: postData.published_at // Allow setting publish date, or defaults to null
+      published_at: postData.published_at, // Allow setting publish date, or defaults to null
+      // Default is_published to false if not explicitly provided in the payload.
+      // Ensure your BlogPost partial type allows for is_published or handle undefined.
+      is_published: typeof postData.is_published === 'boolean' ? postData.is_published : false,
     };
 
     console.log("Attempting to insert post:", insertData.slug);
@@ -88,7 +96,11 @@ serve(async (req: Request) => {
            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
          });
       }
-      throw insertError; // Re-throw other errors
+      // For RLS errors (though service_role should bypass) or other issues:
+      return new Response(JSON.stringify({ error: insertError.message, details: insertError.details }), {
+        status: 500, // Or a more specific error code if identifiable
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log("Successfully inserted post:", (newPost as BlogPost)?.slug);
@@ -100,6 +112,7 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
+    // Catch errors from missing env vars or other unexpected issues
     console.error("Error in create-blog-post function:", error.message, error.stack);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

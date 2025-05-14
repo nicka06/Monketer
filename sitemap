@@ -596,7 +596,7 @@
     │
     ├── 📄 Login.tsx
     │   Purpose: Authentication page for users to sign in.
-    │   Details:
+│   Details:
     │   - Renders a login form with email and password fields (`input`).
     │   - Uses `useState` for form state and loading indicator.
     │   - Calls `signIn` from `useAuth` hook on submission.
@@ -606,7 +606,7 @@
     │
     ├── 📄 NotFound.tsx
     │   Purpose: Displays a 404 error page for non-existent routes.
-    │   Details:
+│   Details:
     │   - Displays a standard "404 Page not found" message.
     │   - Uses `useAuth` to check user authentication status.
     │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
@@ -616,7 +616,7 @@
     │
     ├── 📄 PrivacyPolicy.tsx
     │   Purpose: Displays the company's privacy policy.
-    │   Details:
+│   Details:
     │   - Static content page.
     │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
     │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
@@ -625,7 +625,7 @@
     │
     ├── 📄 SendEmailPage.tsx
     │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
-    │   Details:
+│   Details:
     │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
     │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
     │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
@@ -637,7 +637,7 @@
     │
     ├── 📄 Signup.tsx
     │   Purpose: User registration page for creating new accounts.
-    │   Details:
+│   Details:
     │   - Renders a signup form with email, password, and terms agreement checkbox.
     │   - Uses `useState` for form state and loading indicator.
     │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
@@ -773,3 +773,57 @@ Key parts:
 - `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>`: Generic helper types for easier access to table row/insert/update types.
 
 Usage: Imported by services (`projectService.ts`) and components that interact directly with Supabase data to ensure correct data shapes.
+
+## AUTONOMOUS AI BLOG AGENT (PYTHON PROJECT)
+
+📁 ai_blog_agent/
+  Purpose: Contains the Python-based autonomous AI agent for blog content generation, research, and an approval workflow via Telegram.
+  Details: This project is designed to be run as a standalone Python application. It uses Langchain for LLM orchestration and interacts with various APIs (OpenAI, Perplexity, Telegram, Supabase) to autonomously source news, generate blog content, and manage an interactive approval workflow via Telegram.
+  Status: Core functionality for news sourcing, content generation, and Telegram-based approval workflow implemented. Ongoing refinements based on `AIAgentMap`.
+  ├── 📄 AIAgentMap
+  │   Purpose: Detailed multi-phase roadmap and checklist for the development of the AI blog agent.
+  │   Details: Outlines phases from setup, manual trigger, Perplexity integration, Telegram approval, feedback handling, social media promotion, to deployment. Includes key decisions made.
+  │   Usage: Primary planning and tracking document for this sub-project.
+  ├── 📄 .env
+  │   Purpose: Stores sensitive API keys and configuration variables for the AI blog agent.
+  │   Details: Contains `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and potentially Supabase function URLs/keys.
+  │   Usage: Loaded by `python-dotenv` in `main.py` to provide credentials to the application. This file is listed in `.gitignore` and should not be committed to version control.
+  ├── 📄 config.yaml
+  │   Purpose: Main configuration file for the AI blog agent, storing non-sensitive settings, prompts, and parameters.
+  │   Details: Includes sections for Perplexity API settings (env var name, query params), OpenAI API settings (env var name, model choices), Telegram Bot settings (env var names), Supabase function details (URL), various prompts for LLM interaction (research, blog post generation, social media snippets), and job management settings (pending jobs file, max iterations).
+  │   Usage: Loaded by the agent to configure its behavior and interaction with LLMs and other services.
+  ├── 📄 main.py
+  │   Purpose: Main orchestrator script for the AI Blog Agent.
+  │   Details: Initializes the agent, loads configurations, sets up Telegram bot (handlers, polling). Defines the core asynchronous workflow including fetching news topics, generating blog content (research, writing, formatting), and managing an interactive Telegram-based approval process (publish, delete, rewrite). Manages job context for multi-step interactions.
+  │   Usage: The primary entry point to run the AI blog agent (`python3 main.py`).
+  ├── 📄 requirements.txt
+  │   Purpose: Lists all Python dependencies required for the AI blog agent.
+  │   Details: Includes `langchain`, `langchain-openai`, `openai`, `python-dotenv`, `requests`, `PyYAML`, `python-telegram-bot`.
+  │   Usage: Used to install dependencies into the virtual environment (`pip install -r requirements.txt`).
+  ├── 📁 modules/
+  │   Purpose: Contains various service modules, each responsible for a specific part of the agent's functionality.
+  │   Details: Follows a modular design to separate concerns.
+  │   ├── 📄 __init__.py
+  │   │   Purpose: Makes the `modules` directory a Python package.
+  │   │   Details: Currently empty.
+  │   ├── 📄 job_manager.py
+  │   │   Purpose: Manages the state and context of ongoing blog post generation jobs, particularly for asynchronous Telegram interactions.
+  │   │   Details: Provides functions (`store_job_context`, `get_job_context`, `pop_job_context`, `clear_job_context`) to handle an in-memory dictionary for storing job details (e.g., current draft data, user choices, next expected action). Supports a default job ID for single pending interaction.
+  │   ├── 📄 notification_service.py
+  │   │   Purpose: Handles Telegram bot setup and communication.
+  │   │   Details: Uses `python-telegram-bot`. Key functions include `create_bot_application` (initializes bot), `register_handlers` (maps commands, messages, callbacks to handler functions in `main.py`), `start_bot_polling`/`stop_bot_polling` (manages bot lifecycle), and `send_telegram_message` (sends formatted messages with optional inline keyboards). Also retrieves Telegram credentials.
+  │   ├── 📄 perplexity_service.py
+  │   │   Purpose: Interacts with the Perplexity API for news sourcing and uses OpenAI for topic relevance assessment.
+  │   │   Details: Implements `fetch_breaking_news_topic` which queries Perplexity for recent news based on configured keywords and then uses an OpenAI model to evaluate relevance and extract a concise blog topic. Loads Perplexity API and relevance check prompts from `config.yaml`.
+  │   ├── 📄 research_service.py
+  │   │   Purpose: Conducts research on a given topic using an LLM (via Perplexity API direct call).
+  │   │   Details: Implements `conduct_research` which takes a topic, queries the Perplexity API (model `llama-3.1-sonar-small-128k-online` by default) with a specific system prompt to gather information, and returns a synthesized research brief. Loads configuration from `config.yaml`.
+  │   ├── 📄 supabase_service.py
+  │   │   Purpose: Interacts with the Supabase backend for formatting blog post data and posting it.
+  │   │   Details: Provides `format_for_supabase` to map generated blog components (title, slug, content, author_id, etc.) to the JSON payload expected by the Supabase Edge Function. Provides `post_blog_to_supabase` to send this payload to the `create-blog-post` Supabase Edge Function. Handles API responses and errors.
+  │   └── 📄 writing_service.py
+  │       Purpose: Generates various components of a blog post (title, slug, content, excerpt) using LLM calls via Langchain, and can incorporate rewrite instructions.
+  │       Details: Implements `generate_blog_post_components` which orchestrates multiple OpenAI calls with specific prompts (from `config.yaml`) for each component. Accepts an initial research brief and optional user feedback for rewrites. Uses Langchain's `ChatOpenAI`.
+  └── 📁 venv/
+      Purpose: Python virtual environment for the `ai_blog_agent`.
+      Details: Contains isolated Python interpreter and installed dependencies. This directory is typically gitignored.
