@@ -61,7 +61,6 @@ const NotFound = () => {
         {/* Primary navigation button - adapts text based on auth state */}
         <Button 
           onClick={handleReturnHome}
-          asChild
           className="bg-monketer-purple hover:bg-monketer-purple-dark mb-2 w-full"
         >
           Return to {user ? "Dashboard" : "Home"}
