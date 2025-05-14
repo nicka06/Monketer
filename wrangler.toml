@@ -1,0 +1,5 @@
+name = "monketer-project-v1"
+compatibility_date = "2024-05-15"
+
+[site]
+bucket = "./dist" 
