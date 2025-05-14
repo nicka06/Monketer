@@ -220,6 +220,7 @@ export async function getProjectByNameAndUsername(projectName: string, username:
     
     // If current user's email matches the username, use the current user's ID
     if (user && user.email === username) {
+      console.log(`[getProjectByNameAndUsername] Primary lookup: user.id=${user.id}, projectName=${projectName}`);
       // Find the project by name and user ID
       const { data: projects, error: projectError } = await supabase
         .from('projects')
@@ -228,31 +229,41 @@ export async function getProjectByNameAndUsername(projectName: string, username:
         .eq('name', projectName)
         .limit(1);
         
-      if (projectError) throw projectError;
+      console.log('[getProjectByNameAndUsername] Primary lookup result:', JSON.stringify({ projects, projectError }, null, 2));
       
-      if (!projects || projects.length === 0) {
-        throw new Error('Project not found');
+      if (projectError) {
+        console.error('[getProjectByNameAndUsername] Primary lookup projectError:', projectError);
+        throw projectError;
       }
       
-      return projects[0];
+      if (!projects || projects.length === 0) {
+        // Don't throw 'Project not found' here yet, let the fallback try
+        console.log(`[getProjectByNameAndUsername] Project '${projectName}' not found for authenticated user ${user.id} via primary lookup, trying fallback.`);
+      } else {
+        console.log(`[getProjectByNameAndUsername] Project '${projectName}' FOUND for authenticated user ${user.id} via primary lookup.`);
+        return projects[0]; // Project found for authenticated user
+      }
     }
     
-    // Fallback: Try to find the user in user_info by username
+    // Fallback: Try to find the user in user_info by username (email) and use their auth_user_uuid
+    console.log(`Fallback: Attempting to find user '${username}' in user_info and use auth_user_uuid.`);
     const { data: userInfo, error: userError } = await supabase
       .from('user_info')
-      .select('id')
-      .eq('username', username)
+      .select('auth_user_uuid') // Select the new auth_user_uuid column
+      .eq('username', username) // Assuming 'username' column in user_info stores the email
       .single();
       
-    if (userError || !userInfo) {
-      throw new Error('User not found');
+    if (userError || !userInfo || !userInfo.auth_user_uuid) {
+      // If user not found in user_info or auth_user_uuid is missing, then throw User not found
+      console.error('User not found in user_info or auth_user_uuid is missing:', userError || 'No userInfo or auth_user_uuid');
+      throw new Error('User not found'); 
     }
     
-    // Find the project by name and user ID
+    // Find the project by name and the auth_user_uuid from user_info
     const { data: projects, error: projectError } = await supabase
       .from('projects')
       .select('*')
-      .eq('user_id', userInfo.id.toString())
+      .eq('user_id', userInfo.auth_user_uuid) // Use the auth_user_uuid
       .eq('name', projectName)
       .limit(1);
       

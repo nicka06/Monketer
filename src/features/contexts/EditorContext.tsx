@@ -371,27 +371,25 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Case 2: Username and project name are provided (legacy URL format)
         else if (username && projectName) {
           console.log(`Loading project by username/name: ${username}/${projectName}`);
-          const result = await getProjectByNameAndUsername(username, decodeURIComponent(projectName));
+          const result = await getProjectByNameAndUsername(decodeURIComponent(projectName), username);
           
-          if (result?.project) {
+          if (result) { // Check if result itself is truthy (i.e., project object was returned)
             // Update state with the fetched project
-            setProjectData(result.project);
-            setProjectTitle(result.project.name);
-            setActualProjectId(result.project.id);
-            setHasCode(!!result.project.current_html);
+            setProjectData(result); // Use result directly
+            setProjectTitle(result.name); // Use result.name
+            setActualProjectId(result.id); // Use result.id
+            setHasCode(!!result.current_html); // Use result.current_html
             
-            // Type cast the messages to match our extended interface
-            const formattedChatMessages = (result.chatMessages || []).map(msg => ({
-              ...msg,
-              role: msg.role || 'assistant',
-            })) as ExtendedChatMessage[];
-            setChatMessages(formattedChatMessages);
-            
-            setPendingChanges(result.pendingChanges || []);
-            setLivePreviewHtml(result.project.current_html || null);
+            // Assuming getProjectByNameAndUsername doesn't return chatMessages or pendingChanges directly
+            // If you need them, you might need to call fetchAndSetProject(result.id) here
+            // or modify getProjectByNameAndUsername to also return them.
+            // For now, let's clear them or fetch them separately if needed after validating this fix.
+            setChatMessages([]); 
+            setPendingChanges([]);
+            setLivePreviewHtml(result.current_html || null);
             
             // Update URL to use project ID format for future consistency
-            window.history.replaceState({}, '', `/editor/${result.project.id}`);
+            window.history.replaceState({}, '', `/editor/${result.id}`);
             
             // Store the username for potential later use
             setCurrentUsername(username);
@@ -1066,6 +1064,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       });
       return;
     }
+    
     
     // Ensure we have the semantic structure (required for V2)
     if (!projectData.semantic_email_v2) {
