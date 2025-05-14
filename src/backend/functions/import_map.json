@@ -6,4 +6,4 @@
     "shared/": "./_shared/",
     "@shared/": "../../shared/"
   }
-}
+} 
