@@ -3,20 +3,20 @@ FROM node:18-alpine AS build
 
 # Install tools (including bash) and then bun
 RUN apk add --no-cache curl unzip bash && curl -fsSL https://bun.sh/install | bash
-
-# Set working directory
-WORKDIR /app
-
+   
+   # Set working directory
+   WORKDIR /app
+   
 # Copy package.json and bun.lockb
 COPY package.json bun.lockb ./
-
+   
 # Install dependencies using bun
 ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun_cache
 RUN /root/.bun/bin/bun install --frozen-lockfile --cache-dir $BUN_INSTALL_CACHE_DIR
-
+   
 # Copy the rest of the application code
-COPY . .
-
+   COPY . .
+   
 # Define build arguments for Vite
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
@@ -27,7 +27,7 @@ ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
 
 # Build the application
 RUN /root/.bun/bin/bun run build
-
+   
 # ---- Production Stage ----
 FROM nginx:alpine
 

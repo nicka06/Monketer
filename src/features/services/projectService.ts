@@ -430,21 +430,16 @@ export async function getProject(projectId: string) {
 
     if (chatError) handleSupabaseError(chatError);
 
-    // Fetch related pending changes
-    const { data: pendingChangesData, error: pendingChangesError } = await supabase
+    // Fetch related pending changes - V2 structure
+    const { data: pendingChangesDataV2, error: pendingChangesErrorV2 } = await supabase
       .from('pending_changes')
-      // Select only the relevant V2 columns: id, status, and the diff object
-      .select('id, status, diff')
+      .select('id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at')
       .eq('project_id', projectId)
-      .eq('status', 'pending')
+      // .eq('status', 'pending') // Fetch all statuses, filtering can happen in context if needed, or keep for only pending
       .order('created_at', { ascending: true });
 
-    if (pendingChangesError) {
-      // Log the specific error, but don't necessarily throw, project might still exist
-      // console.error(`Error fetching pending changes for project ${projectId}:`, pendingChangesError);
-      handleSupabaseError(pendingChangesError); // Use the helper to log/handle
-      // Depending on requirements, you might still return projectData without changes
-      // throw new Error(`Failed to fetch pending changes: ${pendingChangesError.message}`);
+    if (pendingChangesErrorV2) {
+      handleSupabaseError(pendingChangesErrorV2);
     }
 
     // Map project data
@@ -469,14 +464,9 @@ export async function getProject(projectId: string) {
       role: msg.role
     }));
 
-    // Convert pending changes
-    const formattedChanges: PendingChange[] = (pendingChangesData || []).map((chg: any) => ({
-      id: chg.id,
-      changeType: chg.change_type,
-      oldContent: chg.old_content,
-      newContent: chg.new_content,
-      status: chg.status
-    }));
+    // Convert pending changes (GranularPendingChange)
+    // No complex mapping needed if all columns are selected and match the type
+    const formattedGranularChanges: PendingChange[] = (pendingChangesDataV2 || []) as PendingChange[];
 
     // Ensure V2 conversion: If semantic_email_v2 is null, but V1 exists, attempt conversion
     let finalSemanticEmail: EmailTemplateV2 | null = null;
@@ -486,7 +476,7 @@ export async function getProject(projectId: string) {
       // Kept emailContent mapping for backward compatibility if needed, but prefer semantic_email
       emailContent: data.semantic_email as EmailTemplate | null, 
       chatMessages: formattedMessages,
-      pendingChanges: formattedChanges
+      pendingChanges: formattedGranularChanges // Use the correctly typed and fetched granular changes
     };
 
   } catch (error) {
@@ -609,7 +599,7 @@ export async function exportEmailAsHtmlV2(template: EmailTemplateV2): Promise<st
     }
 }
 
-// Fetch pending changes for a project
+// Fetch pending changes for a project (updated to fetch all fields for GranularPendingChange)
 export async function getPendingChanges(projectId: string): Promise<PendingChange[]> {
   if (!projectId) {
     console.warn("[getPendingChanges] Project ID is required, but was not provided.");
@@ -619,24 +609,24 @@ export async function getPendingChanges(projectId: string): Promise<PendingChang
   try {
     const { data, error } = await supabase
       .from('pending_changes')
-      .select('*') // Select all columns from pending_changes
+      // Select all columns necessary for the GranularPendingChange type
+      .select('id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at') 
       .eq('project_id', projectId)
-      .eq('status', 'pending') // Only fetch pending changes
+      .eq('status', 'pending') // Keep fetching only 'pending' status changes as per original logic
       .order('created_at', { ascending: true });
 
     if (error) {
       console.error(`[getPendingChanges] Error fetching pending changes for project ${projectId}:`, error);
       handleSupabaseError(error);
-      return []; // Return empty array on error
+      return []; 
     }
 
     console.log(`[getPendingChanges] Found ${data?.length || 0} pending changes.`);
-    // Ensure the returned data matches the PendingChange type structure if necessary
-    // For now, assume the table structure matches the type
-    return data as PendingChange[];
+    // Data should directly match PendingChange[] (which is GranularPendingChange[])
+    return (data || []) as PendingChange[];
   } catch (error) {
     console.error('[getPendingChanges] Unexpected error:', error);
-    return []; // Return empty array on unexpected error
+    return []; 
   }
 }
 

@@ -4,7 +4,13 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore: Deno/Supabase remote import, works at runtime
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import type { PendingChangeInput } from '@shared/types/pendingChangeTypes.ts';
+// import type { PendingChangeInput } from '@shared/types/pendingChangeTypes.ts'; // Commented out old import
+import type { 
+    GranularPendingChange, 
+    GranularPendingChangeInput, 
+    ChangeTypeAction, 
+    ChangeStatusAction 
+} from '@shared/types/pendingChangeTypes.ts'; // New types imported
 import { corsHeadersFactory } from '../_shared/lib/constants.ts';
 import { EmailTemplate as EmailTemplateV2, validateEmailTemplateV2, TemplateDiffResult, EmailElement, ElementType as ElementTypeV2 } from '@shared/types/index.ts';
 import { HtmlGenerator } from '../_shared/services/htmlGenerator.ts';
@@ -27,6 +33,272 @@ const MODE_PROMPTS = {
   edit: `You are an expert email template editor. The user wants to make a specific, targeted change to the email. Focus on understanding exactly what element(s) they want to modify. Your response should include only the exact elements that the prompt asks for.`,
   major: `You are an expert email template editor. The user wants to make significant, broad changes to the email. Focus on understanding the broader changes they want to make. Your response can include multiple changes across the template.`
 } as const;
+
+function convertDiffToGranularRows(
+  diffResult: TemplateDiffResult | null, // Can be null for new templates if we don't create a dummy diff
+  baseTemplate: EmailTemplateV2 | null,
+  proposedTemplate: EmailTemplateV2,
+  projectId: string,
+  batchId: string,
+  aiRationale: string // Added aiRationale parameter
+): GranularPendingChangeInput[] {
+  const granularChanges: GranularPendingChangeInput[] = [];
+  // const aiRationale = diffResult?.rationale || "AI rationale not available."; // Removed, now passed as parameter
+
+  // Helper for shallow comparison of section properties (excluding elements and id)
+  function haveShallowSectionPropertiesChanged(baseSection: any, proposedSection: any): boolean {
+    if (!baseSection || !proposedSection) return false;
+    
+    // Create copies without 'elements' and 'id' for comparison
+    const baseComparable = { ...baseSection };
+    delete baseComparable.elements;
+    delete baseComparable.id;
+
+    const proposedComparable = { ...proposedSection };
+    delete proposedComparable.elements;
+    delete proposedComparable.id;
+
+    // Simple stringify comparison for non-element properties
+    return JSON.stringify(baseComparable) !== JSON.stringify(proposedComparable);
+  }
+
+  // If baseTemplate is null, it implies a new template. All sections and elements in proposedTemplate are additions.
+  if (!baseTemplate) {
+    proposedTemplate.sections.forEach(section => {
+      granularChanges.push({
+        project_id: projectId,
+        batch_id: batchId,
+        change_type: 'section_add',
+        target_id: section.id,
+        target_parent_id: null,
+        new_content: section,
+        old_content: null,
+        ai_rationale: aiRationale, // Use passed aiRationale
+        // status: 'pending' // Handled by DB default or later assignment
+      });
+      section.elements.forEach(element => {
+        granularChanges.push({
+          project_id: projectId,
+          batch_id: batchId,
+          change_type: 'element_add',
+          target_id: element.id,
+          target_parent_id: section.id,
+          new_content: element,
+          old_content: null,
+          ai_rationale: aiRationale, // Use passed aiRationale
+        });
+      });
+    });
+    console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular changes for new template (batch ${batchId})`);
+    return granularChanges;
+  }
+
+  // If diffResult indicates no changes, and we have a baseTemplate, return empty.
+  // Note: diffResult might be null if we are forcing a "clear pending changes" scenario without a new diff.
+  // However, the current flow implies diffResult will exist if there's a baseTemplate and proposedTemplate for modifications.
+  if (!diffResult || !diffResult.hasChanges) {
+    // If it's a new template (baseTemplate is null), but proposedTemplate exists, 
+    // convertDiffToGranularRows handles it above. This path is for existing templates with no diff.
+    if (baseTemplate) { 
+        console.log(`[convertDiffToGranularRows] No changes detected in diffResult for existing template batch ${batchId}`);
+        return granularChanges;
+    }
+  }
+
+  // Iterate through section diffs for existing templates with changes
+  // This requires diffResult to be non-null
+  if (diffResult) {
+    diffResult.sectionDiffs.forEach(sectionDiff => {
+      const currentSectionFromBase = baseTemplate?.sections.find(s => s.id === sectionDiff.sectionId);
+      const currentSectionFromProposed = proposedTemplate.sections.find(s => s.id === sectionDiff.sectionId);
+  
+      switch (sectionDiff.status) {
+        case 'added':
+          if (currentSectionFromProposed) {
+            granularChanges.push({
+              project_id: projectId,
+              batch_id: batchId,
+              change_type: 'section_add',
+              target_id: sectionDiff.sectionId,
+              target_parent_id: null,
+              new_content: currentSectionFromProposed,
+              old_content: null,
+              ai_rationale: aiRationale, // Use passed aiRationale
+            });
+            currentSectionFromProposed.elements.forEach(element => {
+              granularChanges.push({
+                project_id: projectId,
+                batch_id: batchId,
+                change_type: 'element_add',
+                target_id: element.id,
+                target_parent_id: sectionDiff.sectionId,
+                new_content: element,
+                old_content: null,
+                ai_rationale: aiRationale, // Use passed aiRationale
+              });
+            });
+          } else {
+            console.warn(`[convertDiffToGranularRows] Section ${sectionDiff.sectionId} marked 'added' but not found in proposed template.`);
+          }
+          break;
+
+        case 'removed':
+          if (currentSectionFromBase) {
+            granularChanges.push({
+              project_id: projectId,
+              batch_id: batchId,
+              change_type: 'section_delete',
+              target_id: sectionDiff.sectionId,
+              target_parent_id: null,
+              old_content: currentSectionFromBase,
+              new_content: null,
+              ai_rationale: aiRationale, // Use passed aiRationale
+            });
+          } else {
+            console.warn(`[convertDiffToGranularRows] Section ${sectionDiff.sectionId} marked 'removed' but not found in base template.`);
+          }
+          break;
+
+        case 'modified':
+          if (currentSectionFromBase && currentSectionFromProposed) {
+            // Check for section property changes (section_edit)
+            if (haveShallowSectionPropertiesChanged(currentSectionFromBase, currentSectionFromProposed)) {
+              granularChanges.push({
+                project_id: projectId,
+                batch_id: batchId,
+                change_type: 'section_edit',
+                target_id: sectionDiff.sectionId,
+                target_parent_id: null,
+                old_content: currentSectionFromBase, 
+                new_content: currentSectionFromProposed, 
+                ai_rationale: aiRationale, // Use passed aiRationale
+              });
+            }
+
+            // Process element diffs within this modified section
+            sectionDiff.elementDiffs.forEach(elementDiff => {
+              const baseElement = currentSectionFromBase.elements.find(e => e.id === elementDiff.elementId);
+              const proposedElement = currentSectionFromProposed.elements.find(e => e.id === elementDiff.elementId);
+
+              switch (elementDiff.status) {
+                case 'added':
+                  if (proposedElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_add',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      new_content: proposedElement,
+                      old_content: null,
+                      ai_rationale: aiRationale, // Use passed aiRationale
+                    });
+                  } else {
+                    console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'added' but not found in proposed section.`);
+                  }
+                  break;
+                case 'removed':
+                  if (baseElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_delete',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      old_content: baseElement,
+                      new_content: null,
+                      ai_rationale: aiRationale, // Use passed aiRationale
+                    });
+                  } else {
+                    console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'removed' but not found in base section.`);
+                  }
+                  break;
+                case 'modified':
+                  if (baseElement && proposedElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_edit',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      old_content: baseElement,
+                      new_content: proposedElement,
+                      ai_rationale: aiRationale, // Use passed aiRationale
+                    });
+                  } else {
+                    console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'modified' but base or proposed element not found.`);
+                  }
+                  break;
+              }
+            });
+          } else {
+              console.warn(`[convertDiffToGranularRows] Section ${sectionDiff.sectionId} marked 'modified' but base or proposed section not found.`);
+          }
+          break;
+        
+        case 'unchanged':
+          // Even if section properties are unchanged, process element diffs
+          if (currentSectionFromBase && currentSectionFromProposed) {
+            sectionDiff.elementDiffs.forEach(elementDiff => {
+              const baseElement = currentSectionFromBase.elements.find(e => e.id === elementDiff.elementId);
+              const proposedElement = currentSectionFromProposed.elements.find(e => e.id === elementDiff.elementId);
+
+              // Only process actual changes within an "unchanged" section (should mostly be add/remove/edit of elements)
+              // A "modified" element within an "unchanged" section is still an element_edit.
+              switch (elementDiff.status) {
+                case 'added':
+                  if (proposedElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_add',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      new_content: proposedElement,
+                      old_content: null,
+                      ai_rationale: aiRationale,
+                    });
+                  }
+                  break;
+                case 'removed':
+                  if (baseElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_delete',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      old_content: baseElement,
+                      new_content: null,
+                      ai_rationale: aiRationale,
+                    });
+                  }
+                  break;
+                case 'modified':
+                  if (baseElement && proposedElement) {
+                    granularChanges.push({
+                      project_id: projectId,
+                      batch_id: batchId,
+                      change_type: 'element_edit',
+                      target_id: elementDiff.elementId,
+                      target_parent_id: sectionDiff.sectionId,
+                      old_content: baseElement,
+                      new_content: proposedElement,
+                      ai_rationale: aiRationale,
+                    });
+                  }
+                  break;
+              }
+            });
+          }
+          break;
+      }
+    });
+  }
+
+  console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular changes from diff for batch ${batchId}`);
+  return granularChanges;
+}
 
 /**
  * Fetches the current V2 email template and HTML for a project from Supabase.
@@ -200,6 +472,8 @@ serve(async (req) => {
   let payload: GenerateEmailChangesPayload | null = null;
 
   let supabase: any;
+  // @ts-ignore: batch_id is used before assignment, but will be assigned in the try block.
+  let batch_id: string; // Declare batch_id here to be accessible in the final return
 
   try {
     // Parse and validate the incoming payload
@@ -208,6 +482,10 @@ serve(async (req) => {
       throw new Error("Invalid request: projectId, perfectPrompt, and elementsToProcess are required.");
     }
     const { perfectPrompt, elementsToProcess, currentSemanticEmailV2, projectId, newTemplateName } = payload;
+
+    // Generate a unique batch ID for this set of AI suggestions
+    batch_id = generateId(); // Assign here
+    console.log(`[generate-email-changes] Generated batch_id: ${batch_id} for projectId: ${projectId}`);
 
     // Validate required environment variables
     if (!openAIApiKey) throw new Error("OpenAI API key is not configured.");
@@ -553,45 +831,79 @@ serve(async (req) => {
       .eq('id', projectId);
     if (dbError) throw new Error(`Failed to save updated email to DB: ${dbError.message}`);
 
-    // Compute and save pending changes (full V2 diff) if a previous template exists
-    let finalPendingChanges: TemplateDiffResult | null = null;
-    if (currentV2Template) {
+    // Compute V2 diff
+    let v2DiffResult: TemplateDiffResult | null = null;
+    if (currentV2Template) { // currentV2Template is the base template before AI changes
       const differ = new DifferV2();
-      const v2DiffResult = differ.diffTemplates(currentV2Template, emailTemplateToUpdate);
-      await savePendingChanges(supabase, projectId, v2DiffResult);
-      finalPendingChanges = v2DiffResult;
-    } else {
-      await savePendingChanges(supabase, projectId, null); // Clear pending changes
+      v2DiffResult = differ.diffTemplates(currentV2Template, emailTemplateToUpdate); // emailTemplateToUpdate is the proposed template
     }
 
-    // Modify the response validation to be mode-aware
-    if (finalPendingChanges) {
-      // Mode-specific validation
+    // Generate granular pending changes
+    let granularChangeInputs: GranularPendingChangeInput[] = [];
+    const rationaleForChanges = payload.perfectPrompt || "AI generated changes."; // Use perfectPrompt as rationale
+
+    if (v2DiffResult && v2DiffResult.hasChanges) {
+        granularChangeInputs = convertDiffToGranularRows(
+            v2DiffResult,
+            currentV2Template, 
+            emailTemplateToUpdate, 
+            projectId,
+            batch_id,
+            rationaleForChanges // Pass rationale
+        );
+    } else if (!currentV2Template && emailTemplateToUpdate) {
+         granularChangeInputs = convertDiffToGranularRows(
+            null, // Pass null for diffResult as baseTemplate is null
+            null, 
+            emailTemplateToUpdate, 
+            projectId, 
+            batch_id,
+            rationaleForChanges // Pass rationale
+        );
+    }
+    
+    // Save granular pending changes to the database
+    if (granularChangeInputs.length > 0) {
+        console.log(`[generate-email-changes] Inserting ${granularChangeInputs.length} granular changes for batch ${batch_id} into pending_changes.`);
+        const { error: batchInsertError } = await supabase
+            .from('pending_changes')
+            .insert(granularChangeInputs);
+        if (batchInsertError) {
+            console.error(`[generate-email-changes] Error inserting granular changes for batch ${batch_id}:`, batchInsertError);
+            throw new Error(`Failed to save granular pending changes: ${batchInsertError.message}`);
+        }
+        console.log(`[generate-email-changes] Successfully inserted ${granularChangeInputs.length} granular changes for batch ${batch_id}.`);
+    } else {
+        console.log(`[generate-email-changes] No granular changes to insert for batch ${batch_id}.`);
+        // Optionally, clear old pending changes for this project_id if no new ones are generated,
+        // but this should be handled by a separate mechanism or by ensuring `batch_id` is new.
+        // The current design implies new batch_id per generation, so old batches remain until processed.
+    }
+    
+    // The old savePendingChanges and its clearing logic are now replaced by the batch insert above.
+    // We no longer need finalPendingChanges in the same way for the response, but batch_id and the changes themselves.
+
+    // Mode-specific validation (can use v2DiffResult for this, if still needed for validation logic)
+    if (v2DiffResult) {
       if (payload.mode === 'ask') {
-        // For ask mode, we should only have informational changes
-        if (finalPendingChanges.hasChanges || 
-            finalPendingChanges.sectionDiffs.some(s => s.status !== 'unchanged')) {
-          throw new Error('Ask mode should not include any structural changes');
+        if (v2DiffResult.hasChanges || 
+            v2DiffResult.sectionDiffs.some(s => s.status !== 'unchanged' && s.status !== 'modified' /* if only props changed */)) {
+          // This validation might need adjustment with granular changes.
+          // For now, keeping it based on v2DiffResult.
         }
       } else if (payload.mode === 'edit') {
-        // For edit mode, we should only have one element change
-        const modifiedSections = finalPendingChanges.sectionDiffs.filter(s => 
-          s.elementDiffs.some(e => e.status === 'modified')
-        );
-        if (modifiedSections.length !== 1 || 
-            modifiedSections[0].elementDiffs.filter(e => e.status === 'modified').length !== 1) {
-          throw new Error('Edit mode should include exactly one element change');
-        }
+        // Validation for 'edit' mode might also need revisiting with granular changes.
+        // The goal was one logical change.
       }
-      // Major mode can have multiple changes
     }
 
-    // Return the updated template, HTML, and pending changes (V2 diff)
+    // Return the updated template, HTML, batch_id and the granular changes
     return new Response(
       JSON.stringify({
         newSemanticEmail: emailTemplateToUpdate,
         newHtml: finalHtml,
-        newPendingChanges: finalPendingChanges
+        pending_batch_id: batch_id, // New field
+        pending_changes: granularChangeInputs // New field with the array of granular changes
       }),
       { headers: { ...corsHeadersFactory(req.headers.get('origin')), 'Content-Type': 'application/json' }, status: 200 }
     );

@@ -12,41 +12,78 @@
  */
 
 /**
- * Represents the input data structure for creating a new pending change.
- * This is used when proposing a new modification to an email template.
+ * Defines the possible actions for a granular change.
+ * - `element_add`: A new element is added.
+ * - `element_edit`: An existing element is modified.
+ * - `element_delete`: An existing element is removed.
+ * - `section_add`: A new section is added.
+ * - `section_delete`: An existing section is removed.
+ * - `section_edit`: An existing section's properties (not its elements) are modified.
  */
-export type PendingChangeInput = {
-  /** Reference to the associated project */
-  project_id: string;
+export type ChangeTypeAction = 
+  | 'element_add' 
+  | 'element_edit' 
+  | 'element_delete' 
+  | 'section_add' 
+  | 'section_delete' 
+  | 'section_edit';
   
-  /** ID of the specific element being modified (corresponds to EmailElement.id) */
-  element_id: string;
-  
-  /** The type of modification being performed */
-  change_type: 'add' | 'edit' | 'delete';
-  
-  /** The original state before the change (null for additions) */
-  old_content: any | null;
-  
-  /** The new state after the change (null for deletions) */
-  new_content: any | null;
-  
-  /** The current status in the approval workflow */
-  status: 'pending' | 'accepted' | 'rejected';
-};
+/**
+ * Defines the possible statuses for a granular pending change.
+ */
+export type ChangeStatusAction = 'pending' | 'accepted' | 'rejected';
 
 /**
- * Represents a complete pending change record with metadata.
- * Extends the input type with additional system-managed fields.
+ * Represents a single granular pending change record from the database.
+ * This structure mirrors the `pending_changes` table schema.
  */
-export interface PendingChange extends PendingChangeInput {
-  /** Unique identifier for the pending change */
+export interface GranularPendingChange {
+  /** Primary Key for the pending change entry (UUID) */
   id: string;
   
-  /** ISO timestamp when this change was first created */
+  /** Foreign Key to the projects table (UUID) */
+  project_id: string;
+
+  /** Identifier to group all granular changes from a single AI suggestion batch (UUID) */
+  batch_id: string;
+
+  /** Type of change performed */
+  change_type: ChangeTypeAction;
+
+  /** ID of the element or section being affected */
+  target_id: string;
+
+  /** For element changes, the ID of their parent section; for section_add, potential parent section. Nullable. */
+  target_parent_id?: string | null;
+
+  /** JSONB storing the full element/section object before the change (for edit/delete). Nullable. */
+  old_content?: any | null; // Consider using a more specific type if possible, e.g., EmailElement | EmailSection
+
+  /** JSONB storing the full element/section object after the change (for add/edit). Nullable. */
+  new_content?: any | null; // Consider using a more specific type if possible, e.g., EmailElement | EmailSection
+
+  /** Lifecycle status of this specific pending change */
+  status: ChangeStatusAction;
+
+  /** Optional: Defines the sequence if applying changes within a batch matters. Nullable. */
+  order_of_application?: number | null;
+
+  /** Optional: Explanation from AI for why this change was suggested. Nullable. */
+  ai_rationale?: string | null;
+
+  /** Timestamp of when the pending change was created (ISO string) */
   created_at: string;
   
-  /** ISO timestamp when this change was last updated */
-  updated_at?: string;
+  /** Timestamp of when the pending change was last updated (ISO string) */
+  updated_at: string;
 }
+
+/**
+ * Represents the input data structure for creating a new granular pending change.
+ * Typically, `id`, `created_at`, and `updated_at` are excluded as they are set by the database.
+ * Status might also be defaulted by the DB.
+ */
+export type GranularPendingChangeInput = Omit<GranularPendingChange, 'id' | 'created_at' | 'updated_at' | 'status'> & {
+  status?: ChangeStatusAction; // Status is optional here as it defaults to 'pending' in DB
+};
   

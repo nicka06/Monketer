@@ -92,6 +92,10 @@ interface EditorContextType {
   isEditingTitle: boolean;
   /** State setter for the title editing state */
   setIsEditingTitle: React.Dispatch<React.SetStateAction<boolean>>;
+  /** The current batch ID for a set of pending changes */
+  currentBatchId: string | null;
+  /** State setter for the current batch ID */
+  setCurrentBatchId: React.Dispatch<React.SetStateAction<string | null>>;
   
   // UI States section - Loading and visual state indicators
   /** Whether any async operation is currently in progress */
@@ -178,10 +182,14 @@ interface EditorContextType {
   handleSendMessage: (message: string, mode: InteractionMode) => Promise<void>;
   /** Handler for changing the project title */
   handleTitleChange: (newTitle: string) => Promise<void>;
-  /** Handler for accepting all pending changes */
-  handleAcceptAll: () => Promise<void>;
-  /** Handler for rejecting all pending changes */
-  handleRejectAll: () => Promise<void>;
+  /** Handler for accepting all pending changes in the current batch */
+  handleAcceptCurrentBatch: () => Promise<void>;
+  /** Handler for rejecting all pending changes in the current batch */
+  handleRejectCurrentBatch: () => Promise<void>;
+  /** Handler for accepting a single pending change */
+  handleAcceptOneChange: (changeId: string) => Promise<void>;
+  /** Handler for rejecting a single pending change */
+  handleRejectOneChange: (changeId: string) => Promise<void>;
   /** Handler for when a suggestion is selected */
   handleSuggestionSelected: (suggestionValue: string) => Promise<void>;
   /** Handler for navigating to the send email page */
@@ -229,6 +237,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [actualProjectId, setActualProjectId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState('Untitled Document');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   
   // Content state - Message history and pending changes
   const [chatMessages, setChatMessages] = useState<ExtendedChatMessage[]>([]);
@@ -593,18 +602,14 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else if (clarifyData.status === 'complete') {
           console.log("[EditorContext] 'clarify-user-intent' complete. Proceeding to 'generate-email-changes'.");
           setProgress(70);
-          // Reset clarification state as we are proceeding to generation
           setIsClarifying(false); 
           setClarificationContext(null); 
 
-          // Step 2: Call 'generate-email-changes'
-          const generatePayload = { // Conforms to GenerateEmailChangesPayload
+          const generatePayload = { 
             projectId: currentProjectId,
-            mode: 'major', // As expected by generate-email-changes
+            mode: 'major', 
             perfectPrompt: clarifyData.perfectPrompt,
-            elementsToProcess: clarifyData.elementsToProcess,
-            currentSemanticEmailV2: null, // No existing email for the first creation
-            // newTemplateName: projectTitle, // Optional: use current project title or derive
+            currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass current if available, null if truly new
           };
 
           const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
@@ -624,39 +629,78 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             throw new Error(errorData.error || errorData.message || `Failed to generate email (status ${generateResponse.status})`);
           }
 
-          const generateData = await generateResponse.json(); // Expects { newSemanticEmail, newHtml, newPendingChanges }
+          // Backend now returns: { newSemanticEmail?: EmailTemplateV2, newHtml?: string, pending_batch_id: string, pending_changes: GranularPendingChangeInput[], ai_rationale: string }
+          const generateData = await generateResponse.json(); 
 
+          // Set pending changes and batch ID regardless of direct application
+          setCurrentBatchId(generateData.pending_batch_id || null);
+          setPendingChanges(generateData.pending_changes || []);
+
+          // If AI directly applied changes and returned new email state
           if (generateData.newHtml && generateData.newSemanticEmail) {
-            console.log("[EditorContext] Email generated successfully by 'generate-email-changes'.");
-            const updatedProjectData = await updateProject(currentProjectId, {
+            console.log("[EditorContext] Email generated and auto-applied by 'generate-email-changes'.");
+            const updatedProjectData = await updateProject(currentProjectId!, {
               current_html: generateData.newHtml,
               semantic_email_v2: generateData.newSemanticEmail,
-              name: generateData.newSemanticEmail.name || projectTitle, // Update project name if template name changed
+              name: generateData.newSemanticEmail.name || projectTitle, 
             });
 
             if (updatedProjectData) {
               setProjectData(updatedProjectData);
               setLivePreviewHtml(generateData.newHtml);
-              setPendingChanges(generateData.newPendingChanges || []); // Assuming it can be null
+              // Pending changes already set above
               setHasCode(true);
               setHasFirstDraft(true);
-              setIsCreatingFirstEmail(false); // Exit first email creation flow
-              setIsClarifying(false); // Ensure clarification mode is exited
+              setIsCreatingFirstEmail(false); 
+              setIsClarifying(false); 
 
+              const successMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've created your email based on your description!";
               const successMessage: ExtendedChatMessage = {
                 id: generateId(),
-                content: clarifyData.finalSummary || "I've created your email based on your description!",
+                content: successMessageContent,
                 role: 'assistant',
                 timestamp: new Date(),
                 type: 'success',
               };
               setChatMessages(prev => [...prev, successMessage]);
             } else {
-              throw new Error("Failed to update project with generated email data.");
+              throw new Error("Failed to update project with auto-applied email data.");
             }
+          } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
+            // If only pending changes were returned (no auto-apply)
+            console.log("[EditorContext] Pending changes generated by 'generate-email-changes'. User to review.");
+            setHasCode(true); // Assuming we have a base structure even if changes are just pending
+            setHasFirstDraft(true);
+            setIsCreatingFirstEmail(false);
+            setIsClarifying(false);
+
+            const successMessageContent = generateData.ai_rationale || "I have some suggestions for your email. Please review the pending changes.";
+            const suggestionsMessage: ExtendedChatMessage = {
+              id: generateId(),
+              content: successMessageContent,
+              role: 'assistant',
+              timestamp: new Date(),
+              type: 'edit_response', // Or a new type like 'suggestions_ready'
+            };
+            setChatMessages(prev => [...prev, suggestionsMessage]);
+             // Optionally, if there's a base HTML/Semantic even with pending changes, update preview
+            if (projectData?.current_html) setLivePreviewHtml(projectData.current_html);
+
           } else {
-            console.error("Invalid response from 'generate-email-changes':", generateData);
-            throw new Error("Received invalid data after email generation.");
+            // Neither auto-applied nor pending changes, or empty pending changes
+            console.warn("No direct update or significant pending changes from 'generate-email-changes':", generateData);
+            // Potentially show a message like "No changes were needed" or handle as an edge case.
+            // For now, exit creation flow if it was active
+            setIsCreatingFirstEmail(false); 
+            setIsClarifying(false);
+             const noChangesMessage: ExtendedChatMessage = {
+                id: generateId(),
+                content: generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.",
+                role: 'assistant',
+                timestamp: new Date(),
+                type: 'answer',
+              };
+              setChatMessages(prev => [...prev, noChangesMessage]);
           }
         } else {
           console.error("Unknown status from 'clarify-user-intent':", clarifyData.status);
@@ -713,6 +757,10 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             const clarifyData = await clarifyResponse.json(); // QuestionResponse or CompleteResponse
 
+            // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+            console.log("[EditorContext] Raw clarifyData from clarify-user-intent:", JSON.stringify(clarifyData, null, 2));
+            // >>>>>>>>>> END LOGGING <<<<<<<<<<
+
             if (clarifyData.status === 'requires_clarification') {
               console.log("[EditorContext] 'clarify-user-intent' requires clarification (edit flow).");
               setIsClarifying(true); // Enter clarification mode
@@ -735,18 +783,24 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             } else if (clarifyData.status === 'complete') {
               console.log("[EditorContext] 'clarify-user-intent' complete (edit flow). Proceeding to 'generate-email-changes'.");
+              // >>>>>>>>>> ADD LOGGING HERE FOR THE 'complete' BRANCH <<<<<<<<<<
+              console.log("[EditorContext] clarifyData in 'complete' branch:", JSON.stringify(clarifyData, null, 2));
+              // >>>>>>>>>> END LOGGING <<<<<<<<<<
               setProgress(70);
               setIsClarifying(false); 
               setClarificationContext(null); 
 
-              // Step 2: Call 'generate-email-changes'
-              const generatePayload = { // Conforms to GenerateEmailChangesPayload
-                projectId: actualProjectId,
-                mode: mode, // Pass the original mode
+              const generatePayload = { 
+                projectId: actualProjectId!,
+                mode: mode, 
                 perfectPrompt: clarifyData.perfectPrompt,
-                elementsToProcess: clarifyData.elementsToProcess,
-                currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass existing template
+                elementsToProcess: clarifyData.elementsToProcess, // Ensure this is what you intend to send
+                currentSemanticEmailV2: projectData?.semantic_email_v2 || null, 
               };
+
+              // >>>>>>>>>> ADD LOGGING FOR generatePayload <<<<<<<<<<
+              console.log("[EditorContext] Payload for generate-email-changes:", JSON.stringify(generatePayload, null, 2));
+              // >>>>>>>>>> END LOGGING <<<<<<<<<<
 
               const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
                 method: 'POST',
@@ -765,28 +819,68 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 throw new Error(errorData.error || errorData.message || `Failed to generate email changes (edit flow, status ${generateResponse.status})`);
               }
 
-              const generateData = await generateResponse.json(); // Expects { newSemanticEmail, newHtml, newPendingChanges }
+              const generateData = await generateResponse.json(); 
+
+              setCurrentBatchId(generateData.pending_batch_id || null);
+              setPendingChanges(generateData.pending_changes || []);
 
               if (generateData.newHtml && generateData.newSemanticEmail) {
-                console.log("[EditorContext] Email changes generated successfully by 'generate-email-changes' (edit flow).");
-                // Note: updateProject might overwrite changes if called concurrently. 
-                // Consider fetching latest project data before updating locally, or relying on subscription.
-                setProjectData(prev => prev ? { ...prev, semantic_email_v2: generateData.newSemanticEmail } : null);
-                setLivePreviewHtml(generateData.newHtml);
-                setPendingChanges(generateData.newPendingChanges || []); // Overwrite pending changes
+                console.log("[EditorContext] Email changes auto-applied by 'generate-email-changes' (edit flow).");
+                
+                const updatedProject = await updateProject(actualProjectId!, {
+                    current_html: generateData.newHtml,
+                    semantic_email_v2: generateData.newSemanticEmail,
+                });
+
+                if (updatedProject) {
+                    setProjectData(updatedProject);
+                    setLivePreviewHtml(generateData.newHtml);
+                } else {
+                    setProjectData(prev => prev ? { 
+                        ...prev, 
+                        current_html: generateData.newHtml, 
+                        semantic_email_v2: generateData.newSemanticEmail 
+                    } : null);
+                    setLivePreviewHtml(generateData.newHtml);
+                    console.warn("[EditorContext] updateProject did not return data, updated local projectData partially.")
+                }
+                
                 setHasCode(true);
-                // Update the chat
+                const successMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've updated the email based on your request.";
                 const successMessage: ExtendedChatMessage = {
                   id: generateId(),
-                  content: clarifyData.finalSummary || "I've updated the email based on your request.",
+                  content: successMessageContent,
                   role: 'assistant',
                   timestamp: new Date(),
                   type: 'success',
                 };
                 setChatMessages(prev => [...prev, successMessage]);
+
+              } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
+                console.log("[EditorContext] Pending changes generated by 'generate-email-changes' (edit flow). User to review.");
+                setHasCode(true); 
+                if (projectData?.current_html) setLivePreviewHtml(projectData.current_html); 
+
+                const successMessageContent = generateData.ai_rationale || "I have some new suggestions for your email. Please review them.";
+                const suggestionsMessage: ExtendedChatMessage = {
+                  id: generateId(),
+                  content: successMessageContent,
+                  role: 'assistant',
+                  timestamp: new Date(),
+                  type: 'edit_response', 
+                };
+                setChatMessages(prev => [...prev, suggestionsMessage]);
               } else {
-                console.error("Invalid response from 'generate-email-changes' (edit flow):", generateData);
-                throw new Error("Received invalid data after email change generation.");
+                console.warn("No direct update or significant pending changes from 'generate-email-changes' (edit flow):", generateData);
+                const noChangesMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
+                const noChangesMessage: ExtendedChatMessage = {
+                    id: generateId(),
+                    content: noChangesMessageContent,
+                    role: 'assistant',
+                    timestamp: new Date(),
+                    type: 'answer',
+                };
+                setChatMessages(prev => [...prev, noChangesMessage]);
               }
             } else {
               console.error("Unknown status from 'clarify-user-intent' (edit flow):", clarifyData.status);
@@ -1085,31 +1179,22 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
   
   /**
-   * handleAcceptAll - Accept all pending changes to the email
+   * handleAcceptCurrentBatch - Accept all pending changes to the email
    * 
    * Calls the API to apply all pending changes to the email,
    * then refreshes the project data to show the updated content.
    */
-  const handleAcceptAll = async () => {
-    // Ensure we have a project ID
-    if (!actualProjectId) {
-      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
-      return;
-    }
-    
-    // Check if there are any pending changes to accept
-    if (pendingChanges.length === 0) {
-      toast({ title: 'Info', description: 'No pending changes to accept.' });
+  const handleAcceptCurrentBatch = async () => {
+    if (!actualProjectId || !currentBatchId) {
+      toast({ title: 'Error', description: 'Project or Batch ID is missing.', variant: 'destructive' });
       return;
     }
 
-    // Set loading state and progress
     setIsLoading(true);
     setProgress(30);
 
     try {
-      // Call the API to accept all pending changes
-      console.log(`Calling manage-pending-changes with action: accept for project ${actualProjectId}`);
+      console.log(`Calling manage-pending-changes with operation: accept_batch for project ${actualProjectId} and batch_id ${currentBatchId}`);
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
@@ -1118,71 +1203,68 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          action: 'accept',
+          operation: 'accept_batch',
+          batch_id: currentBatchId,
         }),
       });
 
       setProgress(70);
 
-      // Handle error responses
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'Failed to accept changes');
+        throw new Error(errorData.error || errorData.message || 'Failed to accept batch of changes');
       }
 
-      // Show success message
       const result = await response.json();
       toast({
         title: 'Success',
-        description: result.message || 'All pending changes accepted.',
+        description: result.message || 'All pending changes in the batch accepted.',
       });
 
-      // Refresh project data to show updated content
+      // Update local state for all accepted changes in the batch
+      setPendingChanges(prevChanges =>
+        prevChanges.map(change =>
+          change.batch_id === currentBatchId && change.status === 'pending' 
+            ? { ...change, status: 'accepted' } 
+            : change
+        )
+      );
+
+      // Refresh project data as the template has changed
       await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
-      // Handle errors during the accept operation
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
-      console.error('Error accepting all changes:', error);
+      console.error('Error accepting batch:', error);
       toast({
-        title: 'Error Accepting Changes',
+        title: 'Error Accepting Batch',
         description: errorMsg,
         variant: 'destructive',
       });
     } finally {
-      // Clean up loading state
       setIsLoading(false);
       setProgress(100);
-      setTimeout(() => setProgress(0), 500); // Reset progress after a delay
+      setTimeout(() => setProgress(0), 500);
     }
   };
   
   /**
-   * handleRejectAll - Reject all pending changes to the email
+   * handleRejectCurrentBatch - Reject all pending changes to the email
    * 
    * Calls the API to discard all pending changes to the email,
    * then refreshes the project data to restore the original content.
    */
-  const handleRejectAll = async () => {
-    // Ensure we have a project ID
-    if (!actualProjectId) {
-      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
-      return;
-    }
-    
-    // Check if there are any pending changes to reject
-    if (pendingChanges.length === 0) {
-      toast({ title: 'Info', description: 'No pending changes to reject.' });
+  const handleRejectCurrentBatch = async () => {
+    if (!actualProjectId || !currentBatchId) {
+      toast({ title: 'Error', description: 'Project or Batch ID is missing.', variant: 'destructive' });
       return;
     }
 
-    // Set loading state and progress
     setIsLoading(true);
     setProgress(30);
 
     try {
-      // Call the API to reject all pending changes
-      console.log(`Calling manage-pending-changes with action: reject for project ${actualProjectId}`);
+      console.log(`Calling manage-pending-changes with operation: reject_batch for project ${actualProjectId} and batch_id ${currentBatchId}`);
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
@@ -1191,42 +1273,186 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          action: 'reject',
+          operation: 'reject_batch',
+          batch_id: currentBatchId,
         }),
       });
 
       setProgress(70);
 
-      // Handle error responses
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'Failed to reject changes');
+        throw new Error(errorData.error || errorData.message || 'Failed to reject batch of changes');
       }
 
-      // Show success message
       const result = await response.json();
       toast({
         title: 'Success',
-        description: result.message || 'All pending changes rejected.',
+        description: result.message || 'All pending changes in the batch rejected.',
       });
 
-      // Refresh project data to restore original content
-      await fetchAndSetProject(actualProjectId);
+      // Update local state for all rejected changes in the batch
+      setPendingChanges(prevChanges =>
+        prevChanges.map(change =>
+          change.batch_id === currentBatchId && change.status === 'pending' 
+            ? { ...change, status: 'rejected' } 
+            : change
+        )
+      );
+      // No need to fetch full project data for a batch reject.
 
     } catch (error) {
-      // Handle errors during the reject operation
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
-      console.error('Error rejecting all changes:', error);
+      console.error('Error rejecting batch:', error);
       toast({
-        title: 'Error Rejecting Changes',
+        title: 'Error Rejecting Batch',
         description: errorMsg,
         variant: 'destructive',
       });
     } finally {
-      // Clean up loading state
       setIsLoading(false);
       setProgress(100);
-      setTimeout(() => setProgress(0), 500); // Reset progress after a delay
+      setTimeout(() => setProgress(0), 500);
+    }
+  };
+  
+  /**
+   * handleAcceptOneChange - Accept a single pending change to the email
+   * 
+   * Calls the API to accept a single pending change to the email,
+   * then refreshes the project data to show the updated content.
+   * 
+   * @param changeId - The ID of the pending change to accept
+   */
+  const handleAcceptOneChange = async (changeId: string) => {
+    // Ensure we have a project ID
+    if (!actualProjectId) {
+      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsLoading(true);
+    setProgress(30);
+
+    try {
+      // Call the API to accept a single pending change
+      console.log(`Calling manage-pending-changes with operation: accept_one for project ${actualProjectId} and change_id ${changeId}`);
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+        },
+        body: JSON.stringify({
+          projectId: actualProjectId,
+          operation: 'accept_one', // Corrected operation
+          change_id: changeId,    // Corrected parameter name
+        }),
+      });
+
+      setProgress(70);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to accept change');
+      }
+
+      const result = await response.json();
+      toast({
+        title: 'Success',
+        description: result.message || 'Selected change accepted.',
+      });
+
+      // Update local state for the accepted change
+      setPendingChanges(prevChanges => 
+        prevChanges.map(change => 
+          change.id === changeId ? { ...change, status: 'accepted' } : change
+        )
+      );
+
+      // Refresh project data as the template has changed
+      await fetchAndSetProject(actualProjectId);
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
+      console.error('Error accepting change:', error);
+      toast({
+        title: 'Error Accepting Change',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 500);
+    }
+  };
+  
+  /**
+   * handleRejectOneChange - Reject a single pending change to the email
+   * 
+   * Calls the API to reject a single pending change to the email,
+   * then refreshes the project data to restore the original content.
+   * 
+   * @param changeId - The ID of the pending change to reject
+   */
+  const handleRejectOneChange = async (changeId: string) => {
+    if (!actualProjectId) {
+      toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsLoading(true);
+    setProgress(30);
+
+    try {
+      console.log(`Calling manage-pending-changes with operation: reject_one for project ${actualProjectId} and change_id ${changeId}`);
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+        },
+        body: JSON.stringify({
+          projectId: actualProjectId,
+          operation: 'reject_one', // Corrected operation
+          change_id: changeId,   // Corrected parameter name
+        }),
+      });
+
+      setProgress(70);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to reject change');
+      }
+
+      const result = await response.json();
+      toast({
+        title: 'Success',
+        description: result.message || 'Selected change rejected.',
+      });
+
+      // Update local state for the rejected change
+      setPendingChanges(prevChanges => 
+        prevChanges.map(change => 
+          change.id === changeId ? { ...change, status: 'rejected' } : change
+        )
+      );
+      // No need to fetch full project data for a reject, as base template is not altered.
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
+      console.error('Error rejecting change:', error);
+      toast({
+        title: 'Error Rejecting Change',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 500);
     }
   };
   
@@ -1638,6 +1864,8 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setProjectTitle,
     isEditingTitle,
     setIsEditingTitle,
+    currentBatchId,
+    setCurrentBatchId,
     
     // UI States
     isLoading,
@@ -1687,8 +1915,10 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Core Actions
     handleSendMessage,
     handleTitleChange,
-    handleAcceptAll,
-    handleRejectAll,
+    handleAcceptCurrentBatch,
+    handleRejectCurrentBatch,
+    handleAcceptOneChange,
+    handleRejectOneChange,
     handleSuggestionSelected,
     handleNavigateToSendPage,
     handleModeChange,

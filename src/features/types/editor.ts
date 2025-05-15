@@ -1,4 +1,5 @@
 import type { EmailTemplateV2Type as EmailTemplateV2 } from '../../shared/types/validators';
+import { GranularPendingChange as BackendGranularPendingChange } from '../../shared/types/pendingChangeTypes.ts';
 
 // Types for email content and pending changes
 
@@ -27,13 +28,8 @@ export interface EmailTemplate {
   version: number;
 }
 
-export interface PendingChange {
-  id: string;
-  changeType: 'add' | 'edit' | 'delete';
-  oldContent: any;
-  newContent: any;
-  status: 'pending' | 'applied' | 'rejected';
-}
+// New PendingChange type for the frontend, directly using or extending the backend type
+export type PendingChange = BackendGranularPendingChange;
 
 // Base ChatMessage type (ensure this aligns with your actual base if it comes from DB types elsewhere)
 // If Database['public']['Tables']['chat_messages']['Row'] was correct, use that.
@@ -84,7 +80,7 @@ export interface Project {
 // Props for EmailPreview component
 export interface EmailPreviewProps {
   currentHtml: string | null;
-  pendingChanges: PendingChange[];
+  pendingChanges: PendingChange[]; // This will now use the new PendingChange type (GranularPendingChange)
   previewMode: 'light' | 'dark';
   previewDevice: 'desktop' | 'mobile';
   semanticTemplate: EmailTemplateV2 | null;

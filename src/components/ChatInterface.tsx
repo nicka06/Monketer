@@ -129,12 +129,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const isError = 'isError' in msg && msg.isError;
 
     let suggestions: ExtendedChatMessage['suggestions'] = undefined;
-    if (!isClarificationMsg && 'suggestions' in msg && msg.role === 'assistant') {
+    if ('suggestions' in msg && msg.role === 'assistant' && !isClarificationMsg) {
       suggestions = (msg as ExtendedChatMessage).suggestions;
     }
 
-    const messageStyle = isClarificationMsg ? 'bg-blue-50 dark:bg-blue-900/30' : 
-                         isUser ? 'bg-primary/5 dark:bg-primary/10' : 'bg-background';
+    const isClarificationPromptInMainChat = 'type' in msg && msg.type === 'clarification';
+
+    const messageStyle = 
+      isClarificationMsg || isClarificationPromptInMainChat ? 'bg-blue-50 dark:bg-blue-900/30' : 
+      isUser ? 'bg-primary/5 dark:bg-primary/10' : 'bg-background';
 
     return (
       <div 
