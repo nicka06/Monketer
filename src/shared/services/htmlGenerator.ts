@@ -192,7 +192,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
     // Return the outer table row for the section
     return `
       <tr>
-        <td id="section-${section.id}" style="${sectionStyles}">
+        <td id="section-${section.id}" data-section-id="${section.id}" style="${sectionStyles}">
           ${innerTable}
         </td>
       </tr>`;

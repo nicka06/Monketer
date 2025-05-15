@@ -149,16 +149,13 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const overlayContainer = overlayContainerRef.current;
 
     if (!container || !overlayContainer) {
-      console.log("[EmailPreview] calculateAndApplyOverlays skipped: Missing container or overlayContainer.");
+      // console.log("[EmailPreview] calculateAndApplyOverlays skipped: Missing container or overlayContainer.");
       return;
     }
 
-    console.log(`[EmailPreview] Running calculateAndApplyOverlays...`);
-
-    // Clear existing overlays
+    // console.log(`[EmailPreview] Running calculateAndApplyOverlays for ${pendingChanges.length} changes...`);
     overlayContainer.innerHTML = '';
     
-    // Find the iframe inside the container
     const iframe = container.querySelector('iframe');
     if (!iframe || !iframe.contentDocument || !iframe.contentWindow) {
       console.warn("[EmailPreview] Could not access iframe content document.");
@@ -170,37 +167,33 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const iframeRect = iframe.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     const scrollY = iframeWin.scrollY;
-
-    let allPendingFound = true;
     
-    /**
-     * Process Non-Delete Pending Changes
-     * 
-     * Creates visual overlays for elements that have pending additions or edits.
-     * Deletions are handled at the template level and not visualized here.
-     * 
-     * Overlay Types:
-     * - Add: Green dashed border with light green background
-     * - Edit: Yellow solid border with light yellow background
-     */
-    console.log("[EmailPreview] Processing Pending Changes Overlays...");
+    // console.log("[EmailPreview] Processing Pending Changes Overlays...");
     if (Array.isArray(pendingChanges) && pendingChanges.length > 0) {
-      // Create overlays for additions and edits only
-      pendingChanges.forEach((change: PendingChange) => {
-        // Skip deletion overlays as they're handled at template level
-        if (change.changeType === 'delete') return;
+      pendingChanges.forEach((change: PendingChange) => { // PendingChange is now GranularPendingChange
+        // Only show overlays for changes that are currently in 'pending' status
+        if (change.status !== 'pending') return;
 
-        const targetElement = iframeDoc.getElementById(change.elementId);
+        // Skip explicit deletion overlays as they are handled by the template not rendering the item
+        if (change.change_type === 'element_delete' || change.change_type === 'section_delete') return;
+
+        let targetElement: HTMLElement | null = null;
+        const isSectionChange = change.change_type.startsWith('section');
+
+        if (isSectionChange) {
+          // Assume sections are identifiable by data-section-id attribute
+          targetElement = iframeDoc.querySelector(`[data-section-id="${change.target_id}"]`);
+        } else {
+          // Elements are identifiable by data-element-id attribute
+          targetElement = iframeDoc.querySelector(`[data-element-id="${change.target_id}"]`);
+        }
+
         if (!targetElement) {
-          console.warn(`[EmailPreview] Pending Change Overlay: Element [ID: ${change.elementId}] not found in iframe. Skipping.`);
-          allPendingFound = false;
+          // console.warn(`[EmailPreview] Pending Change Overlay: Target [ID: ${change.target_id}, Type: ${change.change_type}] not found in iframe. Skipping.`);
           return;
         }
         
-        // Get element position relative to iframe
         const targetRect = targetElement.getBoundingClientRect();
-        
-        // Create overlay with appropriate styling based on change type
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.left = `${iframeRect.left + targetRect.left - containerRect.left}px`;
@@ -208,17 +201,21 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
         overlay.style.width = `${targetRect.width}px`;
         overlay.style.height = `${targetRect.height}px`;
         overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '10';
+        overlay.style.zIndex = '10'; 
         overlay.style.boxSizing = 'border-box';
         overlay.style.borderRadius = '3px';
         
-        // Apply specific styles based on change type
-        if (change.changeType === 'add') {
-          overlay.style.border = '2px dashed #22c55e';
+        // Apply specific styles based on change type (add or edit)
+        if (change.change_type === 'element_add' || change.change_type === 'section_add') {
+          overlay.style.border = '2px dashed #22c55e'; // Green for add
           overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-        } else if (change.changeType === 'edit') {
-          overlay.style.border = '2px solid #eab308';
+          // Consider adding a small label like "New Section" or "New Element"
+          // overlay.textContent = isSectionChange ? 'New Section' : 'New Element'; 
+          // overlay.style.color = '#22c55e'; overlay.style.fontSize = '10px'; overlay.style.padding = '2px';
+        } else if (change.change_type === 'element_edit' || change.change_type === 'section_edit') {
+          overlay.style.border = '2px solid #eab308'; // Yellow for edit
           overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
+           // Consider adding a small label like "Section Modified" or "Element Modified"
         }
         
         overlayContainer?.appendChild(overlay);

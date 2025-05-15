@@ -56,17 +56,13 @@
 │   │   │       │   Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
 │   │   │       │
 │   │   │       ├── 📄 htmlGenerator.ts
-│   │   │       │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
+│   │   │       │   Purpose: Backend adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
 │   │   │       │   Details:
-│   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
-│   │   │       │   - Overrides element generation (`generateElementHtml`) specifically for `button` and `image` types to:
-│   │   │       │   - Detect placeholder content using an `isPlaceholder` utility.
-│   │   │       │   - Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
-│   │   │       │   - Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
-│   │   │       │   - Crucially, its `generateLayoutStyle` helper now correctly maps the semantic `layout.align` property (e.g., 'center') to the CSS `text-align` property for the wrapping table cell (`<td>`), ensuring correct alignment in the preview.
-│   │   │       │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
+│   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the backend Deno environment.
+│   │   │       │   - Does not override any core methods, simply inherits the HTML generation logic.
+│   │   │       │   - **This means it includes the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available in the HTML stored in the database.**
 │   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
-│   │   │       │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.
+│   │   │       │   Usage: Used by backend functions like `manage-pending-changes` to generate the final HTML for accepted email templates before saving to the database.
 │   │   │       │
 │   │   │       └── 📄 semanticParser.ts
 │   │   │           Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
@@ -108,10 +104,11 @@
 │   │
 │   ├── 📁 generate-email-changes/
 │   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to apply AI-driven modifications to email templates and save them.
+│   │       Purpose: Supabase Edge Function to process AI-driven modifications to email templates, convert them into granular pending changes, and save these changes.
 │   │       Details:
 │   │       - Core Functionality:
 │   │         • Receives a structured `GenerateEmailChangesPayload` (likely from `clarify-user-intent`) detailing the desired email modifications, including a "perfect prompt" and elements to process.
+│   │         • Imports updated for new `GranularPendingChange` types from `@shared/types/pendingChangeTypes.ts`.
 │   │         • Fetches the current `EmailTemplateV2` if it exists (`currentV2Template`).
 │   │         • Constructs a system prompt for OpenAI based on whether `currentV2Template` exists:
 │   │           - If creating a new email (`currentV2Template` is null): Instructs the AI to generate a *complete EmailTemplateV2* JSON object based on the prompt, providing a structural example and emphasizing inclusion of all required fields based on `elementDefaults`.
@@ -120,43 +117,46 @@
 │   │             1.  To **always include** a top-level `content` field for every element (using `\'\'` if needed).
 │   │             2.  To **OMIT** optional string fields (like image/border properties) entirely if they are not applicable, instead of setting them to `null`.
 │   │         • Calls the OpenAI API (gpt-4o-mini) with the constructed prompt and context.
-│   │         • Parses the AI's JSON response.
+│   │         • Parses the AI's JSON response into a proposed `EmailTemplateV2`.
 │   │         • Merges the AI-generated element data with `elementDefaults` using a deep merge, ensuring all necessary properties are present.
 │   │         • Crucially, iterates through the merged elements and explicitly sets a default `content` string (e.g., `\'\'` or text derived from properties like `alt` or `button text`) if the AI omitted it, preventing validation errors.
 │   │         • Also converts any `null` values received from the AI for optional string properties (e.g., in image or border settings) to `undefined` to align with the Zod schema's expectation (string | undefined).
 │   │         • **Also ensures that if a `properties.border` object exists after merging, the required `width`, `style`, and `color` properties have default string values (e.g., '1px', 'solid', '#000000') if they are `undefined`. This happens before the final Zod validation and has been confirmed to work correctly.**
 │   │         • Validates the final `EmailTemplateV2` structure using Zod (`validateEmailTemplateV2`). Throws error if invalid.
-│   │         • Generates the final HTML using `HtmlGenerator`.
-│   │         • Calculates the difference between the old and new template using `DifferV2` if `currentV2Template` existed.
-│   │         • Saves the new template (`semantic_email_v2`), HTML (`current_html`), and diff (`diff` in `pending_changes` table) to Supabase, overwriting previous pending changes.
+│   │         • **Generates a `batch_id` using `generateId()` for the set of changes.**
+│   │         • **Calls the `convertDiffToGranularRows` helper function:**
+│   │           - Inputs: `diffResult` (from `DifferV2` comparing base and proposed templates), `baseTemplate`, `proposedTemplate`, `projectId`, `batchId`, and `aiRationale` (from `payload.perfectPrompt`).
+│   │           - Logic: Identifies `section_add`, `section_delete`, `section_edit`, `element_add`, `element_delete`, `element_edit`. For `section_add`, also creates `element_add` for its elements. `section_edit` logic determines if a change row is needed based on shallow property comparison. Handles new templates (all adds) and no-change scenarios.
+│   │           - Output: An array of `GranularPendingChangeInput[]`.
+│   │         • **Saves the `GranularPendingChangeInput[]` to the `pending_changes` table using a Supabase batch insert (`supabase.from('pending_changes').insert(granularChanges)`).**
 │   │         • Updates the project's `last_edited_at` timestamp.
-│   │       - Input: `GenerateEmailChangesPayload` (see function code for details).
-│   │       - Output: JSON containing `newSemanticEmail` (EmailTemplateV2), `newHtml` (string), and `newPendingChanges` (TemplateDiffResult | null).
-│   │       Usage: Called by the frontend (`EditorContext`) after the clarification flow (if any) is complete to generate the actual email changes based on the final user intent.
+│   │         • The function no longer directly saves the new template or HTML to the project; this is now handled by `manage-pending-changes` upon acceptance.
+│   │       - Input: `GenerateEmailChangesPayload`.
+│   │       - Output: JSON containing `{ pending_batch_id: string, pending_changes: GranularPendingChangeInput[], ai_rationale: string }`.
+│   │       Usage: Called by the frontend (`EditorContext`) after the clarification flow (if any) is complete to generate a batch of granular pending changes based on AI suggestions, which are then presented to the user for individual approval.
 │   │
 │   ├── 📁 manage-pending-changes/
 │   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to accept or reject a set of pending V2 template changes for a project.
+│   │       Purpose: Supabase Edge Function to manage granular pending V2 template changes, allowing for individual or batch acceptance/rejection, and fetching changes.
 │   │       Details:
-│   │       - Core Functionality:
-│   │         • Handles HTTP POST requests with a `projectId` and an `action` ('accept' or 'reject').
-│   │         • Fetches the project's current `semantic_email_v2` and its associated `pending_changes` (which is expected to be a `TemplateDiffResult` containing `oldTemplate` and `newTemplate` states).
-│   │         • If 'accept':
-│   │           - Assumes `pending_changes.diff.newTemplate` is the target state.
-│   │           - Generates HTML from this target state using `HtmlGeneratorCore` (shared).
-│   │           - Calls Supabase RPC `manage_accept_transaction` to update the project with the new template/HTML, mark changes as 'accepted', and increment project version.
-│   │         • If 'reject':
-│   │           - Assumes `pending_changes.diff.oldTemplate` is the target state to revert to.
-│   │           - Generates HTML from this reverted state using `HtmlGeneratorCore` (shared).
-│   │           - Calls Supabase RPC `manage_reject_transaction` to update the project with the reverted template/HTML and mark changes as 'rejected'.
-│   │       - Key Dependencies:
-│   │         • Supabase client (for DB operations and RPC calls).
-│   │         • `corsHeadersFactory` (backend shared).
-│   │         • `HtmlGeneratorCore` (shared service).
-│   │         • Shared types (`EmailTemplate`, `PendingChange`).
-│   │         • Supabase RPCs: `manage_accept_transaction`, `manage_reject_transaction`.
-│   │       - Note: Contains `applyPendingChanges` and `applyRevert` helper functions that manipulate template objects based on change arrays, but these are not directly used by the main 'accept'/'reject' logic of this endpoint, which instead relies on the full old/new templates stored within the pending diff.
-│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to finalize or discard a set of proposed email template modifications.
+│   │       - Imports updated for new `GranularPendingChange` types and `HtmlGeneratorV2` from `../_shared/services/htmlGenerator.ts`.
+│   │       - **`applyPendingChanges` Function (Refactored Helper):**
+│   │         • Input: `currentTemplate: EmailTemplateV2`, `changesToApply: GranularPendingChangeInput[]`.
+│   │         • Logic: Processes changes in a specific order (section deletions, element deletions, section edits, element edits, section additions, element additions) using `target_id` and `target_parent_id` to apply them to the `currentTemplate`.
+│   │       - **`applyRevert` Function (Refactored Helper):**
+│   │         • Input: `template: EmailTemplateV2`, `changesToRevert: GranularPendingChange[]`.
+│   │         • Logic: Processes reverts in a specific order (element additions (delete new), section additions (delete new), element edits (restore old), section edits (restore old), element deletions (re-add old), section deletions (re-add old)) to revert the template.
+│   │       - **`serve` Function (Overhauled Main Handler):**
+│   │         • Input Payload (`ManagePendingChangesPayload`): `{ projectId: string, operation: 'accept_one' | 'reject_one' | 'accept_batch' | 'reject_batch' | 'get_batch' | 'get_all_project', change_id?: string, batch_id?: string }`.
+│   │         • Handles operations:
+│   │           - `accept_one`: Fetches the specific `GranularPendingChange` by `change_id`. Fetches the current project's `semantic_email_v2`. Applies the single change to the template using `applyPendingChanges`. Regenerates `current_html` using `HtmlGeneratorV2`. Updates the project's `semantic_email_v2` and `current_html` in the database. Updates the status of the specific change to 'accepted'.
+│   │           - `reject_one`: Updates the status of the specific `GranularPendingChange` (by `change_id`) to 'rejected' in the database.
+│   │           - `accept_batch`: Fetches all 'pending' `GranularPendingChange`s for the given `batch_id`. Fetches the current project's `semantic_email_v2`. Iteratively applies all fetched changes to the template using `applyPendingChanges`. Regenerates `current_html` using `HtmlGeneratorV2`. Updates the project's `semantic_email_v2` and `current_html`. Updates statuses of all processed changes for the batch to 'accepted'.
+│   │           - `reject_batch`: Updates the statuses of all 'pending' `GranularPendingChange`s for the given `batch_id` to 'rejected'.
+│   │           - `get_batch`: Fetches and returns all `GranularPendingChange`s for a given `batch_id`.
+│   │           - `get_all_project`: Fetches and returns all `GranularPendingChange`s for a given `project_id`.
+│   │       - Key Dependencies: Supabase client, `corsHeadersFactory`, `HtmlGeneratorV2` (backend shared), shared types (`EmailTemplateV2`, `GranularPendingChange`, `GranularPendingChangeInput`). The previous reliance on RPCs `manage_accept_transaction` and `manage_reject_transaction` has been replaced by direct database operations for template and status updates.
+│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to manage granular pending changes individually or in batches, and to retrieve change information.
 │   │
 │   ├── 📁 send-preview-email/
 │   │   └── 📄 index.ts
@@ -248,12 +248,17 @@
 │   │   - Core Functionality:
 │   │     • Uses `EmailHtmlRenderer` to display the base HTML content in an iframe.
 │   │     • Manages an overlay system on top of the iframe for:
-│   │       - Visualizing pending changes (adds/edits) with styled borders.
+│   │       - Visualizing pending changes (adds/edits) with styled borders. This is handled by the `calculateAndApplyOverlays` function which:
+│   │         - Iterates `pendingChanges` (which are `GranularPendingChange[]`), filtering by `status: 'pending'`.
+│   │         - Uses `change.target_id` to identify the affected element or section.
+│   │         - Locates elements in the iframe document via `iframeDoc.querySelector(\`[data-element-id="${change.target_id}"]\`)`.
+│   │         - Locates sections in the iframe document via `iframeDoc.querySelector(\`[data-section-id="${change.target_id}"]\`)` (assumes HTML generator adds this attribute).
+│   │         - Applies overlays based on `change_type`: 'element_add', 'section_add' (e.g., green overlay); 'element_edit', 'section_edit' (e.g., yellow overlay). Deletion changes are typically not visually highlighted with an overlay on the element itself.
 │   │       - Creating interactive, clickable overlays for image and link placeholders identified from the `semanticTemplate`.
 │   │     • Handles coordinate mapping between the iframe and the parent document for accurate overlay positioning, accounting for scroll and iframe boundaries.
 │   │   - Props:
 │   │     • `currentHtml`: The HTML string to render.
-│   │     • `pendingChanges`: Array of pending changes to highlight.
+│   │     • `pendingChanges`: Array of `GranularPendingChange` to highlight.
 │   │     • `previewMode`: 'light' or 'dark' (applies a CSS filter for dark mode).
 │   │     • `previewDevice`: 'desktop' or 'mobile' (adjusts preview width).
 │   │     • `semanticTemplate`: The structured email template data used to identify placeholders.
@@ -450,16 +455,20 @@
 │   │   │   Usage: Rendered conditionally within `EditorContent`
 │   │   │
 │   │   ├── 📄 PendingChangesBar.tsx
-│   │   │   Purpose: Floating action bar for accepting or rejecting all pending email changes.
+│   │   │   Purpose: Displays a list of individual pending granular changes for the current batch, allowing users to accept or reject each one, as well as accept or reject the entire batch.
 │   │   │   Details:
-│   │   │   - Visibility: Only shown if there are pending changes.
-│   │   │   - Layout: Absolutely positioned at the bottom-center of its parent, styled as a floating bar.
-│   │   │   - Controls:
-│   │   │     • "Reject All" button (red, `X` icon), calls `handleRejectAll` from context.
-│   │   │     • "Accept All" button (green, `Check` icon), calls `handleAcceptAll` from context.
-│   │   │   - Both buttons are disabled during loading states.
-│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/button`, `useEditor` hook.
-│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to allow bulk actions on pending template modifications.
+│   │   │   - Fetches `pendingChanges` (now `GranularPendingChange[]`), `currentBatchId`, `handleAcceptOneChange`, `handleRejectOneChange`, `handleAcceptCurrentBatch`, `handleRejectCurrentBatch`, and loading states from `useEditor` hook.
+│   │   │   - Filters `pendingChanges` to display only those with `status: 'pending'` belonging to the `currentBatchId`.
+│   │   │   - If pending changes exist for the current batch:
+│   │   │     • Displays a list of individual pending changes. Each item shows change type (e.g., 'element_add', 'section_edit') and target identifier.
+│   │   │     • Each item has an "Accept" button (calls `handleAcceptOneChange(change.id)`) and a "Reject" button (calls `handleRejectOneChange(change.id)`).
+│   │   │     • Includes an "Accept Batch" button (calls `handleAcceptCurrentBatch()`).
+│   │   │     • Includes a "Reject Batch" button (calls `handleRejectCurrentBatch()`).
+│   │   │   - Buttons are disabled during relevant loading states.
+│   │   │   - Visibility: Only shown if there are relevant pending changes for the current batch.
+│   │   │   - Styling: UI updated for list display; button sizes adjusted (e.g., to "sm").
+│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/button`, `useEditor` hook, `GranularPendingChange` type.
+│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to provide fine-grained control over AI-suggested modifications.
 │   │   │
 │   │   └── 📁 ui/
 │   │       Purpose: Collection of foundational, reusable UI components (e.g., Button, Input, Dialog, Card, Switch).
@@ -473,7 +482,7 @@
     │   Details: Provides a React Context and a custom hook (`useAuth`) for auth operations.
     │   └── 📄 useAuth.tsx
     │       Purpose: Provides a React Context and custom hook (`useAuth`) for managing user authentication state and interactions with Supabase.
-    │       Details:
+│       Details:
     │       - Manages `session`, `user`, and `loading` states.
     │       - Synchronizes with Supabase auth events (`onAuthStateChange`, `getSession`).
     │       - Exports `AuthProvider` component to wrap the application or parts of it.
@@ -491,31 +500,36 @@
     │   Purpose: Provides React Context for sharing state across different parts of a feature or the application.
     │   Details: Centralizes state management for complex UI sections like the email editor.
     │   └── 📄 EditorContext.tsx
-    │       Purpose: Central React Context (`EditorContext`) and provider (`EditorProvider`) for managing all state and operations of the email editor.
-    │       Details:
+    │       Purpose: Central React Context (`EditorContext`) and provider (`EditorProvider`) for managing all state and operations of the email editor, including the new granular pending changes system.
+│       Details:
     │       - Manages comprehensive editor state including:
     │         • Project data (`projectData`, `projectTitle`, `actualProjectId`).
     │         • UI states (`isLoading`, `isLoadingProject`, `isDarkMode`, `isMobileView`, `selectedMode`).
-    │         • Content (`chatMessages`, `livePreviewHtml`, `pendingChanges`, `EmailTemplateV2` structure).
+    │         • Content (`chatMessages`, `livePreviewHtml`, `pendingChanges` (now `GranularPendingChange[]`), `EmailTemplateV2` structure).
+    │         • **New State:** `currentBatchId: string | null`, `setCurrentBatchId`.
     │         • AI clarification flow (`isClarifying`, `clarificationConversation`, `clarificationContext`).
     │         • Placeholder editing (`editingPlaceholder`, `linkInputValue`).
     │       - Initializes editor by fetching or creating project data based on URL parameters and user auth.
     │       - Provides core handler functions for:
-    │         • Sending messages to AI for edits, questions, or generation (`handleSendMessage`).
+    │         • Sending messages to AI for edits, questions, or generation (`handleSendMessage`): **Updated to process new response from `/generate-email-changes` (`{ pending_batch_id, pending_changes, ai_rationale }`) and set `currentBatchId` and `pendingChanges` state (for both new email creation and edits).**
     │         • Managing clarification dialogues with AI.
-    │         • Accepting/rejecting pending template changes (`handleAcceptAll`, `handleRejectAll`).
+    │         • **Managing Granular Pending Changes:**
+    │           - `handleAcceptCurrentBatch` (replaces `handleAcceptAll`): Calls `/manage-pending-changes` with `operation: 'accept_batch'`, `batch_id: currentBatchId`. Updates local `pendingChanges` statuses and re-fetches project.
+    │           - `handleRejectCurrentBatch` (replaces `handleRejectAll`): Calls `/manage-pending-changes` with `operation: 'reject_batch'`, `batch_id: currentBatchId`. Updates local `pendingChanges` statuses.
+    │           - **New `handleAcceptOneChange(changeId: string)`:** Calls `/manage-pending-changes` with `operation: 'accept_one'`, `change_id`. Updates local `pendingChanges` status for the specific change and re-fetches project.
+    │           - **New `handleRejectOneChange(changeId: string)`:** Calls `/manage-pending-changes` with `operation: 'reject_one'`, `change_id`. Updates local `pendingChanges` status for the specific change.
     │         • Updating project title, element properties (links, images).
     │         • Navigating to send preview page.
     │       - Integrates with `projectService`, Supabase client, `HtmlGeneratorV2`, and `useAuth`.
     │       - Exports `useEditor` hook for components to access context.
-    │       Usage: `EditorProvider` wraps the main `Editor` page component (`src/pages/Editor.tsx`). `useEditor` is consumed by numerous components within the editor UI (e.g., `ChatInterface`, `EmailPreviewPanel`, `EditorHeader`, etc.) to display data and trigger actions.
+    │       Usage: `EditorProvider` wraps the main `Editor` page component (`src/pages/Editor.tsx`). `useEditor` is consumed by numerous components within the editor UI (e.g., `ChatInterface`, `EmailPreviewPanel`, `EditorHeader`, `PendingChangesBar`) to display data and trigger actions related to the editor and pending changes.
     │
     ├── 📁 services/
     │   Purpose: Contains modules that provide specific functionalities, often acting as clients or wrappers for backend services, shared core logic, or complex operations.
     │   Details: These services are typically used by contexts or page components to fetch data, perform actions, and encapsulate business logic.
     │   ├── 📄 differ.ts
     │   │   Purpose: Frontend (browser) adapter for the V2 template diffing service.
-│   │   Details:
+│   Details:
     │   │   - Adapts the shared `DifferCore` (from `src/shared/services/differ.ts`) for the frontend environment.
     │   │   - Uses the standard `lodash` library.
     │   │   - Exports `DifferV2` class, which instantiates `DifferCore` with lodash.
@@ -525,7 +539,7 @@
     │   │
     │   ├── 📄 htmlGenerator.ts
     │   │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
-│   │   Details:
+    │   Details:
     │   │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
     │   │   - Overrides element generation (`generateElementHtml`) specifically for `button` and `image` types to:
     │   │     • Detect placeholder content using an `isPlaceholder` utility.
@@ -533,8 +547,9 @@
     │   │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
     │   │   - Crucially, its `generateLayoutStyle` helper now correctly maps the semantic `layout.align` property (e.g., 'center') to the CSS `text-align` property for the wrapping table cell (`<td>`), ensuring correct alignment in the preview.
     │   │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
+    │   │   - **Inherits the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available for frontend processing like overlays.**
     │   │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
-    │   │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders.
+    │   │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders and for identifying sections (e.g., by `EmailPreview.tsx`).
     │   │
     │   ├── 📄 semanticParser.ts
     │   │   Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
@@ -550,13 +565,16 @@
     │   │   Usage: Used to convert raw HTML (e.g., from an imported email or a previous version) into the structured `EmailTemplateV2` format that the editor and other services can work with.
     │   │
     │   └── 📄 projectService.ts
-    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and pending changes.
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
 │       Details:
-    │       - This service is a key part of the frontend\'s data management. It includes logic for fetching, creating, updating, and deleting project data.
-    │       - It also manages email templates, including a crucial V1 to V2 upgrade path which involves client-side HTML generation to prepare V1 templates for the V2 editor.
-    │       - **Fetches pending changes correctly using the V2 structure (selecting `id`, `status`, `diff` from `pending_changes` table).**
-    │       - It uses the Supabase client for backend communication.
-    │       Usage:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
     │       - Used throughout the 
 
 
@@ -566,7 +584,224 @@
     Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
     ├── 📄 Dashboard.tsx
     │   Purpose: Main user dashboard for managing email projects.
+│   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+│   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
     │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+│   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+│   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id="${section.id}"` attribute to the primary HTML element (typically a `<td>`) of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML. Its adapters are used by both frontend (`EditorContext`, `EmailPreview`) and backend (`manage-pending-changes`) to generate HTML that includes section identifiers.
+    │   │
+    │   └── 📄 semanticParser.ts
+    │       Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │       Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │       Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │
+    └── 📄 projectService.ts
+        Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+        Details:
+        - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+        - It also manages email templates, including a V1 to V2 upgrade path.
+        - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+│       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+│   Details:
     │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
     │   - Uses `useState` for projects, loading state, and username.
     │   - Uses `useAuth` for user context and sign out.
@@ -596,7 +831,7 @@
     │
     ├── 📄 Login.tsx
     │   Purpose: Authentication page for users to sign in.
-│   Details:
+    │   Details:
     │   - Renders a login form with email and password fields (`input`).
     │   - Uses `useState` for form state and loading indicator.
     │   - Calls `signIn` from `useAuth` hook on submission.
@@ -606,7 +841,7 @@
     │
     ├── 📄 NotFound.tsx
     │   Purpose: Displays a 404 error page for non-existent routes.
-│   Details:
+    │   Details:
     │   - Displays a standard "404 Page not found" message.
     │   - Uses `useAuth` to check user authentication status.
     │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
@@ -616,7 +851,7 @@
     │
     ├── 📄 PrivacyPolicy.tsx
     │   Purpose: Displays the company's privacy policy.
-│   Details:
+    │   Details:
     │   - Static content page.
     │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
     │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
@@ -625,7 +860,7 @@
     │
     ├── 📄 SendEmailPage.tsx
     │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
-│   Details:
+    │   Details:
     │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
     │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
     │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
@@ -637,7 +872,7 @@
     │
     ├── 📄 Signup.tsx
     │   Purpose: User registration page for creating new accounts.
-│   Details:
+    │   Details:
     │   - Renders a signup form with email, password, and terms agreement checkbox.
     │   - Uses `useState` for form state and loading indicator.
     │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
@@ -695,57 +930,1391 @@
     │   │
     │   ├── 📄 htmlGenerator.ts
     │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
-    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
     │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
     │   │
-    │   └── 📄 semanticParser.ts
-    │       Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
-    │       Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
-    │       Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+│       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
     │
-    └── 📁 types/
-        Purpose: Shared TypeScript type definitions and configurations used across the entire application.
-        ├── 📁 config/
-        │   Purpose: Default configurations for shared entities.
-        │   └── 📄 elementDefaults.ts
-        │       Purpose: Defines default configurations (styles, layout, properties) for all V2 email element types and provides a factory function.
-        │       Details: Exports `elementDefaults` constant mapping `ElementTypeV2` to default objects (using `@@PLACEHOLDER_...@@` markers). Exports `createNewElement(type, initialContent?)` factory function using `generateId` and deep copying defaults.
-        │       Usage: Used when creating new elements programmatically (AI/backend) or via UI (editor) to ensure consistency.
-        │
-        ├── 📄 common.ts
-        │   Purpose: Defines common, fundamental TypeScript types shared across the application.
-        │   Details: Exports `InteractionMode` union type (`'ask' | 'edit' | 'major'`).
-        │   Usage: Provides basic shared types, imported where needed (e.g., `EditorContext`).
-        │
-        ├── 📄 diffs.ts
-        │   Purpose: Defines TypeScript interfaces for representing the results of diffing email templates.
-        │   Details: Exports `PropertyChange`, `ElementDiff`, `SectionDiff`, `TemplateDiffResult`. Defines the structure returned by `DifferCore`.
-        │   Usage: Used by `DifferCore` service and consumers of diff results (e.g., `EditorContext` for pending changes).
-        │
-        ├── 📄 editor.ts
-        │   Purpose: Defines TypeScript types specific to the editor interface, primarily for chat/messaging.
-        │   Details: Exports `ChatMessage` interface (`id`, `project_id`, `role`, `content`, `timestamp`, `isError`).
-        │   Usage: Used by frontend components (`ChatInterface`, `EditorContext`) for chat data.
-        │
-        ├── 📄 elements.ts
-        │   Purpose: Defines all TypeScript types related to individual email elements within the V2 template structure.
-        │   Details: Exports `ElementType` union. Defines `EmailElementLayout` and specific property interfaces (`HeaderElementProperties`, `ImageElementProperties`, etc.) for all types. Exports the main `EmailElement` discriminated union.
-        │   Usage: Foundational types used by services, contexts, validation, and defaults for defining email content elements.
-        │
-        ├── 📄 blog.ts                     # NEW: Defines types related to blog posts.
-        │   Purpose: Defines the frontend TypeScript interface for blog post data.
-        │   Details: Exports the `BlogPost` interface, mirroring the structure of the `blog_posts` Supabase table row.
-        │   Usage: Used by blog page components (`BlogIndexPage`, `BlogPostPage`) for type safety when handling fetched post data.
-        │
-        ├── 📄 index.ts
-        │   Purpose: Barrel file for the `src/shared/types` directory.
-        │   Details: Explicitly re-exports types from `elements.ts`, `sections.ts`, `template.ts`, `validators.ts`, `diffs.ts`, `blog.ts`.
-        │   Usage: Provides a single import point (`@shared/types`) for common shared types.
-        │
-        ├── 📄 pendingChangeTypes.ts
-        │   Purpose: Defines TypeScript types for representing proposed template changes awaiting approval.
-        │   Details: Exports `PendingChangeInput` (for creation) and `PendingChange` (for stored record, includes metadata).
-        │   Usage: Structures data for the pending changes workflow (backend functions, frontend context/UI).
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+    Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+    │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+        │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+        │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+        │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+        │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+        │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+        │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+        │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+        │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+        Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+    │            - Shows a "No Posts Found" message if filters/search yield no results.
+    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
+    │            - Includes the standard application `Footer`.
+    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
+    │
+    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
+        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
+        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
+        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
+
+└── 📁 shared/
+    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
+    Details: Contains core services logic, utility functions, and type definitions used across the application.
+    ├── 📁 lib/
+    │   Purpose: Shared, low-level utility functions.
+    │   ├── 📄 uuid-utils.ts
+    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+    │   │
+    │   └── 📄 uuid.ts
+    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
+    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
+    │
+    ├── 📁 services/
+    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
+    │   ├── 📄 differ.ts
+    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
+    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
+    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
+    │   │
+    │   ├── 📄 htmlGenerator.ts
+    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
+    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML.
+    │   │
+    │   ├── 📄 semanticParser.ts
+    │   │   Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
+    │   │   Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
+    │   │   Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
+    │   │
+    │   └── 📄 projectService.ts
+    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
+    │       Details:
+    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
+    │       - It also manages email templates, including a V1 to V2 upgrade path.
+    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
+    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
+    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
+    │       - Uses the Supabase client for backend communication.
+    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
+    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
+    │       - Used throughout the 
+
+
+
+└── 📁 pages/
+    Purpose: Top-level components representing distinct application pages or views.
+    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 Dashboard.tsx
+    │   Purpose: Main user dashboard for managing email projects.
+        │   Details:
+    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
+    │   - Uses `useState` for projects, loading state, and username.
+    │   - Uses `useAuth` for user context and sign out.
+    │   - Uses `useToast` for error feedback.
+    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
+    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
+    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
+    │   - Handles loading and empty states.
+    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Editor.tsx
+    │   Purpose: Main entry point and layout component for the email editor interface.
+    │   Details:
+    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
+    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
+    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
+    │   - Manages different UI states based on context (loading, prompting, generating, editing).
+    │   - Handles file input for image uploads via a `useRef`.
+    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
+    │
+    ├── 📄 Index.tsx
+    │   Purpose: Main public landing page for the application.
+    │   Details:
+    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
+    │   - Uses a flex column layout to structure the page.
+    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 Login.tsx
+    │   Purpose: Authentication page for users to sign in.
+    │   Details:
+    │   - Renders a login form with email and password fields (`input`).
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signIn` from `useAuth` hook on submission.
+    │   - Includes links to signup (`/signup`) and potentially password reset.
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    ├── 📄 NotFound.tsx
+    │   Purpose: Displays a 404 error page for non-existent routes.
+    │   Details:
+    │   - Displays a standard "404 Page not found" message.
+    │   - Uses `useAuth` to check user authentication status.
+    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
+    │   - Conditionally shows a link to `/editor` for authenticated users.
+    │   - Uses `useLocation` to log the invalid path.
+    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
+    │
+    ├── 📄 PrivacyPolicy.tsx
+    │   Purpose: Displays the company's privacy policy.
+    │   Details:
+    │   - Static content page.
+    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
+    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
+    │   - Dynamically sets the "Last updated" date.
+    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
+    │
+    ├── 📄 SendEmailPage.tsx
+    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
+    │   Details:
+    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
+    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
+    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
+    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
+    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
+    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
+    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
+    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
+    │
+    ├── 📄 Signup.tsx
+    │   Purpose: User registration page for creating new accounts.
+    │   Details:
+    │   - Renders a signup form with email, password, and terms agreement checkbox.
+    │   - Uses `useState` for form state and loading indicator.
+    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
+    │   - Includes specific error handling for rate limiting (`useToast`).
+    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
+    │   - Uses `@/components/ui/button` and `lucide-react` icon.
+    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
+    │
+    └── 📄 TermsOfService.tsx
+        Purpose: Displays the company's terms of service.
+            Details:
+        - Static content page, similar structure to `PrivacyPolicy.tsx`.
+        - Uses `@/components/ui/container` and `@/components/ui/typography`.
+        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
+        - Dynamically sets the "Last updated" date.
+        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
+
+    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
+    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
+    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
+    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
+    │            - Input and filter button have explicit white backgrounds and borders for contrast.
+    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
+        │   - Defines `ChangeTypeAction` enum ('element_add', 'element_edit', 'element_delete', 'section_add', 'section_edit', 'section_delete').
+        │   - Defines `ChangeStatusAction` enum ('pending', 'accepted', 'rejected').
+        │   - Exports `GranularPendingChange` interface for database records (includes `id`, `project_id`, `batch_id`, `change_type`, `target_id`, `target_parent_id`, `old_content`, `new_content`, `status`, `order_of_application`, `ai_rationale`).
+        │   - Exports `GranularPendingChangeInput` interface for creating new granular changes.
+        │   - Note: Old types `PendingChangeInput` and `PendingChange` (which represented a comprehensive diff) have been removed.
+        │   Usage: These types are central to the refactored pending changes system. Used by backend functions (`generate-email-changes`, `manage-pending-changes`) for creating, storing, and processing granular changes, and by the frontend (`EditorContext`, `PendingChangesBar`, `projectService`) for displaying and managing these changes.
         │
         ├── 📄 sections.ts
         │   Purpose: Defines TypeScript types for email template sections.
