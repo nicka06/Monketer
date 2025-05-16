@@ -1237,7 +1237,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          operation: 'accept_batch',
+          operation: 'accept_batch', // Ensure this is 'operation'
           batch_id: currentBatchId,
         }),
       });
@@ -1307,7 +1307,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          operation: 'reject_batch',
+          operation: 'reject_batch', // Ensure this is 'operation'
           batch_id: currentBatchId,
         }),
       });
@@ -1359,7 +1359,6 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
    * @param changeId - The ID of the pending change to accept
    */
   const handleAcceptOneChange = async (changeId: string) => {
-    // Ensure we have a project ID
     if (!actualProjectId) {
       toast({ title: 'Error', description: 'Project context is missing.', variant: 'destructive' });
       return;
@@ -1369,18 +1368,17 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setProgress(30);
 
     try {
-      // Call the API to accept a single pending change
-      console.log(`Calling manage-pending-changes with operation: accept_one for project ${actualProjectId} and change_id ${changeId}`);
+      console.log(`Calling manage-pending-changes with operation: accept_one for project ${actualProjectId} and change_id ${changeId}`); // Log 'operation'
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          operation: 'accept_one', // Corrected operation
-          change_id: changeId,    // Corrected parameter name
+          operation: 'accept_one', // Changed from action: 'accept'
+          change_id: changeId,
         }),
       });
 
@@ -1397,14 +1395,11 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: result.message || 'Selected change accepted.',
       });
 
-      // Update local state for the accepted change
       setPendingChanges(prevChanges => 
         prevChanges.map(change => 
           change.id === changeId ? { ...change, status: 'accepted' } : change
         )
       );
-
-      // Refresh project data as the template has changed
       await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
@@ -1440,17 +1435,17 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setProgress(30);
 
     try {
-      console.log(`Calling manage-pending-changes with operation: reject_one for project ${actualProjectId} and change_id ${changeId}`);
+      console.log(`Calling manage-pending-changes with operation: reject_one for project ${actualProjectId} and change_id ${changeId}`); // Log 'operation'
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+          'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
         },
         body: JSON.stringify({
           projectId: actualProjectId,
-          operation: 'reject_one', // Corrected operation
-          change_id: changeId,   // Corrected parameter name
+          operation: 'reject_one', // Changed from action: 'reject'
+          change_id: changeId,
         }),
       });
 
@@ -1467,13 +1462,12 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         description: result.message || 'Selected change rejected.',
       });
 
-      // Update local state for the rejected change
       setPendingChanges(prevChanges => 
         prevChanges.map(change => 
           change.id === changeId ? { ...change, status: 'rejected' } : change
         )
       );
-      // No need to fetch full project data for a reject, as base template is not altered.
+      await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';

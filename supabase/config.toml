@@ -9,3 +9,7 @@ import_map = "../src/backend/functions/import_map.json" # Assuming it uses the s
 [functions.create-blog-post]
 entrypoint = "../src/backend/functions/create-blog-post/index.ts"
 import_map = "../src/backend/functions/import_map.json"
+
+[functions.manage-pending-changes]
+entrypoint = "../src/backend/functions/manage-pending-changes/index.ts"
+import_map = "../src/backend/functions/import_map.json"
