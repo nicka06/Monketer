@@ -464,9 +464,9 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
           throw new Error('Ask mode should not include any elements to process');
         }
       } else if (payload.mode === 'edit') {
-        if (aiApiResponse.elementsToProcess.length !== 1 || 
-            aiApiResponse.elementsToProcess[0].action !== 'modify') {
-          throw new Error('Edit mode should include exactly one modify action');
+        if (aiApiResponse.elementsToProcess.length !== 1 ||
+            (aiApiResponse.elementsToProcess[0].action !== 'modify' && aiApiResponse.elementsToProcess[0].action !== 'add')) {
+          throw new Error('Edit mode should include exactly one modify or add action');
         }
       }
     } else {

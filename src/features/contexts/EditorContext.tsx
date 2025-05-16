@@ -176,6 +176,8 @@ interface EditorContextType {
   setClarificationConversation: React.Dispatch<React.SetStateAction<SimpleClarificationMessage[]>>;
   /** Context object for the clarification flow, containing gathered info */
   clarificationContext: any;
+  /** Number of times image upload has been requested */
+  imageUploadRequested: number;
   
   // Core Actions section - Main user-initiated operations
   /** Handler for sending a user message to the AI */
@@ -273,6 +275,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [clarificationContext, setClarificationContext] = useState<any>(null);
   const [hasFirstDraft, setHasFirstDraft] = useState<boolean>(false);
   const [isCreatingFirstEmail, setIsCreatingFirstEmail] = useState<boolean>(false);
+  const [imageUploadRequested, setImageUploadRequested] = useState(0);
   
   /**
    * fetchAndSetProject - Core utility function for loading project data
@@ -313,6 +316,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setChatMessages(formattedChatMessages);
         
         setPendingChanges(fetchedResult.pendingChanges || []);
+        console.log("[EditorContext|fetchAndSetProject] Detailed pending changes fetched:", JSON.stringify(fetchedResult.pendingChanges, null, 2)); // Log detailed pending changes
         
         // Initialize preview HTML with current content
         setLivePreviewHtml(fetchedResult.project.current_html || null);
@@ -1609,6 +1613,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (context.type === 'image') {
       // For images, a file input should be triggered (handled by parent component)
       console.log("[Editor] Image placeholder activated, file selection should be triggered")
+      setImageUploadRequested(c => c + 1); // Trigger the effect in EditorContent
     } else if (context.type === 'link') {
       // For links, open the link editing modal
       console.log("[Editor] Opening link modal.");
@@ -1939,6 +1944,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     clarificationConversation,
     setClarificationConversation,
     clarificationContext,
+    imageUploadRequested, // Expose new state
     
     // Core Actions
     handleSendMessage,
