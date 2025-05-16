@@ -369,12 +369,12 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     
     // Add placeholders for edit mode
     if (isPlaceholderSrc) {
-        // Add placeholder overlay with "Add Image" prompt
-        const placeholderOverlay = `
-        <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background-color:rgba(0,0,0,0.1); color:#333; text-align:center;">
-            <div style="padding:10px; font-size:14px; font-weight:bold;">Add Image</div>
-        </div>`;
-        elementContent = `<div style="position:relative;">${elementContent}${placeholderOverlay}</div>`;
+        // For placeholder images, elementContent (which is wrappedImgTag or an <a> around it) 
+        // already contains the necessary data-placeholder attributes on the <img> tag.
+        // EmailHtmlRenderer.tsx will handle the visual representation of the placeholder.
+        // No additional overlay div is needed here from the generator.
+        // The existing elementContent is sufficient.
+        console.log('[HtmlGeneratorV2] Image is placeholder. Passing through existing elementContent for EmailHtmlRenderer to handle:', elementContent.substring(0, 200));
     }
     
     // Wrap element content in a table row/cell structure

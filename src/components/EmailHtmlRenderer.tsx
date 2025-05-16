@@ -69,27 +69,31 @@ function processHtmlForPlaceholders(html: string): string {
   const imgRegex = /<img[^>]*data-placeholder=[\'\"]true[\'\"][^>]*>/gi;
   processedHtml = processedHtml.replace(imgRegex, (match) => {
     console.log('[EmailHtmlRenderer:processHtml] Found IMAGE placeholder match:', match);
-    // Extract required data attributes
-    const elementIdMatch = match.match(/data-element-id=[\'\"]([^\"\']+)[\'\"]/i);
-    const propertyPathMatch = match.match(/data-property-path=[\'\"]([^\"\']+)[\'\"]/i);
-    const elementId = elementIdMatch ? elementIdMatch[1] : null;
-    const propertyPath = propertyPathMatch ? propertyPathMatch[1] : null;
+    
+    // Parse the image tag string to a DOM element to reliably get attributes
+    const tempEl = document.createElement('div');
+    tempEl.innerHTML = match;
+    const imgElement = tempEl.firstElementChild as HTMLImageElement | null;
 
-    if (!elementId || !propertyPath) {
-      console.warn('[EmailHtmlRenderer:processHtml] Placeholder image missing data attributes:', match);
-      return '<!-- Invalid Placeholder Image -->'; // Skip if data attributes are missing
+    // Extract required data attributes
+    const elementId = imgElement?.getAttribute('data-element-id');
+    const propertyPath = imgElement?.getAttribute('data-property-path');
+
+    if (!elementId || !propertyPath || !imgElement) {
+      console.warn('[EmailHtmlRenderer:processHtml] Placeholder image missing data attributes or failed to parse img element:', match);
+      return '<!-- Invalid Placeholder Image -->';
     }
 
     // Extract existing styles and attributes for display
-    const styleMatch = match.match(/style=[\'\"]([^\"\']*)[\'\"]/i);
-    const widthMatch = match.match(/width=[\'\"]?(\\d+%?|auto)[\'\"]?/i);
-    const heightMatch = match.match(/height=[\'\"]?(\\d+%?|auto)[\'\"]?/i);
-    const altMatch = match.match(/alt=[\'\"]([^\"\']*)[\'\"]/i);
+    const existingStyles = imgElement.getAttribute('style') || '';
+    const attrWidth = imgElement.getAttribute('width');
+    const attrHeight = imgElement.getAttribute('height');
+    const alt = imgElement.getAttribute('alt') || 'Image Placeholder';
     
-    const existingStyles = styleMatch ? styleMatch[1] : '';
-    const width = widthMatch ? widthMatch[1] : '100%'; 
-    const height = heightMatch ? heightMatch[1] : 'auto'; 
-    const alt = altMatch ? altMatch[1] : 'Image Placeholder';
+    // Use attribute values if present and valid, otherwise fallback
+    const width = (attrWidth && /^[\d%]+$/.test(attrWidth)) ? attrWidth : '100%'; // Allow digits or percentage
+    const height = (attrHeight && /^[\d%]+$/.test(attrHeight)) ? attrHeight : 'auto'; // Allow digits or percentage
+
     console.log(`[EmailHtmlRenderer:processHtml] Extracted for Image ${elementId}: width=${width}, height=${height}, alt=${alt}`);
 
     // Ensure display: block for proper sizing
@@ -123,26 +127,36 @@ function processHtmlForPlaceholders(html: string): string {
       .replace(/height:[^;]+;?/gi, '')
       .replace(/max-width:[^;]+;?/gi, '')
       .replace(/aspect-ratio:[^;]+;?/gi, '')
+      .replace(/object-fit:[^;]+;?/gi, '') 
+      .replace(/-ms-interpolation-mode:[^;]+;?/gi, '')
+      .replace(/border[^:]*:[^;]+;?/gi, '')
       .trim();
 
-    const placeholderStyle = `
+    const placeholderOuterStyle = `
       ${displayStyle} 
       width: ${formatDimension(width)};
       ${finalHeightStyle}
       max-width: 100%;
       background-color: #e0e0e0; 
       border: 1px dashed #a0a0a0; 
-      color: #666; 
-      font-size: 14px; 
-      text-align: center; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
       cursor: pointer; 
       box-sizing: border-box;
       ${cleanedExistingStyles}
     `.replace(/\s+/g, ' ').trim();
-    console.log(`[EmailHtmlRenderer:processHtml] Calculated Style for Image ${elementId}:`, placeholderStyle);
+    console.log(`[EmailHtmlRenderer:processHtml] Calculated Style for OUTER Image Div ${elementId}:`, placeholderOuterStyle);
+
+    const placeholderInnerStyle = `
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      width: 100%;
+      height: 100%;
+      color: #666; 
+      font-size: 14px; 
+      text-align: center;
+      box-sizing: border-box; /* Ensure inner content respects padding/border of parent if any were added to span */
+    `.replace(/\s+/g, ' ').trim();
+    console.log(`[EmailHtmlRenderer:processHtml] Calculated Style for INNER Image Div ${elementId}:`, placeholderInnerStyle);
 
     // Return placeholder div
     const placeholderDiv = `
@@ -151,10 +165,12 @@ function processHtmlForPlaceholders(html: string): string {
           data-element-id="${elementId}" 
           data-property-path="${propertyPath}" 
           data-placeholder-type="image"
-          style="${escapeHtml(placeholderStyle)}" 
+          style="${escapeHtml(placeholderOuterStyle)}" 
           title="${escapeHtml(alt)}"
         >
-          <span>${escapeHtml(alt)}<br/>(Placeholder)</span>
+          <div style="${escapeHtml(placeholderInnerStyle)}">
+            <span>${escapeHtml(alt)}<br/>(Placeholder)</span>
+          </div>
         </div>
       `;
     console.log(`[EmailHtmlRenderer:processHtml] Generated DIV for Image ${elementId}:`, placeholderDiv);

@@ -49,7 +49,8 @@ const EditorContent = () => {
     handleSendMessage,
     handleSuggestionSelected,
     handleFileSelected,
-    actualProjectId
+    actualProjectId,
+    imageUploadRequested
   } = useEditor();
 
   // Reference to file input for image uploads from placeholders
@@ -73,6 +74,13 @@ const EditorContent = () => {
       };
     }
   }, [handleFileSelected]);
+
+  // Effect to trigger file input click when image upload is requested
+  useEffect(() => {
+    if (imageUploadRequested > 0 && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, [imageUploadRequested]);
 
   // Initial loading state
   if (isLoadingProject) {

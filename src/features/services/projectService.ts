@@ -435,7 +435,7 @@ export async function getProject(projectId: string) {
       .from('pending_changes')
       .select('id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at')
       .eq('project_id', projectId)
-      // .eq('status', 'pending') // Fetch all statuses, filtering can happen in context if needed, or keep for only pending
+      .eq('status', 'pending') // Fetch all statuses, filtering can happen in context if needed, or keep for only pending
       .order('created_at', { ascending: true });
 
     if (pendingChangesErrorV2) {
