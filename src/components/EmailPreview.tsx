@@ -8,6 +8,7 @@ import {
   ImageElementProperties, 
   ButtonElementProperties,
 } from '@/shared/types';
+import { useEditor } from '@/features/contexts/EditorContext';
 
 /**
  * EmailPreview Component
@@ -112,6 +113,8 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   const overlayContainerRef = useRef<HTMLDivElement>(null);
   const htmlRendererRef = useRef<{ getContainer: () => HTMLDivElement | null } | null>(null);
 
+  const { handleAcceptOneChange, handleRejectOneChange, isLoading } = useEditor();
+
   /**
    * calculateAndApplyOverlays
    * 
@@ -171,28 +174,16 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     // console.log("[EmailPreview] Processing Pending Changes Overlays...");
     if (Array.isArray(pendingChanges) && pendingChanges.length > 0) {
       pendingChanges.forEach((change: PendingChange) => { // PendingChange is now GranularPendingChange
-        // Only show overlays for changes that are currently in 'pending' status
         if (change.status !== 'pending') return;
-
-        // Skip explicit deletion overlays as they are handled by the template not rendering the item
         if (change.change_type === 'element_delete' || change.change_type === 'section_delete') return;
-
         let targetElement: HTMLElement | null = null;
         const isSectionChange = change.change_type.startsWith('section');
-
         if (isSectionChange) {
-          // Assume sections are identifiable by data-section-id attribute
           targetElement = iframeDoc.querySelector(`[data-section-id="${change.target_id}"]`);
         } else {
-          // Elements are identifiable by data-element-id attribute
           targetElement = iframeDoc.querySelector(`[data-element-id="${change.target_id}"]`);
         }
-
-        if (!targetElement) {
-          // console.warn(`[EmailPreview] Pending Change Overlay: Target [ID: ${change.target_id}, Type: ${change.change_type}] not found in iframe. Skipping.`);
-          return;
-        }
-        
+        if (!targetElement) return;
         const targetRect = targetElement.getBoundingClientRect();
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
@@ -200,24 +191,72 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
         overlay.style.top = `${iframeRect.top + targetRect.top - containerRect.top + scrollY + 2}px`;
         overlay.style.width = `${targetRect.width}px`;
         overlay.style.height = `${targetRect.height}px`;
-        overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '10'; 
+        overlay.style.pointerEvents = 'auto';
+        overlay.style.zIndex = '12'; // Above content, below placeholders
         overlay.style.boxSizing = 'border-box';
         overlay.style.borderRadius = '3px';
-        
-        // Apply specific styles based on change type (add or edit)
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'flex-start';
+        overlay.style.justifyContent = 'flex-end';
+        overlay.style.flexDirection = 'row';
+        overlay.style.background = 'none';
+        // Border and background
         if (change.change_type === 'element_add' || change.change_type === 'section_add') {
-          overlay.style.border = '2px dashed #22c55e'; // Green for add
+          overlay.style.border = '2px dashed #22c55e';
           overlay.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-          // Consider adding a small label like "New Section" or "New Element"
-          // overlay.textContent = isSectionChange ? 'New Section' : 'New Element'; 
-          // overlay.style.color = '#22c55e'; overlay.style.fontSize = '10px'; overlay.style.padding = '2px';
         } else if (change.change_type === 'element_edit' || change.change_type === 'section_edit') {
-          overlay.style.border = '2px solid #eab308'; // Yellow for edit
+          overlay.style.border = '2px solid #eab308';
           overlay.style.backgroundColor = 'rgba(234, 179, 8, 0.1)';
-           // Consider adding a small label like "Section Modified" or "Element Modified"
         }
-        
+        // Accept/Reject buttons
+        const btnContainer = document.createElement('div');
+        btnContainer.style.position = 'absolute';
+        btnContainer.style.top = '4px';
+        btnContainer.style.right = '4px';
+        btnContainer.style.display = 'flex';
+        btnContainer.style.gap = '4px';
+        btnContainer.style.zIndex = '13';
+        // Accept button
+        const acceptBtn = document.createElement('button');
+        acceptBtn.type = 'button';
+        acceptBtn.innerHTML = '✓';
+        acceptBtn.title = 'Accept change';
+        acceptBtn.style.background = '#22c55e';
+        acceptBtn.style.color = 'white';
+        acceptBtn.style.border = 'none';
+        acceptBtn.style.borderRadius = '50%';
+        acceptBtn.style.width = '24px';
+        acceptBtn.style.height = '24px';
+        acceptBtn.style.fontSize = '16px';
+        acceptBtn.style.cursor = 'pointer';
+        acceptBtn.style.opacity = isLoading ? '0.5' : '1';
+        acceptBtn.disabled = isLoading;
+        acceptBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleAcceptOneChange(change.id);
+        });
+        // Reject button
+        const rejectBtn = document.createElement('button');
+        rejectBtn.type = 'button';
+        rejectBtn.innerHTML = '✗';
+        rejectBtn.title = 'Reject change';
+        rejectBtn.style.background = '#ef4444';
+        rejectBtn.style.color = 'white';
+        rejectBtn.style.border = 'none';
+        rejectBtn.style.borderRadius = '50%';
+        rejectBtn.style.width = '24px';
+        rejectBtn.style.height = '24px';
+        rejectBtn.style.fontSize = '16px';
+        rejectBtn.style.cursor = 'pointer';
+        rejectBtn.style.opacity = isLoading ? '0.5' : '1';
+        rejectBtn.disabled = isLoading;
+        rejectBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleRejectOneChange(change.id);
+        });
+        btnContainer.appendChild(acceptBtn);
+        btnContainer.appendChild(rejectBtn);
+        overlay.appendChild(btnContainer);
         overlayContainer?.appendChild(overlay);
       });
     }
@@ -311,7 +350,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     } else {
       console.log("[EmailPreview] No semantic template available to find placeholders.");
     }
-  }, [pendingChanges, semanticTemplate, onPlaceholderActivate]);
+  }, [pendingChanges, semanticTemplate, onPlaceholderActivate, handleAcceptOneChange, handleRejectOneChange, isLoading]);
 
   /**
    * handleContentReady
