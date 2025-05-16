@@ -217,7 +217,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       case 'text':
         const textProps = element.properties as TextElementProperties;
         const textStyles = this.generateTypographyStyle(textProps.typography);
-        elementContent = `<p style="margin:0; ${textStyles}">${element.content}</p>`;
+        elementContent = `<p data-element-id="${element.id}" style="margin:0; ${textStyles}">${element.content}</p>`;
         break;
 
       case 'button':

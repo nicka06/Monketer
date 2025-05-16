@@ -34,10 +34,17 @@ const PendingChangesBar = () => {
     handleRejectOneChange,
   } = useEditor();
 
+  // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+  console.log("[PendingChangesBar] Rendering. currentBatchId from context:", currentBatchId, "Number of pendingChanges from context:", pendingChanges.length);
+  // >>>>>>>>>> END LOGGING <<<<<<<<<<
+
   // Filter for display: only changes in the current batch that are still pending
   const displayablePendingChanges = pendingChanges.filter(
     change => change.batch_id === currentBatchId && change.status === 'pending'
   );
+  // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+  console.log(`[PendingChangesBar] currentBatchId: ${currentBatchId}, Total pendingChanges in context: ${pendingChanges.length}, Filtered displayablePendingChanges count: ${displayablePendingChanges.length}`);
+  // >>>>>>>>>> END LOGGING <<<<<<<<<<
 
   const pendingCount = displayablePendingChanges.length;
 
