@@ -317,6 +317,21 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // Initialize preview HTML with current content
         setLivePreviewHtml(fetchedResult.project.current_html || null);
         
+        // >>>>>>>>>> MODIFICATION START <<<<<<<<<<
+        // If there are pending changes, set the currentBatchId to the batch_id of the first one
+        // This helps initialize the PendingChangesBar correctly when a project with pending changes is loaded.
+        if (fetchedResult.pendingChanges && fetchedResult.pendingChanges.length > 0) {
+          const firstBatchId = fetchedResult.pendingChanges[0].batch_id;
+          setCurrentBatchId(firstBatchId);
+          console.log(`[fetchAndSetProject] Set currentBatchId from first pending change: ${firstBatchId}`);
+        } else {
+          // If no pending changes loaded, ensure currentBatchId is nullified unless set by an active operation
+          // This might already be handled by initial state, but explicit can be safer.
+          // Avoid nullifying if a batch operation is in progress by checking isLoading or specific flags if needed.
+          // For now, let existing logic in handleSendMessage manage setCurrentBatchId during active operations.
+        }
+        // >>>>>>>>>> MODIFICATION END <<<<<<<<<<
+        
         // Update draft status based on content
         // A draft exists if we have either HTML or a semantic structure
         const hasEmail = !!fetchedResult.project.current_html || 
@@ -609,8 +624,13 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             projectId: currentProjectId,
             mode: 'major', 
             perfectPrompt: clarifyData.perfectPrompt,
+            elementsToProcess: clarifyData.elementsToProcess, // <--- ADD THIS LINE
             currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass current if available, null if truly new
           };
+
+          // >>>>>>>>>> ADD LOGGING FOR generatePayload (this was already present in a later block but good to have here too) <<<<<<<<<<
+          console.log("[EditorContext] Payload for generate-email-changes (first email flow):", JSON.stringify(generatePayload, null, 2));
+          // >>>>>>>>>> END LOGGING <<<<<<<<<<
 
           const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
             method: 'POST',
@@ -632,8 +652,15 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // Backend now returns: { newSemanticEmail?: EmailTemplateV2, newHtml?: string, pending_batch_id: string, pending_changes: GranularPendingChangeInput[], ai_rationale: string }
           const generateData = await generateResponse.json(); 
 
+          // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+          console.log("[EditorContext] Before setCurrentBatchId (First Email Flow). generateData.pending_batch_id:", generateData.pending_batch_id, "Current currentBatchId state:", currentBatchId);
+          // >>>>>>>>>> END LOGGING <<<<<<<<<<
+
           // Set pending changes and batch ID regardless of direct application
           setCurrentBatchId(generateData.pending_batch_id || null);
+          // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+          console.log("[EditorContext] Attempted to set currentBatchId (First Email Flow). Expected new value:", generateData.pending_batch_id || null);
+          // >>>>>>>>>> END LOGGING <<<<<<<<<<
           setPendingChanges(generateData.pending_changes || []);
 
           // If AI directly applied changes and returned new email state
@@ -821,7 +848,14 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
               const generateData = await generateResponse.json(); 
 
+              // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+              console.log("[EditorContext] Before setCurrentBatchId (Edit/Major Flow). generateData.pending_batch_id:", generateData.pending_batch_id, "Current currentBatchId state:", currentBatchId);
+              // >>>>>>>>>> END LOGGING <<<<<<<<<<
+
               setCurrentBatchId(generateData.pending_batch_id || null);
+              // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
+              console.log("[EditorContext] Attempted to set currentBatchId (Edit/Major Flow). Expected new value:", generateData.pending_batch_id || null);
+              // >>>>>>>>>> END LOGGING <<<<<<<<<<
               setPendingChanges(generateData.pending_changes || []);
 
               if (generateData.newHtml && generateData.newSemanticEmail) {
