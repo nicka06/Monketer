@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useEditor } from '@/features/contexts/EditorContext';
@@ -72,16 +72,24 @@ const EditorHeader = () => {
         )}
       </div>
       
-      {/* Right section: Settings (placeholder) */}
-      <div className="flex items-center">
+      {/* Right section: Settings and Send Email */}
+      <div className="flex items-center space-x-2">
         <Button 
           variant="ghost" 
           size="icon"
           aria-label="Project settings"
-          disabled
         >
           <Settings className="h-5 w-5" />
           <span className="sr-only">Settings</span>
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          aria-label="Send Email"
+          onClick={() => navigate('/send-email')}
+        >
+          <Send className="h-5 w-5" />
+          <span className="sr-only">Send Email</span>
         </Button>
       </div>
     </header>
