@@ -464,9 +464,20 @@ Adhere strictly to these ElementTypeV2 values when specifying the 'type' in elem
           throw new Error('Ask mode should not include any elements to process');
         }
       } else if (payload.mode === 'edit') {
-        if (aiApiResponse.elementsToProcess.length !== 1 ||
-            (aiApiResponse.elementsToProcess[0].action !== 'modify' && aiApiResponse.elementsToProcess[0].action !== 'add')) {
-          throw new Error('Edit mode should include exactly one modify or add action');
+        // Allow multiple operations (add, modify, delete) in edit mode.
+        // User might ask to "delete X and change Y to Z".
+        if (aiApiResponse.elementsToProcess.length === 0 && payload.userMessage.toLowerCase() !== 'undo') { // Allow empty for undo
+          // Only throw if not an undo command, as undo might result in no elements to process if it reverts to a state before elements existed.
+          // A more sophisticated undo would have its own handling or specific AI output.
+          console.warn("[Validation] Edit mode received empty elementsToProcess for non-undo command.");
+          // Depending on desired strictness, could throw here or allow AI to decide if no changes are needed.
+          // For now, let it pass if AI explicitly says no changes based on user prompt, but log it.
+          // throw new Error('Edit mode should include at least one action if not an undo.');
+        }
+        for (const element of aiApiResponse.elementsToProcess) {
+          if (!['modify', 'add', 'delete'].includes(element.action)) {
+            throw new Error(`Invalid action '${element.action}' in elementsToProcess for edit mode. Allowed actions are modify, add, delete.`);
+          }
         }
       }
     } else {
