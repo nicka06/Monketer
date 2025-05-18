@@ -23,7 +23,7 @@ import {
   getPendingChanges,
   exportEmailAsHtmlV2,
   saveChatMessage,     // <<< ADDED
-  // getChatMessages      // <<< REMOVED FOR NOW (Phase 3)
+  getChatMessages      // <<< RE-ENABLE for Phase 3
 } from '@/features/services/projectService';
 // Type definitions for core data structures
 import { Project, PendingChange, ChatMessage, ExtendedChatMessage, SimpleClarificationMessage } from '@/features/types/editor';
@@ -37,6 +37,18 @@ import { generateId } from '@/lib/uuid';
 import { supabase } from '@/integrations/supabase/client';
 // HTML generator for rendering email templates
 import { HtmlGeneratorV2 } from '@/features/services/htmlGenerator';
+
+// Helper types and function for message type validation
+// ExtendedChatMessage is imported above, so we can use its 'type' property
+type TargetMessageType = ExtendedChatMessage['type'];
+
+const VALID_TARGET_MESSAGE_TYPES: ReadonlyArray<TargetMessageType> = [
+  "error", "question", "clarification", "edit_request", "success", "answer", "edit_response"
+];
+
+function isValidTargetMessageType(type: any): type is TargetMessageType {
+  return VALID_TARGET_MESSAGE_TYPES.includes(type);
+}
 
 /**
  * Defines the available interaction modes for the editor:
@@ -300,30 +312,46 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setActualProjectId(fetchedResult.project.id);
         setHasCode(!!fetchedResult.project.current_html);
         
-        // TODO (Phase 3): Load existing chat messages from DB and populate chatMessages and clarificationConversation
-        // For now, chat will start fresh on project load.
-        // const rawChatMessages = await getChatMessages(id);
-        // const clarificationMessagesHistory: SimpleClarificationMessage[] = [];
-        // const regularMessages: ExtendedChatMessage[] = [];
+        const rawChatMessages = await getChatMessages(id);
+        const clarificationMessagesHistory: SimpleClarificationMessage[] = [];
+        const regularMessages: ExtendedChatMessage[] = [];
 
-        // rawChatMessages.forEach(msg => {
-        //   const extendedMsg: ExtendedChatMessage = {
-        //       id: msg.id, 
-        //       role: msg.role || 'assistant',
-        //       content: msg.content,
-        //       timestamp: new Date(msg.timestamp), 
-        //       isError: msg.is_error || false,
-        //       type: msg.message_type || (msg.is_error ? 'error' : 'answer'), 
-        //       suggestions: undefined, 
-        //   };
-        //   if (msg.is_clarifying_chat) { 
-        //     clarificationMessagesHistory.push({ role: extendedMsg.role as 'user' | 'assistant', content: extendedMsg.content });
-        //   }
-        //   regularMessages.push(extendedMsg); 
-        // });
+        rawChatMessages.forEach(msg => {
+          // Determine role for ExtendedChatMessage, ensuring it's 'user' or 'assistant'
+          const messageRole: 'user' | 'assistant' = (msg.role === 'user') ? 'user' : 'assistant';
 
-        // setChatMessages(regularMessages); 
-        // setClarificationConversation(clarificationMessagesHistory);
+          // Determine type for ExtendedChatMessage, ensuring it matches the expected union
+          let messageType: TargetMessageType;
+          if (msg.message_type && isValidTargetMessageType(msg.message_type)) {
+            messageType = msg.message_type;
+          } else {
+            // Fallback logic based on original code's || condition
+            if (msg.is_error) {
+              messageType = 'error';
+            } else if (messageRole === 'user') { // Use the already determined messageRole
+              messageType = 'edit_request';
+            } else { // messageRole === 'assistant'
+              messageType = 'answer'; // Default for AI assistant messages if not an error
+            }
+          }
+
+          const extendedMsg: ExtendedChatMessage = {
+              id: msg.id, 
+              role: messageRole, 
+              content: msg.content,
+              timestamp: new Date(msg.timestamp), 
+              is_error: msg.is_error || false,
+              type: messageType,
+              suggestions: undefined, // Suggestions are usually transient, not stored
+          };
+          if (msg.is_clarifying_chat) { 
+            clarificationMessagesHistory.push({ role: extendedMsg.role, content: extendedMsg.content });
+          }
+          regularMessages.push(extendedMsg); 
+        });
+
+        setChatMessages(regularMessages); 
+        setClarificationConversation(clarificationMessagesHistory);
 
         // Load and set clarification context
         if (fetchedResult.project.current_clarification_context) {

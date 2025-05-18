@@ -60,9 +60,6 @@ const LoadingScreen = ({ type = 'generating' }: LoadingScreenProps) => {
         <div className="relative mb-8" aria-hidden="true">
           <div className="relative">
             <Mail className="h-20 w-20 text-primary animate-pulse" />
-            <div className="absolute -right-3 -top-3">
-              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-            </div>
           </div>
         </div>
         <h2 className="text-3xl font-semibold mb-3 text-center">

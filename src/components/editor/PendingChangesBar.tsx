@@ -59,7 +59,7 @@ const PendingChangesBar = () => {
           aria-label={`Reject all ${pendingCount} remaining pending changes in this batch`}
         >
           <XSquare className="mr-1 h-3 w-3" />
-          Reject All ({pendingCount})
+          Reject All
         </Button>
         <Button 
           variant="default"
@@ -70,7 +70,7 @@ const PendingChangesBar = () => {
           aria-label={`Accept all ${pendingCount} remaining pending changes in this batch`}
         >
           <CheckCheck className="mr-1 h-3 w-3" />
-          Accept All ({pendingCount})
+          Accept All
         </Button>
       </div>
     </div>

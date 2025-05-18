@@ -506,8 +506,7 @@ export async function saveChatMessage(message: ChatMessage): Promise<ChatMessage
       .single();
 
     if (error) throw error;
-    // Ensure the returned data matches the ChatMessage type, especially if DB returns created_at as timestamp
-    // For now, direct cast, but consider mapping if DB schema differs significantly for select response.
+    // Ensure the returned data matches the ChatMessage type, especially if DB schema differs significantly for select response.
     return data as ChatMessage; 
   } catch (error) {
     console.error("Error saving chat message:", error);
@@ -651,5 +650,29 @@ export async function updateProject(projectId: string, dataToUpdate: Partial<Pro
   } catch (error) {
     console.error(`Error updating project ${projectId}:`, error);
     return null;
+  }
+}
+
+export async function getChatMessages(projectId: string): Promise<ChatMessage[]> {
+  if (!projectId) {
+    console.error("getChatMessages: projectId is required");
+    return [];
+  }
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching chat messages:", error);
+      handleSupabaseError(error);
+      return []; // Return empty array on error
+    }
+    return data as ChatMessage[];
+  } catch (error) {
+    console.error("Exception in getChatMessages:", error);
+    return []; // Return empty array on exception
   }
 }
