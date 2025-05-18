@@ -494,15 +494,21 @@ export async function saveChatMessage(message: ChatMessage): Promise<ChatMessage
       .insert({
           id: message.id, 
           project_id: message.project_id,
+          user_id: message.user_id,
           role: message.role,
-          content: message.content
-          // timestamp field removed
+          content: message.content,
+          is_clarifying_chat: message.is_clarifying_chat,
+          is_error: message.is_error,
+          message_type: message.message_type
+          // timestamp field removed, DB uses default created_at
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data as ChatMessage;
+    // Ensure the returned data matches the ChatMessage type, especially if DB returns created_at as timestamp
+    // For now, direct cast, but consider mapping if DB schema differs significantly for select response.
+    return data as ChatMessage; 
   } catch (error) {
     console.error("Error saving chat message:", error);
     return null;

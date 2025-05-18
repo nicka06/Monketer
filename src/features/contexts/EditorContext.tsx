@@ -21,7 +21,9 @@ import {
   getProjectByNameAndUsername, 
   updateProject,
   getPendingChanges,
-  exportEmailAsHtmlV2
+  exportEmailAsHtmlV2,
+  saveChatMessage,     // <<< ADDED
+  // getChatMessages      // <<< REMOVED FOR NOW (Phase 3)
 } from '@/features/services/projectService';
 // Type definitions for core data structures
 import { Project, PendingChange, ChatMessage, ExtendedChatMessage, SimpleClarificationMessage } from '@/features/types/editor';
@@ -290,33 +292,56 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const fetchAndSetProject = useCallback(async (id: string): Promise<Project | null> => {
     try {
       console.log(`[fetchAndSetProject] Fetching project with ID: ${id}`);
-      const fetchedResult = await getProject(id);
+      const fetchedResult = await getProject(id); // This should now include current_clarification_context
       
       if (fetchedResult && fetchedResult.project) {
-        // Log key information about the fetched project
-        console.log("[fetchAndSetProject] Fetched Project HTML (first 500 chars):", 
-          fetchedResult.project.current_html?.substring(0, 500) || "No HTML");
-        console.log("[fetchAndSetProject] Fetched Pending Changes:", 
-          fetchedResult.pendingChanges?.length || 0, "changes");
-        console.log("[fetchAndSetProject] Has semantic email v2:", 
-          !!fetchedResult.project.semantic_email_v2);
-
-        // Update all relevant state with fetched data
         setProjectData(fetchedResult.project);
         setProjectTitle(fetchedResult.project.name);
         setActualProjectId(fetchedResult.project.id);
         setHasCode(!!fetchedResult.project.current_html);
         
-        // Type cast the messages to match our extended interface
-        // This ensures the chat messages have the correct structure for the UI
-        const formattedChatMessages = (fetchedResult.chatMessages || []).map(msg => ({
-          ...msg,
-          role: msg.role || 'assistant',
-        })) as ExtendedChatMessage[];
-        setChatMessages(formattedChatMessages);
+        // TODO (Phase 3): Load existing chat messages from DB and populate chatMessages and clarificationConversation
+        // For now, chat will start fresh on project load.
+        // const rawChatMessages = await getChatMessages(id);
+        // const clarificationMessagesHistory: SimpleClarificationMessage[] = [];
+        // const regularMessages: ExtendedChatMessage[] = [];
+
+        // rawChatMessages.forEach(msg => {
+        //   const extendedMsg: ExtendedChatMessage = {
+        //       id: msg.id, 
+        //       role: msg.role || 'assistant',
+        //       content: msg.content,
+        //       timestamp: new Date(msg.timestamp), 
+        //       isError: msg.is_error || false,
+        //       type: msg.message_type || (msg.is_error ? 'error' : 'answer'), 
+        //       suggestions: undefined, 
+        //   };
+        //   if (msg.is_clarifying_chat) { 
+        //     clarificationMessagesHistory.push({ role: extendedMsg.role as 'user' | 'assistant', content: extendedMsg.content });
+        //   }
+        //   regularMessages.push(extendedMsg); 
+        // });
+
+        // setChatMessages(regularMessages); 
+        // setClarificationConversation(clarificationMessagesHistory);
+
+        // Load and set clarification context
+        if (fetchedResult.project.current_clarification_context) {
+          setClarificationContext(fetchedResult.project.current_clarification_context);
+          // TODO (Phase 3): If context exists AND there's a loaded clarification history,
+          //  set setIsClarifying(true) to resume flow.
+          // For now, setIsClarifying will be set by user actions or new clarification responses.
+          // if (clarificationMessagesHistory.length > 0) {
+          //   setIsClarifying(true);
+          //   console.log("[fetchAndSetProject] Resuming clarification flow. Context loaded, history present.");
+          // }
+        } else {
+          setClarificationContext(null);
+          setIsClarifying(false); // No context, not clarifying
+        }
         
         setPendingChanges(fetchedResult.pendingChanges || []);
-        console.log("[EditorContext|fetchAndSetProject] Detailed pending changes fetched:", JSON.stringify(fetchedResult.pendingChanges, null, 2)); // Log detailed pending changes
+        // ... rest of the function like setting livePreviewHtml, batchId, etc.
         
         // Initialize preview HTML with current content
         setLivePreviewHtml(fetchedResult.project.current_html || null);
@@ -522,6 +547,8 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsLoading(true);
     setProgress(10);
 
+    let currentEffectiveProjectId = actualProjectId; // Renamed for clarity within this function
+
     try {
       // Create initial message object and add to chat immediately for UI feedback
       const newUserMessage: ExtendedChatMessage = {
@@ -530,488 +557,478 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         role: 'user',
         timestamp: new Date(),
         type: mode === 'ask' ? 'question' : 'edit_request',
+        is_error: false, // User messages are not errors by default
       };
       setChatMessages(prev => [...prev, newUserMessage]);
+
+      // Attempt to get project ID if creating first email and not yet set
+      if (isCreatingFirstEmail && !currentEffectiveProjectId) {
+        console.log("Attempting to establish project ID for first email flow before saving user message...");
+        try {
+          const newProject = await createProject(projectTitle);
+          if (!newProject?.id) {
+            throw new Error("Failed to create project for first email flow (handleSendMessage pre-save).");
+          }
+          setActualProjectId(newProject.id);
+          setProjectData(newProject);
+          currentEffectiveProjectId = newProject.id;
+          window.history.replaceState({}, '', `/editor/${newProject.id}`);
+          console.log("Created new project with ID for saving user message:", newProject.id);
+        } catch (projectCreationError) {
+          console.error("Error creating project before saving user message:", projectCreationError);
+          // Proceed without saving this message if project creation fails, error will be handled later.
+        }
+      }
+      
+      // Save User Message
+      if (currentEffectiveProjectId && user) {
+        try {
+          console.log(`[EditorContext|handleSendMessage] Saving user message for project ${currentEffectiveProjectId}:`, newUserMessage);
+          await saveChatMessage({
+            id: newUserMessage.id,
+            project_id: currentEffectiveProjectId,
+            user_id: user.id,
+            role: newUserMessage.role,
+            content: newUserMessage.content,
+            timestamp: newUserMessage.timestamp,
+            is_clarifying_chat: isClarifying,
+            is_error: false,
+            message_type: newUserMessage.type,
+          });
+        } catch (saveError) {
+          console.error("Failed to save user chat message to DB:", saveError);
+          // Non-critical, don't block UI
+        }
+      } else {
+        console.warn("[EditorContext|handleSendMessage] Could not save user message: Missing project ID or user session.");
+      }
+
 
       // Flow 1: First email creation process
       if (isCreatingFirstEmail) {
         setProgress(20);
         
-        let currentProjectId = actualProjectId; // Use a local var that can be updated
-        if (!currentProjectId) {
-          console.log("Creating a new project for first email flow...");
+        // Ensure project ID is established (might have been done above for saving user message)
+        if (!currentEffectiveProjectId) {
+          console.log("Creating a new project for first email flow (main block)...");
           setProgress(30);
           try {
-            const newProject = await createProject(projectTitle); // Assuming projectTitle is suitable
+            const newProject = await createProject(projectTitle); 
             if (!newProject?.id) {
               throw new Error("Failed to create project for first email flow");
             }
             setActualProjectId(newProject.id);
             setProjectData(newProject);
-            currentProjectId = newProject.id; // Update local var
+            currentEffectiveProjectId = newProject.id; 
             window.history.replaceState({}, '', `/editor/${newProject.id}`);
             console.log("Created new project with ID:", newProject.id);
           } catch (error) {
             console.error("Error creating project in first email flow:", error);
-            toast({ title: 'Error', description: 'Failed to create project', variant: 'destructive' });
-            setIsLoading(false);
-            setProgress(0);
-            return;
+            // Save error message to chat
+            const errMessage: ExtendedChatMessage = {
+              id: generateId(), content: 'Failed to create a new project. Please try again.', role: 'assistant', timestamp: new Date(), type: 'error', is_error: true,
+            };
+            setChatMessages(prev => [...prev, errMessage]); // No saveChatMessage call for this ephemeral error as project_id might be missing
+            setIsLoading(false); setProgress(0); return;
           }
         }
         
-        if (!currentProjectId) {
+        if (!currentEffectiveProjectId) { // Should not happen if above logic is correct
           toast({ title: 'Error', description: 'Project ID missing after creation attempt.', variant: 'destructive' });
           setIsLoading(false); return;
         }
 
         setProgress(40);
-        console.log(`[EditorContext] Initiating 'clarify-user-intent' for project ${currentProjectId}`);
+        console.log(`[EditorContext] Initiating 'clarify-user-intent' for project ${currentEffectiveProjectId}`);
 
-        // Step 1: Call 'clarify-user-intent'
-        const clarifyPayload = { // Conforms to ClarifyUserIntentPayload
+        const clarifyPayload = { 
           userMessage: message,
-          mainChatHistory: chatMessages.slice(-5), // Send recent history
+          mainChatHistory: chatMessages.slice(-5).map(m => ({role: m.role, content: m.content })),
           currentSemanticEmailV2: null,
-          ongoingClarificationContext: clarificationContext, // Pass the current context back
-          projectId: currentProjectId,
+          ongoingClarificationContext: clarificationContext, 
+          projectId: currentEffectiveProjectId,
           mode: 'major', 
         };
 
         const clarifyResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
           body: JSON.stringify(clarifyPayload),
         });
-
         setProgress(60);
 
         if (!clarifyResponse.ok) {
           const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent' }));
-          console.error("Error from clarify-user-intent:", clarifyResponse.status, errorData);
           throw new Error(errorData.error || errorData.message || `Failed to clarify intent (status ${clarifyResponse.status})`);
         }
-
-        const clarifyData = await clarifyResponse.json(); // QuestionResponse or CompleteResponse
+        const clarifyData = await clarifyResponse.json();
 
         if (clarifyData.status === 'requires_clarification') {
           console.log("[EditorContext] 'clarify-user-intent' requires clarification.");
-          setIsClarifying(true); // Enter clarification mode
+          setIsClarifying(true); 
           setClarificationContext(clarifyData.updatedClarificationContext);
+          if (currentEffectiveProjectId && clarifyData.updatedClarificationContext) {
+            try {
+              await updateProject(currentEffectiveProjectId, { current_clarification_context: clarifyData.updatedClarificationContext });
+              console.log("Persisted updated clarificationContext (requires_clarification) to DB for project:", currentEffectiveProjectId);
+            } catch (contextSaveError) { console.error("Failed to save clarificationContext (requires_clarification):", contextSaveError); }
+          }
           
           const questionMessage: ExtendedChatMessage = {
-            id: generateId(),
-            content: clarifyData.question.text,
-            role: 'assistant',
-            timestamp: new Date(),
-            type: 'clarification',
-            suggestions: clarifyData.question.suggestions?.map(s => s.text) || [], // Assuming suggestions are just text arrays for UI
+            id: generateId(), content: clarifyData.question.text, role: 'assistant', timestamp: new Date(), type: 'clarification', suggestions: clarifyData.question.suggestions?.map(s => s.text) || [], is_error: false,
           };
           setChatMessages(prev => [...prev, questionMessage]);
-          // Add to clarificationConversation as well for dedicated display if needed
-          setClarificationConversation(prev => [
-            ...prev,
-            { role: 'user', content: message }, // User's initial prompt
-            { role: 'assistant', content: clarifyData.question.text } // AI's question
-          ]);
+          setClarificationConversation(prev => [...prev, { role: 'user', content: message }, { role: 'assistant', content: clarifyData.question.text }]);
+          // Save AI Clarification Question
+          if (currentEffectiveProjectId) {
+            try {
+              console.log(`[EditorContext|handleSendMessage] Saving AI clarification question for project ${currentEffectiveProjectId}:`, questionMessage);
+              await saveChatMessage({
+                id: questionMessage.id, project_id: currentEffectiveProjectId, role: questionMessage.role, content: questionMessage.content, timestamp: questionMessage.timestamp,
+                is_clarifying_chat: true, is_error: false, message_type: 'clarification',
+              });
+            } catch (saveError) { console.error("Failed to save AI clarification question to DB:", saveError); }
+          }
 
         } else if (clarifyData.status === 'complete') {
           console.log("[EditorContext] 'clarify-user-intent' complete. Proceeding to 'generate-email-changes'.");
           setProgress(70);
           setIsClarifying(false); 
           setClarificationContext(null); 
+          if (currentEffectiveProjectId) {
+            try {
+              await updateProject(currentEffectiveProjectId, { current_clarification_context: null });
+              console.log("Cleared clarificationContext (complete) in DB for project:", currentEffectiveProjectId);
+            } catch (contextClearError) { console.error("Failed to clear clarificationContext (complete):", contextClearError); }
+          }
 
           const generatePayload = { 
-            projectId: currentProjectId,
-            mode: 'major', 
-            perfectPrompt: clarifyData.perfectPrompt,
-            elementsToProcess: clarifyData.elementsToProcess, // <--- ADD THIS LINE
-            currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass current if available, null if truly new
+            projectId: currentEffectiveProjectId, mode: 'major', perfectPrompt: clarifyData.perfectPrompt,
+            elementsToProcess: clarifyData.elementsToProcess, currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
           };
-
-          // >>>>>>>>>> ADD LOGGING FOR generatePayload (this was already present in a later block but good to have here too) <<<<<<<<<<
           console.log("[EditorContext] Payload for generate-email-changes (first email flow):", JSON.stringify(generatePayload, null, 2));
-          // >>>>>>>>>> END LOGGING <<<<<<<<<<
 
           const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-            },
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
             body: JSON.stringify(generatePayload),
           });
-
           setProgress(90);
 
           if (!generateResponse.ok) {
             const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes' }));
-            console.error("Error from generate-email-changes:", generateResponse.status, errorData);
             throw new Error(errorData.error || errorData.message || `Failed to generate email (status ${generateResponse.status})`);
           }
-
-          // Backend now returns: { newSemanticEmail?: EmailTemplateV2, newHtml?: string, pending_batch_id: string, pending_changes: GranularPendingChangeInput[], ai_rationale: string }
           const generateData = await generateResponse.json(); 
-
-          // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
-          console.log("[EditorContext] Before setCurrentBatchId (First Email Flow). generateData.pending_batch_id:", generateData.pending_batch_id, "Current currentBatchId state:", currentBatchId);
-          // >>>>>>>>>> END LOGGING <<<<<<<<<<
-
-          // Set pending changes and batch ID regardless of direct application
+          console.log("[EditorContext] Before setCurrentBatchId (First Email Flow). generateData.pending_batch_id:", generateData.pending_batch_id);
           setCurrentBatchId(generateData.pending_batch_id || null);
-          // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
           console.log("[EditorContext] Attempted to set currentBatchId (First Email Flow). Expected new value:", generateData.pending_batch_id || null);
-          // >>>>>>>>>> END LOGGING <<<<<<<<<<
           setPendingChanges(generateData.pending_changes || []);
 
-          // If AI directly applied changes and returned new email state
+          let assistantMessageContent = generateData.ai_rationale || "Processing complete.";
+          let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
+
           if (generateData.newHtml && generateData.newSemanticEmail) {
             console.log("[EditorContext] Email generated and auto-applied by 'generate-email-changes'.");
-            const updatedProjectData = await updateProject(currentProjectId!, {
-              current_html: generateData.newHtml,
-              semantic_email_v2: generateData.newSemanticEmail,
-              name: generateData.newSemanticEmail.name || projectTitle, 
+            const updatedProjectData = await updateProject(currentEffectiveProjectId!, {
+              current_html: generateData.newHtml, semantic_email_v2: generateData.newSemanticEmail, name: generateData.newSemanticEmail.name || projectTitle, 
             });
-
             if (updatedProjectData) {
-              setProjectData(updatedProjectData);
-              setLivePreviewHtml(generateData.newHtml);
-              // Pending changes already set above
-              setHasCode(true);
-              setHasFirstDraft(true);
-              setIsCreatingFirstEmail(false); 
-              setIsClarifying(false); 
-
-              const successMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've created your email based on your description!";
-              const successMessage: ExtendedChatMessage = {
-                id: generateId(),
-                content: successMessageContent,
-                role: 'assistant',
-                timestamp: new Date(),
-                type: 'success',
-              };
-              setChatMessages(prev => [...prev, successMessage]);
-            } else {
-              throw new Error("Failed to update project with auto-applied email data.");
+              setProjectData(updatedProjectData); setLivePreviewHtml(generateData.newHtml);
             }
+            setHasCode(true); setHasFirstDraft(true); setIsCreatingFirstEmail(false); setIsClarifying(false); 
+            assistantMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've created your email based on your description!";
+            assistantMessageType = 'success';
           } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
-            // If only pending changes were returned (no auto-apply)
-            console.log("[EditorContext] Pending changes generated by 'generate-email-changes'. User to review.");
-            setHasCode(true); // Assuming we have a base structure even if changes are just pending
-            setHasFirstDraft(true);
-            setIsCreatingFirstEmail(false);
-            setIsClarifying(false);
-
-            const successMessageContent = generateData.ai_rationale || "I have some suggestions for your email. Please review the pending changes.";
-            const suggestionsMessage: ExtendedChatMessage = {
-              id: generateId(),
-              content: successMessageContent,
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'edit_response', // Or a new type like 'suggestions_ready'
-            };
-            setChatMessages(prev => [...prev, suggestionsMessage]);
-             // Optionally, if there's a base HTML/Semantic even with pending changes, update preview
-            if (projectData?.current_html) setLivePreviewHtml(projectData.current_html);
-
+            console.log("[EditorContext] Pending changes generated. User to review.");
+            setHasCode(true); setHasFirstDraft(true); setIsCreatingFirstEmail(false); setIsClarifying(false);
+            assistantMessageContent = generateData.ai_rationale || "I have some suggestions for your email. Please review the pending changes.";
           } else {
-            // Neither auto-applied nor pending changes, or empty pending changes
             console.warn("No direct update or significant pending changes from 'generate-email-changes':", generateData);
-            // Potentially show a message like "No changes were needed" or handle as an edge case.
-            // For now, exit creation flow if it was active
-            setIsCreatingFirstEmail(false); 
-            setIsClarifying(false);
-             const noChangesMessage: ExtendedChatMessage = {
-                id: generateId(),
-                content: generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.",
-                role: 'assistant',
-                timestamp: new Date(),
-                type: 'answer',
-              };
-              setChatMessages(prev => [...prev, noChangesMessage]);
+            setIsCreatingFirstEmail(false); setIsClarifying(false);
+            assistantMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
+            assistantMessageType = 'answer';
+          }
+          const assistantFinalMessage: ExtendedChatMessage = {
+            id: generateId(), content: assistantMessageContent, role: 'assistant', timestamp: new Date(), type: assistantMessageType, is_error: false,
+          };
+          setChatMessages(prev => [...prev, assistantFinalMessage]);
+          if (currentEffectiveProjectId) {
+            try {
+              console.log(`[EditorContext|handleSendMessage] Saving AI final message (first email) for project ${currentEffectiveProjectId}:`, assistantFinalMessage);
+              await saveChatMessage({
+                id: assistantFinalMessage.id, project_id: currentEffectiveProjectId, role: assistantFinalMessage.role, content: assistantFinalMessage.content, timestamp: assistantFinalMessage.timestamp,
+                is_clarifying_chat: false, is_error: false, message_type: assistantFinalMessage.type,
+              });
+            } catch (saveError) { console.error("Failed to save AI final message to DB:", saveError); }
           }
         } else {
-          console.error("Unknown status from 'clarify-user-intent':", clarifyData.status);
           throw new Error(`Unknown status from clarification: ${clarifyData.status}`);
         }
       } 
-      // Flow 3: Normal message handling for questions or edits
+      // Flow 3: Normal message handling for questions or edits (NOT first email, NOT currently in deeper clarification)
       else { 
-        // This flow should only trigger if !isCreatingFirstEmail AND !isClarifying
-        if (isClarifying) {
-          console.warn("Attempting normal message send while still in clarification mode. This shouldn't happen with the unified flow.");
-          setIsClarifying(false); // Force exit clarification mode
-          setClarificationContext(null);
-        }
-          
-        try {
-          // Ensure we have a project ID
-          if (!actualProjectId) {
-            throw new Error("Missing project ID for message handling");
+        if (isClarifying) { // This implies user is responding to a clarification question
+          console.log(`[EditorContext] Continuing clarification for project ${actualProjectId} with message: "${message}"`);
+          setClarificationConversation(prev => [...prev, { role: 'user', content: message }]);
+          // User message already saved at the top of handleSendMessage.
+
+          const clarifyPayload = {
+            userMessage: message, mainChatHistory: [], // History is in ongoingClarificationContext
+            currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+            ongoingClarificationContext: clarificationContext, projectId: actualProjectId!, mode: selectedMode,
+          };
+          const clarifyResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
+            body: JSON.stringify(clarifyPayload),
+          });
+          setProgress(60);
+          if (!clarifyResponse.ok) {
+            const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent (continue)' }));
+            throw new Error(errorData.error || errorData.message || `Failed to continue clarification (status ${clarifyResponse.status})`);
           }
-          
-          setProgress(40);
-          
-          // --- START REFACTORED EDIT/MAJOR MODE HANDLING ---
-          if (mode === 'edit' || mode === 'major') {
-            console.log(`[EditorContext] Initiating 'clarify-user-intent' for existing project ${actualProjectId} (Mode: ${mode})`);
+          const clarifyData = await clarifyResponse.json();
 
-            // Step 1: Call 'clarify-user-intent'
-            const clarifyPayload = { // Conforms to ClarifyUserIntentPayload
-              userMessage: message,
-              mainChatHistory: chatMessages.slice(-5), // Send recent history
-              currentSemanticEmailV2: projectData?.semantic_email_v2 || null, // Pass existing template
-              ongoingClarificationContext: clarificationContext, // Pass the current context back
-              projectId: actualProjectId,
-              mode: mode, // Pass the current mode
+          if (clarifyData.status === 'requires_clarification') {
+            console.log("[EditorContext] 'clarify-user-intent' still requires clarification.");
+            setClarificationContext(clarifyData.updatedClarificationContext);
+            if (actualProjectId && clarifyData.updatedClarificationContext) {
+              try {
+                await updateProject(actualProjectId, { current_clarification_context: clarifyData.updatedClarificationContext });
+                console.log("Persisted updated clarificationContext (still requires) to DB for project:", actualProjectId);
+              } catch (contextSaveError) { console.error("Failed to save clarificationContext (still requires):", contextSaveError); }
+            }
+            const nextQuestionMessage: ExtendedChatMessage = {
+              id: generateId(), content: clarifyData.question.text, role: 'assistant', timestamp: new Date(), type: 'clarification', suggestions: clarifyData.question.suggestions?.map(s => s.text) || [], is_error: false,
             };
+            setChatMessages(prev => [...prev, nextQuestionMessage]);
+            setClarificationConversation(prev => [...prev, { role: 'assistant', content: clarifyData.question.text }]);
+            // Save AI Next Clarification Question
+            if (actualProjectId) {
+              try {
+                 console.log(`[EditorContext|handleSendMessage] Saving AI next clarification question for project ${actualProjectId}:`, nextQuestionMessage);
+                await saveChatMessage({
+                  id: nextQuestionMessage.id, project_id: actualProjectId, role: nextQuestionMessage.role, content: nextQuestionMessage.content, timestamp: nextQuestionMessage.timestamp,
+                  is_clarifying_chat: true, is_error: false, message_type: 'clarification',
+                });
+              } catch (saveError) { console.error("Failed to save AI next clarification question to DB:", saveError); }
+            }
+          } else if (clarifyData.status === 'complete') {
+            console.log("[EditorContext] Clarification complete (during ongoing). Proceeding to 'generate-email-changes'.");
+            setProgress(70); setIsClarifying(false); setClarificationContext(null);
+             if (actualProjectId) {
+              try {
+                await updateProject(actualProjectId, { current_clarification_context: null });
+                console.log("Cleared clarificationContext (ongoing complete) in DB for project:", actualProjectId);
+              } catch (contextClearError) { console.error("Failed to clear clarificationContext (ongoing complete):", contextClearError); }
+            }
+            // Proceed to generate changes with the now complete context.
+            const generatePayload = { 
+              projectId: actualProjectId!, mode: selectedMode, perfectPrompt: clarifyData.perfectPrompt,
+              elementsToProcess: clarifyData.elementsToProcess, currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+            };
+            console.log("[EditorContext] Payload for generate-email-changes (from continued clarification):", JSON.stringify(generatePayload, null, 2));
+            const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
+              body: JSON.stringify(generatePayload),
+            });
+            setProgress(90);
+            if (!generateResponse.ok) {
+              const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes (cont)' }));
+              throw new Error(errorData.error || errorData.message || `Failed to generate changes (cont) (status ${generateResponse.status})`);
+            }
+            const generateData = await generateResponse.json();
+            setCurrentBatchId(generateData.pending_batch_id || null);
+            setPendingChanges(generateData.pending_changes || []);
+            
+            let assistantMessageContent = generateData.ai_rationale || "Changes processed.";
+            let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
 
+            if (generateData.newHtml && generateData.newSemanticEmail) {
+              const updatedProject = await updateProject(actualProjectId!, { current_html: generateData.newHtml, semantic_email_v2: generateData.newSemanticEmail });
+              if (updatedProject) { setProjectData(updatedProject); setLivePreviewHtml(generateData.newHtml); }
+              assistantMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've updated your email as requested.";
+              assistantMessageType = 'success';
+            } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
+               assistantMessageContent = generateData.ai_rationale || "I have some new suggestions for your email. Please review them.";
+            } else {
+               assistantMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
+               assistantMessageType = 'answer';
+            }
+            const assistantFinalMessage: ExtendedChatMessage = {
+              id: generateId(), content: assistantMessageContent, role: 'assistant', timestamp: new Date(), type: assistantMessageType, is_error: false,
+            };
+            setChatMessages(prev => [...prev, assistantFinalMessage]);
+            if (actualProjectId) {
+              try {
+                console.log(`[EditorContext|handleSendMessage] Saving AI final message (clarif complete) for project ${actualProjectId}:`, assistantFinalMessage);
+                await saveChatMessage({
+                  id: assistantFinalMessage.id, project_id: actualProjectId, role: assistantFinalMessage.role, content: assistantFinalMessage.content, timestamp: assistantFinalMessage.timestamp,
+                  is_clarifying_chat: false, is_error: false, message_type: assistantFinalMessage.type,
+                });
+              } catch (saveError) { console.error("Failed to save AI final message (clarif complete) to DB:", saveError); }
+            }
+          } else {
+             throw new Error(`Unknown status from continued clarification: ${clarifyData.status}`);
+          }
+        } else { // Not first email, not in deeper clarification --> direct edit/major/ask without prior clarification step
+          console.log(`[EditorContext] Handling direct '${mode}' command for project ${actualProjectId} with message: "${message}"`);
+          // This branch implies mode is 'edit', 'major', or 'ask' and isClarifying is false.
+          // For 'edit' and 'major', we will still go through clarify-user-intent to get structured data.
+          // 'ask' will go to a different endpoint.
+          if (mode === 'edit' || mode === 'major') {
+            // Step 1: Call 'clarify-user-intent' even for direct edits/major changes
+            const clarifyPayload = {
+              userMessage: message, mainChatHistory: chatMessages.slice(-5).map(m => ({role: m.role, content: m.content })),
+              currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
+              ongoingClarificationContext: null, // No prior context for a direct command
+              projectId: actualProjectId!, mode: mode,
+            };
             const clarifyResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clarify-user-intent`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-              },
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
               body: JSON.stringify(clarifyPayload),
             });
-
             setProgress(60);
-
             if (!clarifyResponse.ok) {
-              const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent' }));
-              console.error("Error from clarify-user-intent (edit flow):", clarifyResponse.status, errorData);
-              throw new Error(errorData.error || errorData.message || `Failed to clarify intent (edit flow, status ${clarifyResponse.status})`);
+              const errorData = await clarifyResponse.json().catch(() => ({ error: 'Failed to parse error from clarify-user-intent (direct)' }));
+              throw new Error(errorData.error || errorData.message || `Failed to clarify intent (direct ${mode}, status ${clarifyResponse.status})`);
             }
-
-            const clarifyData = await clarifyResponse.json(); // QuestionResponse or CompleteResponse
-
-            // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
-            console.log("[EditorContext] Raw clarifyData from clarify-user-intent:", JSON.stringify(clarifyData, null, 2));
-            // >>>>>>>>>> END LOGGING <<<<<<<<<<
+            const clarifyData = await clarifyResponse.json();
 
             if (clarifyData.status === 'requires_clarification') {
-              console.log("[EditorContext] 'clarify-user-intent' requires clarification (edit flow).");
-              setIsClarifying(true); // Enter clarification mode
-              setClarificationContext(clarifyData.updatedClarificationContext);
-              
+              // This means even a direct edit/major command needs more info.
+              setIsClarifying(true); setClarificationContext(clarifyData.updatedClarificationContext);
+              if (actualProjectId && clarifyData.updatedClarificationContext) {
+                try {
+                  await updateProject(actualProjectId, { current_clarification_context: clarifyData.updatedClarificationContext });
+                   console.log("Persisted updated clarificationContext (direct requires) to DB for project:", actualProjectId);
+                } catch (contextSaveError) { console.error("Failed to save clarificationContext (direct requires):", contextSaveError); }
+              }
               const questionMessage: ExtendedChatMessage = {
-                id: generateId(),
-                content: clarifyData.question.text,
-                role: 'assistant',
-                timestamp: new Date(),
-                type: 'clarification',
-                suggestions: clarifyData.question.suggestions?.map(s => s.text) || [],
+                id: generateId(), content: clarifyData.question.text, role: 'assistant', timestamp: new Date(), type: 'clarification', suggestions: clarifyData.question.suggestions?.map(s => s.text) || [], is_error: false,
               };
               setChatMessages(prev => [...prev, questionMessage]);
-              setClarificationConversation(prev => [
-                ...prev,
-                { role: 'user', content: message },
-                { role: 'assistant', content: clarifyData.question.text }
-              ]);
-
+              setClarificationConversation(prev => [...prev, { role: 'user', content: message }, { role: 'assistant', content: clarifyData.question.text }]);
+              // Save AI Clarification Question
+              if (actualProjectId) {
+                try {
+                  console.log(`[EditorContext|handleSendMessage] Saving AI question (direct edit) for project ${actualProjectId}:`, questionMessage);
+                  await saveChatMessage({
+                    id: questionMessage.id, project_id: actualProjectId, role: questionMessage.role, content: questionMessage.content, timestamp: questionMessage.timestamp,
+                    is_clarifying_chat: true, is_error: false, message_type: 'clarification',
+                  });
+                } catch (saveError) { console.error("Failed to save AI question (direct edit) to DB:", saveError); }
+              }
             } else if (clarifyData.status === 'complete') {
-              console.log("[EditorContext] 'clarify-user-intent' complete (edit flow). Proceeding to 'generate-email-changes'.");
-              // >>>>>>>>>> ADD LOGGING HERE FOR THE 'complete' BRANCH <<<<<<<<<<
-              console.log("[EditorContext] clarifyData in 'complete' branch:", JSON.stringify(clarifyData, null, 2));
-              // >>>>>>>>>> END LOGGING <<<<<<<<<<
-              setProgress(70);
-              setIsClarifying(false); 
-              setClarificationContext(null); 
-
-              const generatePayload = { 
-                projectId: actualProjectId!,
-                mode: mode, 
-                perfectPrompt: clarifyData.perfectPrompt,
-                elementsToProcess: clarifyData.elementsToProcess, // Ensure this is what you intend to send
-                currentSemanticEmailV2: projectData?.semantic_email_v2 || null, 
+              // Clarification was not needed, or was auto-completed by the AI. Proceed to generate changes.
+              setIsClarifying(false); setClarificationContext(null); // No ongoing clarification context needed
+               if (actualProjectId) { // Clear any stale context just in case
+                try { await updateProject(actualProjectId, { current_clarification_context: null }); } catch (e) { /* ignore */ }
+              }
+              const generatePayload = {
+                projectId: actualProjectId!, mode: mode, perfectPrompt: clarifyData.perfectPrompt,
+                elementsToProcess: clarifyData.elementsToProcess, currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
               };
-
-              // >>>>>>>>>> ADD LOGGING FOR generatePayload <<<<<<<<<<
-              console.log("[EditorContext] Payload for generate-email-changes:", JSON.stringify(generatePayload, null, 2));
-              // >>>>>>>>>> END LOGGING <<<<<<<<<<
-
+              console.log(`[EditorContext] Payload for generate-email-changes (direct ${mode}):`, JSON.stringify(generatePayload, null, 2));
               const generateResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-email-changes`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-                },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
                 body: JSON.stringify(generatePayload),
               });
-
               setProgress(90);
-
               if (!generateResponse.ok) {
-                const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes' }));
-                console.error("Error from generate-email-changes (edit flow):", generateResponse.status, errorData);
-                throw new Error(errorData.error || errorData.message || `Failed to generate email changes (edit flow, status ${generateResponse.status})`);
+                const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes (direct)' }));
+                throw new Error(errorData.error || errorData.message || `Failed to generate changes (direct ${mode}, status ${generateResponse.status})`);
               }
-
-              const generateData = await generateResponse.json(); 
-
-              // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
-              console.log("[EditorContext] Before setCurrentBatchId (Edit/Major Flow). generateData.pending_batch_id:", generateData.pending_batch_id, "Current currentBatchId state:", currentBatchId);
-              // >>>>>>>>>> END LOGGING <<<<<<<<<<
-
+              const generateData = await generateResponse.json();
               setCurrentBatchId(generateData.pending_batch_id || null);
-              // >>>>>>>>>> ADD LOGGING HERE <<<<<<<<<<
-              console.log("[EditorContext] Attempted to set currentBatchId (Edit/Major Flow). Expected new value:", generateData.pending_batch_id || null);
-              // >>>>>>>>>> END LOGGING <<<<<<<<<<
               setPendingChanges(generateData.pending_changes || []);
+              
+              let assistantMessageContent = generateData.ai_rationale || "Changes processed.";
+              let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
 
               if (generateData.newHtml && generateData.newSemanticEmail) {
-                console.log("[EditorContext] Email changes auto-applied by 'generate-email-changes' (edit flow).");
-                
-                const updatedProject = await updateProject(actualProjectId!, {
-                    current_html: generateData.newHtml,
-                    semantic_email_v2: generateData.newSemanticEmail,
-                });
-
-                if (updatedProject) {
-                    setProjectData(updatedProject);
-                    setLivePreviewHtml(generateData.newHtml);
-                } else {
-                    setProjectData(prev => prev ? { 
-                        ...prev, 
-                        current_html: generateData.newHtml, 
-                        semantic_email_v2: generateData.newSemanticEmail 
-                    } : null);
-                    setLivePreviewHtml(generateData.newHtml);
-                    console.warn("[EditorContext] updateProject did not return data, updated local projectData partially.")
-                }
-                
+                const updatedProject = await updateProject(actualProjectId!, { current_html: generateData.newHtml, semantic_email_v2: generateData.newSemanticEmail });
+                if (updatedProject) { setProjectData(updatedProject); setLivePreviewHtml(generateData.newHtml); }
                 setHasCode(true);
-                const successMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've updated the email based on your request.";
-                const successMessage: ExtendedChatMessage = {
-                  id: generateId(),
-                  content: successMessageContent,
-                  role: 'assistant',
-                  timestamp: new Date(),
-                  type: 'success',
-                };
-                setChatMessages(prev => [...prev, successMessage]);
-
+                assistantMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've updated the email based on your request.";
+                assistantMessageType = 'success';
               } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
-                console.log("[EditorContext] Pending changes generated by 'generate-email-changes' (edit flow). User to review.");
                 setHasCode(true); 
-                if (projectData?.current_html) setLivePreviewHtml(projectData.current_html); 
-
-                const successMessageContent = generateData.ai_rationale || "I have some new suggestions for your email. Please review them.";
-                const suggestionsMessage: ExtendedChatMessage = {
-                  id: generateId(),
-                  content: successMessageContent,
-                  role: 'assistant',
-                  timestamp: new Date(),
-                  type: 'edit_response', 
-                };
-                setChatMessages(prev => [...prev, suggestionsMessage]);
+                if (projectData?.current_html) setLivePreviewHtml(projectData.current_html);
+                assistantMessageContent = generateData.ai_rationale || "I have some new suggestions for your email. Please review them.";
               } else {
-                console.warn("No direct update or significant pending changes from 'generate-email-changes' (edit flow):", generateData);
-                const noChangesMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
-                const noChangesMessage: ExtendedChatMessage = {
-                    id: generateId(),
-                    content: noChangesMessageContent,
-                    role: 'assistant',
-                    timestamp: new Date(),
-                    type: 'answer',
-                };
-                setChatMessages(prev => [...prev, noChangesMessage]);
+                 assistantMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
+                 assistantMessageType = 'answer';
+              }
+              const assistantFinalMessage: ExtendedChatMessage = {
+                id: generateId(), content: assistantMessageContent, role: 'assistant', timestamp: new Date(), type: assistantMessageType, is_error: false,
+              };
+              setChatMessages(prev => [...prev, assistantFinalMessage]);
+              if (actualProjectId) {
+                try {
+                  console.log(`[EditorContext|handleSendMessage] Saving AI final message (direct ${mode}) for project ${actualProjectId}:`, assistantFinalMessage);
+                  await saveChatMessage({
+                    id: assistantFinalMessage.id, project_id: actualProjectId, role: assistantFinalMessage.role, content: assistantFinalMessage.content, timestamp: assistantFinalMessage.timestamp,
+                    is_clarifying_chat: false, is_error: false, message_type: assistantFinalMessage.type,
+                  });
+                } catch (saveError) { console.error("Failed to save AI final message (direct mode) to DB:", saveError); }
               }
             } else {
-              console.error("Unknown status from 'clarify-user-intent' (edit flow):", clarifyData.status);
-              throw new Error(`Unknown status from clarification (edit flow): ${clarifyData.status}`);
+              throw new Error(`Unknown status from direct ${mode} clarification: ${clarifyData.status}`);
             }
-          } 
-          // --- END REFACTORED EDIT/MAJOR MODE HANDLING ---
-
-          // --- START ORIGINAL 'ask' MODE HANDLING ---
-          else if (mode === 'ask') {
-            // Determine endpoint based on interaction mode
-            // For now, keep the separate 'ask' endpoint if needed
-            const endpoint = 'email-question'; // Or potentially integrate into clarify-user-intent later
-            
-            // Call the appropriate endpoint based on mode
+          } else if (mode === 'ask') {
+            const endpoint = 'email-question';
             const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
-              },
-              body: JSON.stringify({
-                projectId: actualProjectId,
-                message,
-                mode,
-                // Add relevant context if needed for the 'ask' endpoint
-                // currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
-                // chatHistory: chatMessages.slice(-5), 
-              }),
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`},
+              body: JSON.stringify({ projectId: actualProjectId, message, mode }),
             });
-            
             setProgress(75);
-            
-            // Handle error responses
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from email-question' }));
-              console.error("Error from email-question:", response.status, errorData);
               throw new Error(errorData.error || errorData.message || `Failed to process question (status ${response.status})`);
             }
-            
             const data = await response.json();
-            
-            // Case 3A: Just a question - add response to chat
             const aiResponse: ExtendedChatMessage = {
-              id: generateId(),
-              content: data.message || "Here's your answer",
-              role: 'assistant',
-              timestamp: new Date(),
-              type: 'answer',
+              id: generateId(), content: data.message || "Here's your answer", role: 'assistant', timestamp: new Date(), type: 'answer', is_error: false,
             };
-            
             setChatMessages(prev => [...prev, aiResponse]);
+            // Save 'ask' mode AI response
+            if (actualProjectId) {
+              try {
+                 console.log(`[EditorContext|handleSendMessage] Saving AI 'ask' response for project ${actualProjectId}:`, aiResponse);
+                await saveChatMessage({
+                  id: aiResponse.id, project_id: actualProjectId, role: aiResponse.role, content: aiResponse.content, timestamp: aiResponse.timestamp,
+                  is_clarifying_chat: false, is_error: false, message_type: 'answer',
+                });
+              } catch (saveError) { console.error("Failed to save AI 'ask' response to DB:", saveError); }
+            }
           }
-          // --- END ORIGINAL 'ask' MODE HANDLING ---
-          
-          // Old 'edit'/'major' logic removed here
-          
-        } catch (error) {
-          // Handle errors during regular message processing
-          console.error("Error processing message:", error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to process your request';
-          
-          toast({
-            title: 'Error',
-            description: errorMessage,
-            variant: 'destructive',
-          });
-          
-          // Add error message to chat
-          const aiErrorMessage: ExtendedChatMessage = {
-            id: generateId(),
-            content: `Sorry, I encountered an error: ${errorMessage}`,
-            role: 'assistant',
-            timestamp: new Date(),
-            type: 'error',
-          };
-          
-          setChatMessages(prev => [...prev, aiErrorMessage]);
         }
       }
     } catch (error) {
       // Handle any unhandled errors in the entire message flow
       console.error("Unhandled error in message handling:", error);
-      toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
-        variant: 'destructive',
-      });
+      const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred. Please check the console.';
+      toast({ title: 'Error', description: errorMsg, variant: 'destructive'});
+      
+      const aiErrorMessage: ExtendedChatMessage = {
+        id: generateId(), content: `Sorry, I encountered an error: ${errorMsg}`, role: 'assistant', timestamp: new Date(), type: 'error', is_error: true,
+      };
+      setChatMessages(prev => [...prev, aiErrorMessage]);
+      // Save Error Message to Chat
+      if (currentEffectiveProjectId) { // Use currentEffectiveProjectId as actualProjectId might be null if error happened during creation
+        try {
+          console.log(`[EditorContext|handleSendMessage] Saving AI error message for project ${currentEffectiveProjectId}:`, aiErrorMessage);
+          await saveChatMessage({
+            id: aiErrorMessage.id, project_id: currentEffectiveProjectId, role: aiErrorMessage.role, content: aiErrorMessage.content, timestamp: aiErrorMessage.timestamp,
+            is_clarifying_chat: isClarifying, // If error happened during clarification
+            is_error: true, message_type: 'error',
+          });
+        } catch (saveError) { console.error("Failed to save AI error message to DB:", saveError); }
+      }
     } finally {
-      // Clean up loading state
       setIsLoading(false);
       setProgress(100);
-      setTimeout(() => setProgress(0), 500); // Reset progress after a delay
+      setTimeout(() => setProgress(0), 500); 
     }
   };
   
@@ -1068,7 +1085,9 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const updatedProject = await updateProject(actualProjectId, {
           current_html: data.emailData.html,
           semantic_email_v2: data.emailData.semantic,
+          current_clarification_context: null // Clear clarification context on final generation
         });
+        console.log("Cleared clarificationContext (final generation) in DB for project:", actualProjectId);
         
         if (updatedProject) {
           // Update local state with the generated content
@@ -1084,9 +1103,18 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             role: 'assistant',
             timestamp: new Date(),
             type: 'success',
+            is_error: false,
           };
-          
           setChatMessages(prev => [...prev, successMessage]);
+          // Save success message
+          try {
+            console.log(`[EditorContext|handleFinalEmailGeneration] Saving success message for project ${actualProjectId}:`, successMessage);
+            await saveChatMessage({
+              id: successMessage.id, project_id: actualProjectId, role: successMessage.role, content: successMessage.content, timestamp: successMessage.timestamp,
+              is_clarifying_chat: false, is_error: false, message_type: 'success',
+            });
+          } catch (saveError) { console.error("Failed to save success message (final gen) to DB:", saveError); }
+
         }
       } else {
         throw new Error("No email data received from generation");
@@ -1109,9 +1137,20 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         role: 'assistant',
         timestamp: new Date(),
         type: 'error',
+        is_error: true,
       };
-      
       setChatMessages(prev => [...prev, aiErrorMessage]);
+      // Save error message
+      if (actualProjectId) {
+        try {
+          console.log(`[EditorContext|handleFinalEmailGeneration] Saving error message for project ${actualProjectId}:`, aiErrorMessage);
+          await saveChatMessage({
+            id: aiErrorMessage.id, project_id: actualProjectId, role: aiErrorMessage.role, content: aiErrorMessage.content, timestamp: aiErrorMessage.timestamp,
+            is_clarifying_chat: false, // Error is for final generation, not a clarification step
+            is_error: true, message_type: 'error',
+          });
+        } catch (saveError) { console.error("Failed to save error message (final gen) to DB:", saveError); }
+      }
     } finally {
       // Clean up loading state
       setIsLoading(false);
