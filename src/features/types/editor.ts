@@ -40,12 +40,16 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   role?: 'user' | 'assistant'; // role is often part of the base message
-  isError?: boolean; // Assuming this might have been on the base or intended for Extended
+  is_error?: boolean; // Changed from isError to is_error to match DB and payload
+  // Fields for saving to database, aligning with the schema:
+  user_id?: string; 
+  is_clarifying_chat?: boolean;
+  message_type?: string; // e.g., 'clarification', 'user_prompt', 'ai_response', 'error'
 }
 
 // Extended chat message interface for UI purposes
 export interface ExtendedChatMessage extends Omit<ChatMessage, 'project_id'> {
-  // id, content, timestamp, isError can be inherited if Omit doesn't remove them due to ChatMessage definition
+  // id, content, timestamp, is_error can be inherited if Omit doesn't remove them due to ChatMessage definition
   // Explicitly defining role here to ensure it overrides any optionality from base ChatMessage for UI needs.
   role: 'user' | 'assistant'; 
   type?: 'question' | 'edit_request' | 'clarification' | 'success' | 'error' | 'answer' | 'edit_response';
@@ -55,6 +59,7 @@ export interface ExtendedChatMessage extends Omit<ChatMessage, 'project_id'> {
   id: string; // Explicitly ensure id is here
   content: string; // Explicitly ensure content is here
   timestamp: Date; // Explicitly ensure timestamp is here
+  is_error?: boolean; // Explicitly add is_error here to match ChatMessage for consistency
 }
 
 // Simplified message structure for the AI clarification flow
@@ -75,6 +80,7 @@ export interface Project {
   semantic_email: EmailTemplate | null;
   semantic_email_v2: EmailTemplateV2 | null;
   version: number;
+  current_clarification_context?: any; // For storing ongoing AI clarification state
 }
 
 // Props for EmailPreview component
