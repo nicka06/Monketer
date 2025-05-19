@@ -537,11 +537,14 @@ serve(async (req) => {
 
             case 'reject_one':
                 if (!change_id) throw new Error("change_id is required for reject_one operation.");
+                if (!currentSemanticEmail) throw new Error("Cannot reject change: Project current template (semantic_email_v2) is missing.");
+                
                 console.log(`Processing REJECT_ONE for change ${change_id} in project ${projectId}`);
 
+                // Fetch the specific pending change with its old_content
                 const { data: changeToReject, error: fetchRejectError } = await supabase
                     .from('pending_changes')
-                    .select('id, status')
+                    .select('*')  // Need all fields including old_content
                     .eq('id', change_id)
                     .eq('project_id', projectId)
                     .single();
@@ -549,19 +552,52 @@ serve(async (req) => {
                 if (fetchRejectError) throw new Error(`Failed to fetch change ${change_id} for rejection: ${fetchRejectError.message}`);
                 if (!changeToReject) throw new Error(`Change ${change_id} not found for rejection.`);
                 if (changeToReject.status !== 'pending') {
-                     return new Response(JSON.stringify({ message: `Change ${change_id} is not in pending status, cannot reject.` }), {
+                    return new Response(JSON.stringify({ message: `Change ${change_id} is not in pending status, cannot reject.` }), {
                         headers: { ...corsHeadersFactory(req.headers.get('origin')), 'Content-Type': 'application/json' },
                         status: 400, 
                     });
                 }
 
+                // Revert the change using the old_content
+                const revertedTemplate = applyRevert(currentSemanticEmail, [changeToReject]);
+                const revertedHtml = htmlGenerator.generate(revertedTemplate);
+                const revertedVersionNumber = currentVersion + 1;
+
+                // Update project with reverted content
+                const { error: revertProjectError } = await supabase
+                    .from('projects')
+                    .update({
+                        semantic_email_v2: revertedTemplate,
+                        current_html: revertedHtml,
+                        version: revertedVersionNumber,
+                        last_edited_at: new Date().toISOString(),
+                    })
+                    .eq('id', projectId);
+                if (revertProjectError) throw new Error(`Failed to update project: ${revertProjectError.message}`);
+
+                // Update change status
                 const { error: rejectStatusError } = await supabase
                     .from('pending_changes')
                     .update({ status: 'rejected', updated_at: new Date().toISOString() })
                     .eq('id', change_id);
                 if (rejectStatusError) throw new Error(`Failed to update status to rejected for change ${change_id}: ${rejectStatusError.message}`);
 
-                return new Response(JSON.stringify({ message: `Change ${change_id} rejected.` }), {
+                // Create new version snapshot
+                const { error: revertVersionError } = await supabase
+                    .from('email_versions')
+                    .insert({
+                        project_id: projectId,
+                        version_number: revertedVersionNumber,
+                        semantic_email_v2: revertedTemplate,
+                        created_at: new Date().toISOString()
+                    });
+                if (revertVersionError) console.error("Failed to save email version snapshot:", revertVersionError);
+
+                return new Response(JSON.stringify({ 
+                    message: `Change ${change_id} rejected. Project reverted to previous state.`,
+                    updatedTemplate: revertedTemplate,
+                    newHtml: revertedHtml 
+                }), {
                     headers: { ...corsHeadersFactory(req.headers.get('origin')), 'Content-Type': 'application/json' },
                     status: 200,
                 });
@@ -638,24 +674,45 @@ serve(async (req) => {
 
             case 'reject_batch':
                 if (!batch_id) throw new Error("batch_id is required for reject_batch operation.");
+                if (!currentSemanticEmail) throw new Error("Cannot reject batch: Project current template (semantic_email_v2) is missing.");
+                
                 console.log(`Processing REJECT_BATCH for batch ${batch_id} in project ${projectId}`);
             
                 const { data: changesToRejectBatch, error: fetchRejectBatchError } = await supabase
                     .from('pending_changes')
-                    .select('id') // Only need IDs to update status
+                    .select('*') // Need all fields including old_content
                     .eq('batch_id', batch_id)
                     .eq('project_id', projectId)
-                    .eq('status', 'pending');
+                    .eq('status', 'pending')
+                    .order('created_at', { ascending: true }); // Process in chronological order
 
                 if (fetchRejectBatchError) throw new Error(`Failed to fetch changes for batch ${batch_id} to reject: ${fetchRejectBatchError.message}`);
                 
                 if (!changesToRejectBatch || changesToRejectBatch.length === 0) {
-                     return new Response(JSON.stringify({ message: `No pending changes to reject in batch ${batch_id}.` }), {
+                    return new Response(JSON.stringify({ message: `No pending changes to reject in batch ${batch_id}.` }), {
                         headers: { ...corsHeadersFactory(req.headers.get('origin')), 'Content-Type': 'application/json' },
                         status: 200,
                     });
                 }
 
+                // Revert all changes in the batch
+                const revertedTemplateBatch = applyRevert(currentSemanticEmail, changesToRejectBatch);
+                const revertedHtmlBatch = htmlGenerator.generate(revertedTemplateBatch);
+                const revertedVersionNumberBatch = currentVersion + 1;
+
+                // Update project with reverted content
+                const { error: revertProjectErrorBatch } = await supabase
+                    .from('projects')
+                    .update({
+                        semantic_email_v2: revertedTemplateBatch,
+                        current_html: revertedHtmlBatch,
+                        version: revertedVersionNumberBatch,
+                        last_edited_at: new Date().toISOString(),
+                    })
+                    .eq('id', projectId);
+                if (revertProjectErrorBatch) throw new Error(`Failed to update project for batch ${batch_id}: ${revertProjectErrorBatch.message}`);
+
+                // Update status of all changes in the batch
                 const changeIdsToReject = changesToRejectBatch.map(c => c.id);
                 const { error: rejectBatchStatusError } = await supabase
                     .from('pending_changes')
@@ -663,7 +720,22 @@ serve(async (req) => {
                     .in('id', changeIdsToReject);
                 if (rejectBatchStatusError) throw new Error(`Failed to update status to rejected for batch ${batch_id}: ${rejectBatchStatusError.message}`);
 
-                return new Response(JSON.stringify({ message: `Rejected ${changeIdsToReject.length} pending changes in batch ${batch_id}.` }), {
+                // Create new version snapshot
+                const { error: revertVersionErrorBatch } = await supabase
+                    .from('email_versions')
+                    .insert({
+                        project_id: projectId,
+                        version_number: revertedVersionNumberBatch,
+                        semantic_email_v2: revertedTemplateBatch,
+                        created_at: new Date().toISOString()
+                    });
+                if (revertVersionErrorBatch) console.error("Failed to save email version snapshot for batch:", revertVersionErrorBatch);
+
+                return new Response(JSON.stringify({ 
+                    message: `Rejected ${changeIdsToReject.length} pending changes in batch ${batch_id}. Project reverted to previous state.`,
+                    updatedTemplate: revertedTemplateBatch,
+                    newHtml: revertedHtmlBatch
+                }), {
                     headers: { ...corsHeadersFactory(req.headers.get('origin')), 'Content-Type': 'application/json' },
                     status: 200,
                 });

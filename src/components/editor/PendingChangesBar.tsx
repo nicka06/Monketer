@@ -31,7 +31,7 @@ const PendingChangesBar = () => {
     handleAcceptCurrentBatch,
     handleRejectCurrentBatch,
   } = useEditor();
-
+  
   // Filter for display: only changes in the current batch that are still pending
   const displayablePendingChanges = pendingChanges.filter(
     change => change.batch_id === currentBatchId && change.status === 'pending'

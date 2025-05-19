@@ -364,7 +364,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           //   console.log("[fetchAndSetProject] Resuming clarification flow. Context loaded, history present.");
           // }
         } else {
-          setClarificationContext(null);
+          setClarificationContext(null); // No context, not clarifying
           setIsClarifying(false); // No context, not clarifying
         }
         
@@ -1461,6 +1461,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // No need to fetch full project data for a batch reject.
       // We just update the local state.
       console.log('[EditorContext|handleRejectCurrentBatch] Successfully rejected batch locally.'); // <<< ADDED
+      await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
