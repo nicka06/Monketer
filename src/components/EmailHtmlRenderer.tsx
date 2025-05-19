@@ -169,7 +169,7 @@ function processHtmlForPlaceholders(html: string): string {
           title="${escapeHtml(alt)}"
         >
           <div style="${escapeHtml(placeholderInnerStyle)}">
-            <span>${escapeHtml(alt)}<br/>(Placeholder)</span>
+          <span>${escapeHtml(alt)}<br/>(Placeholder)</span>
           </div>
         </div>
       `;

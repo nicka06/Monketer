@@ -747,35 +747,78 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             throw new Error(errorData.error || errorData.message || `Failed to generate email (status ${generateResponse.status})`);
           }
           const generateData = await generateResponse.json(); 
-          console.log("[EditorContext] Before setCurrentBatchId (First Email Flow). generateData.pending_batch_id:", generateData.pending_batch_id);
-          setCurrentBatchId(generateData.pending_batch_id || null);
-          console.log("[EditorContext] Attempted to set currentBatchId (First Email Flow). Expected new value:", generateData.pending_batch_id || null);
-          setPendingChanges(generateData.pending_changes || []);
+          console.log("[EditorContext] Response from generate-email-changes (first email flow):", JSON.stringify(generateData, null, 2));
 
-          let assistantMessageContent = generateData.ai_rationale || "Processing complete.";
-          let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
+          let assistantMessageContent = "An unexpected error occurred while generating your email.";
+          let assistantMessageType: ExtendedChatMessage['type'] = 'error';
+          setPendingChanges([]); // Default to empty, will be overwritten on success
 
-          if (generateData.newHtml && generateData.newSemanticEmail) {
-            console.log("[EditorContext] Email generated and auto-applied by 'generate-email-changes'.");
-            const updatedProjectData = await updateProject(currentEffectiveProjectId!, {
-              current_html: generateData.newHtml, semantic_email_v2: generateData.newSemanticEmail, name: generateData.newSemanticEmail.name || projectTitle, 
+          // Check if essential data for proceeding is present from the backend
+          if (generateData.newHtml && generateData.newSemanticEmail && generateData.pending_batch_id && currentEffectiveProjectId) {
+            console.log(`[EditorContext] First email core data received. HTML/Semantic present. Batch ID: ${generateData.pending_batch_id}`);
+
+            const updatedProjectResult = await updateProject(currentEffectiveProjectId, {
+              current_html: generateData.newHtml,
+              semantic_email_v2: generateData.newSemanticEmail,
+              name: generateData.newSemanticEmail.name || projectTitle, 
             });
-            if (updatedProjectData) {
-              setProjectData(updatedProjectData); setLivePreviewHtml(generateData.newHtml);
+
+            if (updatedProjectResult) {
+              setProjectData(updatedProjectResult);
+              setLivePreviewHtml(generateData.newHtml);
             }
-            setHasCode(true); setHasFirstDraft(true); setIsCreatingFirstEmail(false); setIsClarifying(false); 
-            assistantMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've created your email based on your description!";
-            assistantMessageType = 'success';
-          } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
-            console.log("[EditorContext] Pending changes generated. User to review.");
-            setHasCode(true); setHasFirstDraft(true); setIsCreatingFirstEmail(false); setIsClarifying(false);
-            assistantMessageContent = generateData.ai_rationale || "I have some suggestions for your email. Please review the pending changes.";
+            
+            setCurrentBatchId(generateData.pending_batch_id);
+
+            // Fetch all pending changes for the project and then filter by the current batch ID
+            try {
+              console.log(`[EditorContext] Fetching all pending changes for project ${currentEffectiveProjectId} to filter for batch ${generateData.pending_batch_id}`);
+              const allProjectPendingChanges = await getPendingChanges(currentEffectiveProjectId);
+              
+              const currentBatchSpecificChanges = (allProjectPendingChanges || []).filter(
+                change => change.batch_id === generateData.pending_batch_id && change.status === 'pending'
+              );
+
+              console.log("[EditorContext] Fetched and filtered pending changes for the current batch:", JSON.stringify(currentBatchSpecificChanges, null, 2));
+              
+              if (currentBatchSpecificChanges.length > 0) {
+                setPendingChanges(currentBatchSpecificChanges);
+                assistantMessageContent = generateData.ai_rationale || "I've drafted your first email! Please review the proposed additions.";
+                assistantMessageType = 'edit_response';
+              } else {
+                // This case means batch ID was returned, HTML generated, but DB query yielded no matching pending changes for this batch.
+                // This could be an issue if backend saves HTML but fails to save pending changes for the batch.
+                console.warn(`[EditorContext] HTML/Semantic data present, batch ID ${generateData.pending_batch_id} received, but no 'pending' changes found for this batch in DB.`);
+                setPendingChanges([]); // Ensure it's an empty array
+                assistantMessageContent = generateData.ai_rationale || "I've created your email. It seems there are no specific items marked for initial review, but the content is ready.";
+                assistantMessageType = 'success'; // Treated as success if content is there but no pending items for the batch.
+              }
+            } catch (fetchError) {
+              console.error("[EditorContext] Error fetching pending changes from DB:", fetchError);
+              handleEditorError(fetchError, "fetching pending changes after first email generation");
+              setPendingChanges([]); // Default to empty on fetch error
+              assistantMessageContent = "Your email was created, but there was an issue retrieving reviewable changes. Please check the content.";
+              // Still treat as having code if HTML was generated.
+            }
+
+            setHasCode(true);
+            setHasFirstDraft(true);
+            setIsCreatingFirstEmail(false); 
+            setIsClarifying(false); 
+
           } else {
-            console.warn("No direct update or significant pending changes from 'generate-email-changes':", generateData);
-            setIsCreatingFirstEmail(false); setIsClarifying(false);
-            assistantMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
-            assistantMessageType = 'answer';
+            // Fallback if the backend response is missing critical fields (newHtml, newSemanticEmail, or pending_batch_id)
+            console.warn("[EditorContext] generate-email-changes (first email) did not return all expected fields (newHtml, newSemanticEmail, pending_batch_id). Data:", generateData);
+            setPendingChanges([]); // Ensure pending changes are cleared/empty
+            setCurrentBatchId(null); // Clear batch ID
+            setIsCreatingFirstEmail(false);
+            setIsClarifying(false);
+            assistantMessageContent = generateData.ai_rationale || "I tried to create your email, but something went wrong with the initial setup. Please try again or contact support if the issue persists.";
+            assistantMessageType = 'error'; 
+            setHasCode(false); // No reliable code/HTML
+            setHasFirstDraft(false);
           }
+          
           const assistantFinalMessage: ExtendedChatMessage = {
             id: generateId(), content: assistantMessageContent, role: 'assistant', timestamp: new Date(), type: assistantMessageType, is_error: false,
           };
@@ -952,7 +995,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                if (actualProjectId) { // Clear any stale context just in case
                 try { await updateProject(actualProjectId, { current_clarification_context: null }); } catch (e) { /* ignore */ }
               }
-              const generatePayload = {
+              const generatePayload = { 
                 projectId: actualProjectId!, mode: mode, perfectPrompt: clarifyData.perfectPrompt,
                 elementsToProcess: clarifyData.elementsToProcess, currentSemanticEmailV2: projectData?.semantic_email_v2 || null,
               };
@@ -966,22 +1009,22 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 const errorData = await generateResponse.json().catch(() => ({ error: 'Failed to parse error from generate-email-changes (direct)' }));
                 throw new Error(errorData.error || errorData.message || `Failed to generate changes (direct ${mode}, status ${generateResponse.status})`);
               }
-              const generateData = await generateResponse.json();
+              const generateData = await generateResponse.json(); 
+              console.log("[EditorContext] Response from generate-email-changes (direct edit/ask):", JSON.stringify(generateData, null, 2)); // <<< ADDED
               setCurrentBatchId(generateData.pending_batch_id || null);
               setPendingChanges(generateData.pending_changes || []);
-              
+
               let assistantMessageContent = generateData.ai_rationale || "Changes processed.";
               let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
 
               if (generateData.newHtml && generateData.newSemanticEmail) {
                 const updatedProject = await updateProject(actualProjectId!, { current_html: generateData.newHtml, semantic_email_v2: generateData.newSemanticEmail });
                 if (updatedProject) { setProjectData(updatedProject); setLivePreviewHtml(generateData.newHtml); }
-                setHasCode(true);
                 assistantMessageContent = generateData.ai_rationale || clarifyData.finalSummary || "I've updated the email based on your request.";
                 assistantMessageType = 'success';
               } else if (generateData.pending_changes && generateData.pending_changes.length > 0) {
                 setHasCode(true); 
-                if (projectData?.current_html) setLivePreviewHtml(projectData.current_html);
+                if (projectData?.current_html) setLivePreviewHtml(projectData.current_html); 
                 assistantMessageContent = generateData.ai_rationale || "I have some new suggestions for your email. Please review them.";
               } else {
                  assistantMessageContent = generateData.ai_rationale || "I reviewed your request, but no specific changes were generated this time.";
@@ -1290,37 +1333,42 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
    * then refreshes the project data to show the updated content.
    */
   const handleAcceptCurrentBatch = async () => {
-    if (!actualProjectId || !currentBatchId) {
+    if (!actualProjectId || !currentBatchId) {  
       toast({ title: 'Error', description: 'Project or Batch ID is missing.', variant: 'destructive' });
       return;
     }
 
+    console.log(`[EditorContext|handleAcceptCurrentBatch] Initiated for project ${actualProjectId}, batch ${currentBatchId}`); // <<< ADDED
     setIsLoading(true);
     setProgress(30);
 
     try {
-      console.log(`Calling manage-pending-changes with operation: accept_batch for project ${actualProjectId} and batch_id ${currentBatchId}`);
+      const payload = {
+        projectId: actualProjectId,
+        operation: 'accept_batch',
+        batch_id: currentBatchId,
+      };
+      console.log('[EditorContext|handleAcceptCurrentBatch] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+      
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
         },
-        body: JSON.stringify({
-          projectId: actualProjectId,
-          operation: 'accept_batch', // Ensure this is 'operation'
-          batch_id: currentBatchId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setProgress(70);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from manage-pending-changes (accept_batch)' })); // <<< ADDED .catch
+        console.error('[EditorContext|handleAcceptCurrentBatch] API call failed:', response.status, errorData); // <<< ADDED
         throw new Error(errorData.error || errorData.message || 'Failed to accept batch of changes');
       }
 
       const result = await response.json();
+      console.log('[EditorContext|handleAcceptCurrentBatch] API call successful, result:', result); // <<< ADDED
       toast({
         title: 'Success',
         description: result.message || 'All pending changes in the batch accepted.',
@@ -1336,6 +1384,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       );
 
       // Refresh project data as the template has changed
+      console.log('[EditorContext|handleAcceptCurrentBatch] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
       await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
@@ -1365,32 +1414,37 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
 
+    console.log(`[EditorContext|handleRejectCurrentBatch] Initiated for project ${actualProjectId}, batch ${currentBatchId}`); // <<< ADDED
     setIsLoading(true);
     setProgress(30);
 
     try {
-      console.log(`Calling manage-pending-changes with operation: reject_batch for project ${actualProjectId} and batch_id ${currentBatchId}`);
+      const payload = {
+        projectId: actualProjectId,
+        operation: 'reject_batch',
+        batch_id: currentBatchId,
+      };
+      console.log('[EditorContext|handleRejectCurrentBatch] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
         },
-        body: JSON.stringify({
-          projectId: actualProjectId,
-          operation: 'reject_batch', // Ensure this is 'operation'
-          batch_id: currentBatchId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setProgress(70);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from manage-pending-changes (reject_batch)' })); // <<< ADDED .catch
+        console.error('[EditorContext|handleRejectCurrentBatch] API call failed:', response.status, errorData); // <<< ADDED
         throw new Error(errorData.error || errorData.message || 'Failed to reject batch of changes');
       }
 
       const result = await response.json();
+      console.log('[EditorContext|handleRejectCurrentBatch] API call successful, result:', result); // <<< ADDED
       toast({
         title: 'Success',
         description: result.message || 'All pending changes in the batch rejected.',
@@ -1405,6 +1459,8 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         )
       );
       // No need to fetch full project data for a batch reject.
+      // We just update the local state.
+      console.log('[EditorContext|handleRejectCurrentBatch] Successfully rejected batch locally.'); // <<< ADDED
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -1435,32 +1491,37 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
     
+    console.log(`[EditorContext|handleAcceptOneChange] Initiated for project ${actualProjectId}, changeId ${changeId}`); // <<< ADDED
     setIsLoading(true);
     setProgress(30);
 
     try {
-      console.log(`Calling manage-pending-changes with operation: accept_one for project ${actualProjectId} and change_id ${changeId}`); // Log 'operation'
+      const payload = {
+        projectId: actualProjectId,
+        operation: 'accept_one',
+        change_id: changeId,
+      };
+      console.log('[EditorContext|handleAcceptOneChange] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+      
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
         },
-        body: JSON.stringify({
-          projectId: actualProjectId,
-          operation: 'accept_one', // Changed from action: 'accept'
-          change_id: changeId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setProgress(70);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from manage-pending-changes (accept_one)' })); // <<< ADDED .catch
+        console.error('[EditorContext|handleAcceptOneChange] API call failed:', response.status, errorData); // <<< ADDED
         throw new Error(errorData.error || errorData.message || 'Failed to accept change');
       }
 
       const result = await response.json();
+      console.log('[EditorContext|handleAcceptOneChange] API call successful, result:', result); // <<< ADDED
       toast({
         title: 'Success',
         description: result.message || 'Selected change accepted.',
@@ -1471,6 +1532,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           change.id === changeId ? { ...change, status: 'accepted' } : change
         )
       );
+      console.log('[EditorContext|handleAcceptOneChange] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
       await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
@@ -1502,32 +1564,37 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return;
     }
     
+    console.log(`[EditorContext|handleRejectOneChange] Initiated for project ${actualProjectId}, changeId ${changeId}`); // <<< ADDED
     setIsLoading(true);
     setProgress(30);
 
     try {
-      console.log(`Calling manage-pending-changes with operation: reject_one for project ${actualProjectId} and change_id ${changeId}`); // Log 'operation'
+      const payload = {
+        projectId: actualProjectId,
+        operation: 'reject_one',
+        change_id: changeId,
+      };
+      console.log('[EditorContext|handleRejectOneChange] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+      
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`
         },
-        body: JSON.stringify({
-          projectId: actualProjectId,
-          operation: 'reject_one', // Changed from action: 'reject'
-          change_id: changeId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setProgress(70);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error from manage-pending-changes (reject_one)' })); // <<< ADDED .catch
+        console.error('[EditorContext|handleRejectOneChange] API call failed:', response.status, errorData); // <<< ADDED
         throw new Error(errorData.error || errorData.message || 'Failed to reject change');
       }
 
       const result = await response.json();
+      console.log('[EditorContext|handleRejectOneChange] API call successful, result:', result); // <<< ADDED
       toast({
         title: 'Success',
         description: result.message || 'Selected change rejected.',
@@ -1538,6 +1605,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           change.id === changeId ? { ...change, status: 'rejected' } : change
         )
       );
+      console.log('[EditorContext|handleRejectOneChange] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
       await fetchAndSetProject(actualProjectId);
 
     } catch (error) {
