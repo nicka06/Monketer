@@ -89,11 +89,43 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Effect: Auto-scroll to latest messages
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+    const scrollAreaRoot = scrollAreaRef.current;
+    if (scrollAreaRoot) {
+      const viewport = scrollAreaRoot.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
+
+      if (viewport) {
+        console.log('[ChatInterface] Viewport found:', viewport);
+        console.log('[ChatInterface] Before scroll: offsetH:', viewport.offsetHeight, 'scrollH:', viewport.scrollHeight, 'scrollT:', viewport.scrollTop);
+        
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            viewport.scrollTo({
+              top: viewport.scrollHeight,
+              behavior: 'smooth'
+            });
+            console.log('[ChatInterface] After scroll attempt: scrollH:', viewport.scrollHeight, 'scrollT:', viewport.scrollTop);
+          }, 0);
+        });
+      } else {
+        console.warn("[ChatInterface] Scrollable viewport with [data-radix-scroll-area-viewport] not found. Falling back to first child.");
+        const firstChildViewport = scrollAreaRoot.children[0] as HTMLElement | undefined;
+        if (firstChildViewport) {
+          console.log('[ChatInterface] Fallback Viewport found:', firstChildViewport);
+          console.log('[ChatInterface] Fallback Before scroll: offsetH:', firstChildViewport.offsetHeight, 'scrollH:', firstChildViewport.scrollHeight, 'scrollT:', firstChildViewport.scrollTop);
+          
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              firstChildViewport.scrollTo({
+                top: firstChildViewport.scrollHeight,
+                behavior: 'smooth'
+              });
+              console.log('[ChatInterface] Fallback After scroll attempt: scrollH:', firstChildViewport.scrollHeight, 'scrollT:', firstChildViewport.scrollTop);
+            }, 0);
+          });
+        } else { 
+          console.warn("[ChatInterface] Fallback to first child viewport also failed.");
+        }
+      }
     }
   }, [messages, clarificationMessages, isLoading]);
 

@@ -218,9 +218,10 @@
 │   │     • Placeholder text
 │   │   - UI Components:
 │   │     • Mode selection buttons
-│   │     • Message history area
+│   │     • Message history area (`ScrollArea`)
 │   │     • Input area with send button
 │   │     • Clarification banner when needed
+│   │   - **Auto-scrolls to the latest message using `useEffect`, `useRef`, and `setTimeout` to ensure the scrollable viewport (typically an inner child of `ScrollArea`) is scrolled after new messages are rendered.**
 │   │   Dependencies:
 │   │   - UI: Button, Textarea, ScrollArea, ReactMarkdown
 │   │   - Icons: Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2

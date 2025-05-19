@@ -77,4 +77,4 @@ const PendingChangesBar = () => {
   );
 };
 
-export default PendingChangesBar; 
+export default PendingChangesBar;
