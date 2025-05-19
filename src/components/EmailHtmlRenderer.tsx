@@ -267,7 +267,7 @@ export const EmailHtmlRenderer = forwardRef<EmailHtmlRendererRef, EmailHtmlRende
   // Expose container access through ref
   useImperativeHandle(ref, () => ({ 
     getContainer: () => containerRef.current,
-  }), []);
+  }), []);  
   
   // Main effect for rendering HTML content
   useEffect(() => {

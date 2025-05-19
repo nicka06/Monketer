@@ -249,7 +249,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         const buttonHref = btnProps.button?.href ?? defaultHref;
         const buttonTarget = btnProps.button?.target ?? defaultTarget;
 
-        const buttonHtml = `<a href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
+        const buttonHtml = `<a data-element-id="${element.id}" href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
 
         const finalAlign = element.layout?.align || 'left';
         console.log(`[HtmlGeneratorCore] Button (ID: ${element.id}): element.layout.align is '${element.layout?.align}', finalAlign for inner TD is '${finalAlign}'.`);

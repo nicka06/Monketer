@@ -43,40 +43,33 @@ function convertDiffToGranularRows(
   aiRationale: string // Added aiRationale parameter
 ): GranularPendingChangeInput[] {
   const granularChanges: GranularPendingChangeInput[] = [];
-  // const aiRationale = diffResult?.rationale || "AI rationale not available."; // Removed, now passed as parameter
 
   // Helper for shallow comparison of section properties (excluding elements and id)
+  // This is no longer used to create section_edit, but might be useful for other logic if needed.
   function haveShallowSectionPropertiesChanged(baseSection: any, proposedSection: any): boolean {
     if (!baseSection || !proposedSection) return false;
     
-    // Create copies without 'elements' and 'id' for comparison
     const baseComparable = { ...baseSection };
     delete baseComparable.elements;
-    delete baseComparable.id;
+    delete baseComparable.id;  
 
     const proposedComparable = { ...proposedSection };
     delete proposedComparable.elements;
     delete proposedComparable.id;
 
-    // Simple stringify comparison for non-element properties
     return JSON.stringify(baseComparable) !== JSON.stringify(proposedComparable);
   }
 
-  // If baseTemplate is null, it implies a new template. All sections and elements in proposedTemplate are additions.
+  // If baseTemplate is null, it implies a new template. All elements in proposedTemplate are additions.
+  // We no longer create section_add changes.
   if (!baseTemplate) {
     proposedTemplate.sections.forEach(section => {
-      granularChanges.push({
-        project_id: projectId,
-        batch_id: batchId,
-        change_type: 'section_add',
-        target_id: section.id,
-        target_parent_id: null,
-        new_content: section,
-        old_content: null,
-        ai_rationale: aiRationale, // Use passed aiRationale
-        // status: 'pending' // Handled by DB default or later assignment
-      });
+      // REMOVED: section_add change generation
       section.elements.forEach(element => {
+        // Skip ignored element types for pending changes
+        if (IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(element.type as ElementTypeV2)) {
+          return; 
+        }
         granularChanges.push({
           project_id: projectId,
           batch_id: batchId,
@@ -85,28 +78,21 @@ function convertDiffToGranularRows(
           target_parent_id: section.id,
           new_content: element,
           old_content: null,
-          ai_rationale: aiRationale, // Use passed aiRationale
+          ai_rationale: aiRationale,
         });
       });
     });
-    console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular changes for new template (batch ${batchId})`);
+    console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular element changes for new template (batch ${batchId})`);
     return granularChanges;
   }
 
-  // If diffResult indicates no changes, and we have a baseTemplate, return empty.
-  // Note: diffResult might be null if we are forcing a "clear pending changes" scenario without a new diff.
-  // However, the current flow implies diffResult will exist if there's a baseTemplate and proposedTemplate for modifications.
   if (!diffResult || !diffResult.hasChanges) {
-    // If it's a new template (baseTemplate is null), but proposedTemplate exists, 
-    // convertDiffToGranularRows handles it above. This path is for existing templates with no diff.
     if (baseTemplate) { 
         console.log(`[convertDiffToGranularRows] No changes detected in diffResult for existing template batch ${batchId}`);
         return granularChanges;
     }
   }
 
-  // Iterate through section diffs for existing templates with changes
-  // This requires diffResult to be non-null
   if (diffResult) {
     diffResult.sectionDiffs.forEach(sectionDiff => {
       const currentSectionFromBase = baseTemplate?.sections.find(s => s.id === sectionDiff.sectionId);
@@ -115,17 +101,11 @@ function convertDiffToGranularRows(
       switch (sectionDiff.status) {
         case 'added':
           if (currentSectionFromProposed) {
-            granularChanges.push({
-              project_id: projectId,
-              batch_id: batchId,
-              change_type: 'section_add',
-              target_id: sectionDiff.sectionId,
-              target_parent_id: null,
-              new_content: currentSectionFromProposed,
-              old_content: null,
-              ai_rationale: aiRationale, // Use passed aiRationale
-            });
+            // REMOVED: section_add change generation
             currentSectionFromProposed.elements.forEach(element => {
+              if (IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(element.type as ElementTypeV2)) {
+                return;
+              }
               granularChanges.push({
                 project_id: projectId,
                 batch_id: batchId,
@@ -134,7 +114,7 @@ function convertDiffToGranularRows(
                 target_parent_id: sectionDiff.sectionId,
                 new_content: element,
                 old_content: null,
-                ai_rationale: aiRationale, // Use passed aiRationale
+                ai_rationale: aiRationale,
               });
             });
           } else {
@@ -143,42 +123,46 @@ function convertDiffToGranularRows(
           break;
 
         case 'removed':
+          // REMOVED: section_delete change generation
+          // We still need to generate element_delete for elements within the removed section if they existed in base.
           if (currentSectionFromBase) {
-            granularChanges.push({
-              project_id: projectId,
-              batch_id: batchId,
-              change_type: 'section_delete',
-              target_id: sectionDiff.sectionId,
-              target_parent_id: null,
-              old_content: currentSectionFromBase,
-              new_content: null,
-              ai_rationale: aiRationale, // Use passed aiRationale
+            currentSectionFromBase.elements.forEach(element => {
+              if (IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(element.type as ElementTypeV2)) {
+                return;
+              }
+              granularChanges.push({
+                project_id: projectId,
+                batch_id: batchId,
+                change_type: 'element_delete',
+                target_id: element.id,
+                target_parent_id: sectionDiff.sectionId, // parent section is being removed
+                old_content: element,
+                new_content: null,
+                ai_rationale: aiRationale,
+              });
             });
           } else {
-            console.warn(`[convertDiffToGranularRows] Section ${sectionDiff.sectionId} marked 'removed' but not found in base template.`);
+            console.warn(`[convertDiffToGranularRows] Section ${sectionDiff.sectionId} marked 'removed' but not found in base template, cannot generate element_delete changes.`);
           }
           break;
 
         case 'modified':
           if (currentSectionFromBase && currentSectionFromProposed) {
-            // Check for section property changes (section_edit)
-            if (haveShallowSectionPropertiesChanged(currentSectionFromBase, currentSectionFromProposed)) {
-              granularChanges.push({
-                project_id: projectId,
-                batch_id: batchId,
-                change_type: 'section_edit',
-                target_id: sectionDiff.sectionId,
-                target_parent_id: null,
-                old_content: currentSectionFromBase, 
-                new_content: currentSectionFromProposed, 
-                ai_rationale: aiRationale, // Use passed aiRationale
-              });
-            }
+            // REMOVED: section_edit change generation, even if shallow properties changed.
+            // We only care about element changes within the section.
 
-            // Process element diffs within this modified section
             sectionDiff.elementDiffs.forEach(elementDiff => {
               const baseElement = currentSectionFromBase.elements.find(e => e.id === elementDiff.elementId);
               const proposedElement = currentSectionFromProposed.elements.find(e => e.id === elementDiff.elementId);
+
+              // Skip ignored element types for any pending changes
+              if (proposedElement && IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(proposedElement.type as ElementTypeV2)) {
+                return; 
+              }
+              if (!proposedElement && baseElement && IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(baseElement.type as ElementTypeV2)){
+                return;
+              }
+
 
               switch (elementDiff.status) {
                 case 'added':
@@ -191,7 +175,7 @@ function convertDiffToGranularRows(
                       target_parent_id: sectionDiff.sectionId,
                       new_content: proposedElement,
                       old_content: null,
-                      ai_rationale: aiRationale, // Use passed aiRationale
+                      ai_rationale: aiRationale,
                     });
                   } else {
                     console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'added' but not found in proposed section.`);
@@ -207,7 +191,7 @@ function convertDiffToGranularRows(
                       target_parent_id: sectionDiff.sectionId,
                       old_content: baseElement,
                       new_content: null,
-                      ai_rationale: aiRationale, // Use passed aiRationale
+                      ai_rationale: aiRationale,
                     });
                   } else {
                     console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'removed' but not found in base section.`);
@@ -223,7 +207,7 @@ function convertDiffToGranularRows(
                       target_parent_id: sectionDiff.sectionId,
                       old_content: baseElement,
                       new_content: proposedElement,
-                      ai_rationale: aiRationale, // Use passed aiRationale
+                      ai_rationale: aiRationale,
                     });
                   } else {
                     console.warn(`[convertDiffToGranularRows] Element ${elementDiff.elementId} in section ${sectionDiff.sectionId} marked 'modified' but base or proposed element not found.`);
@@ -243,8 +227,14 @@ function convertDiffToGranularRows(
               const baseElement = currentSectionFromBase.elements.find(e => e.id === elementDiff.elementId);
               const proposedElement = currentSectionFromProposed.elements.find(e => e.id === elementDiff.elementId);
 
-              // Only process actual changes within an "unchanged" section (should mostly be add/remove/edit of elements)
-              // A "modified" element within an "unchanged" section is still an element_edit.
+              // Skip ignored element types
+               if (proposedElement && IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(proposedElement.type as ElementTypeV2)) {
+                return; 
+              }
+              if (!proposedElement && baseElement && IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES.includes(baseElement.type as ElementTypeV2)){
+                return;
+              }
+
               switch (elementDiff.status) {
                 case 'added':
                   if (proposedElement) {
@@ -288,6 +278,7 @@ function convertDiffToGranularRows(
                     });
                   }
                   break;
+                // 'unchanged' elements within an 'unchanged' section are ignored
               }
             });
           }
@@ -296,8 +287,40 @@ function convertDiffToGranularRows(
     });
   }
 
-  console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular changes from diff for batch ${batchId}`);
+  console.log(`[convertDiffToGranularRows] Generated ${granularChanges.length} granular changes for batch ${batchId} (elements only)`);
   return granularChanges;
+}
+
+// Define the types of elements that should NOT generate pending changes.
+// These are typically structural or spacer-type elements.
+const IGNORED_ELEMENT_TYPES_FOR_PENDING_CHANGES: ElementTypeV2[] = [
+  'spacer', 
+  'divider', 
+  // 'header', // Headers are content and should generate changes
+  // 'footer', // Footers are content and should generate changes
+  // Consider adding other non-content or purely structural types if they exist
+];
+
+// Helper function to check if content is empty or just whitespace
+// This is no longer directly used in convertDiffToGranularRows for filtering section changes,
+// but kept in case it's useful for other logic.
+function isEmptyContent(content: any): boolean {
+  if (content === null || content === undefined) {
+    return true;
+  }
+  if (typeof content === 'string') {
+    return content.trim() === '';
+  }
+  // For other types, like objects or arrays, you might need more specific checks.
+  // For now, if it's not null/undefined and not a string, consider it not empty.
+  // Or, adapt based on how `content` is structured for elements where this might be called.
+  if (typeof content === 'object' && Object.keys(content).length === 0) {
+    return true; // Empty object
+  }
+  if (Array.isArray(content) && content.length === 0) {
+    return true; // Empty array
+  }
+  return false;
 }
 
 /**
