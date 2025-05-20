@@ -266,9 +266,20 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
 
       case 'image':
         const imageProps = element.properties as ImageElementProperties;
-        const img = imageProps.image || { src: '#' }; // Default src
+        const img = imageProps.image || { src: '#', alt: '' }; // Ensure alt is also defaulted if img is empty
         const imgBorder = this.generateBorderStyle(imageProps.border);
-        const imgTag = `<img src="${img.src}" alt="${img.alt || ''}" width="${img.width || '100%'}" ${img.height ? `height="${img.height}"` : ''} style="display:block; max-width:100%; ${imgBorder}" />`;
+        
+        // Enforce pixel dimensions, defaulting if necessary
+        const defaultImageWidth = '150px';
+        const defaultImageHeight = '150px';
+
+        const imageWidth = (typeof img.width === 'string' && img.width.endsWith('px')) ? img.width : defaultImageWidth;
+        const imageHeight = (typeof img.height === 'string' && img.height.endsWith('px')) ? img.height : defaultImageHeight;
+
+        const imgTag = `<img src="${img.src}" alt="${img.alt || ''}" width="${imageWidth.replace('px','')}" height="${imageHeight.replace('px','')}" style="display:block; max-width:100%; height:auto; ${imgBorder}" />`;
+        // Note: style="...height:auto;" allows responsive scaling within the pixel-defined container if max-width is hit.
+        // The width and height attributes ensure the space is reserved.
+
         if (img.linkHref) {
           elementContent = `<a href="${img.linkHref}" target="${img.linkTarget || '_blank'}">${imgTag}</a>`;
         } else {
