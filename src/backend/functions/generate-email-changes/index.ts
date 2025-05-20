@@ -543,7 +543,8 @@ serve(async (req) => {
     // Define the schema rules as a separate string for clarity
     const schemaRules = "\nImportant Schema Rules:\n\n" +
                         "1. Every element MUST have a top-level `content` field. Ensure this field contains appropriate text (e.g., button text, alt text for images/icons, paragraph text) or an empty string '' if no specific text is generated or applicable.\n\n" +
-                        "2. For optional string fields (like image `height`, `linkHref`, `videoHref`, or border properties like `width`, `style`, `color`, `radius`), if a value is not applicable or unknown, OMIT the field entirely from the JSON instead of setting it to `null`. The schema expects `string | undefined`, not `string | null`.\n";
+                        "2. For optional string fields (like image `height`, `width`, `linkHref`, `videoHref`, or border properties like `width`, `style`, `color`, `radius`), if a value is not applicable or unknown, OMIT the field entirely from the JSON instead of setting it to `null`. The schema expects `string | undefined`, not `string | null`.\n\n" +
+                        "3. For 'image' elements, ALWAYS provide specific `width` and `height` properties in pixels (e.g., \"300px\", \"200px\"). Values like 'auto' or percentages are NOT allowed. If a dimension is truly unknown or should not be set, OMIT the property entirely. If unsure but dimensions are expected, you might suggest a common pixel value like \"150px\" for width, and a corresponding height, or omit if truly indeterminate.\n";
     if (currentV2Template) {
         // Editing an existing template
         systemPrompt = "You are an expert email template editor AI.\n" +
@@ -773,6 +774,7 @@ serve(async (req) => {
                   // Example for image properties
                   if (mergedElement.properties.image) {
                       if (mergedElement.properties.image.height === null) mergedElement.properties.image.height = undefined;
+                      if (mergedElement.properties.image.width === null) mergedElement.properties.image.width = undefined;
                       if (mergedElement.properties.image.linkHref === null) mergedElement.properties.image.linkHref = undefined;
                       if (mergedElement.properties.image.videoHref === null) mergedElement.properties.image.videoHref = undefined;
                       // Check nested border properties if they exist

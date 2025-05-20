@@ -104,13 +104,13 @@ export const elementDefaults: Record<ElementTypeV2, Omit<EmailElementTypeV2, 'id
    */
   image: {
     type: 'image',
-    layout: { align: 'center', padding: { top: '10px', bottom: '10px' }, width: '100%' }, // Container width
+    layout: { align: 'center', padding: { top: '10px', bottom: '10px' } }, // Container width - removed width: '100%'
     properties: {
       image: { 
         src: '@@PLACEHOLDER_IMAGE@@', // Placeholder marker for editor UI
         alt: 'Placeholder Image', 
-        width: '100%',                // Image width (can be px or %)
-        height: null,                 // Auto height to maintain aspect ratio
+        width: '150px',               // Image width - changed to pixel value
+        height: '150px',              // Image height - changed to pixel value
         linkHref: null,               // Optional link wrapping the image
         linkTarget: '_self',          // Target for optional image link
         videoHref: null               // Optional video link for video thumbnails
