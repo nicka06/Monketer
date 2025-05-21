@@ -909,8 +909,17 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
             const generateData = await generateResponse.json();
             setCurrentBatchId(generateData.pending_batch_id || null);
-            setPendingChanges(generateData.pending_changes || []);
             
+            // MODIFIED: Merge new pending changes with existing ones from other batches
+            const newChangesFromThisBatch = generateData.pending_changes || [];
+            setPendingChanges(prevPendingChanges => {
+              const otherBatchOrResolvedChanges = prevPendingChanges.filter(
+                pc => pc.batch_id !== generateData.pending_batch_id || pc.status !== 'pending'
+              );
+              const currentBatchEnsuredPending = newChangesFromThisBatch.map(c => ({...c, status: 'pending'}));
+              return [...otherBatchOrResolvedChanges, ...currentBatchEnsuredPending];
+            });
+
             let assistantMessageContent = generateData.ai_rationale || "Changes processed.";
             let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
 
@@ -1010,9 +1019,18 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 throw new Error(errorData.error || errorData.message || `Failed to generate changes (direct ${mode}, status ${generateResponse.status})`);
               }
               const generateData = await generateResponse.json(); 
-              console.log("[EditorContext] Response from generate-email-changes (direct edit/ask):", JSON.stringify(generateData, null, 2)); // <<< ADDED
+              console.log("[EditorContext] Response from generate-email-changes (direct edit/ask):", JSON.stringify(generateData, null, 2)); 
               setCurrentBatchId(generateData.pending_batch_id || null);
-              setPendingChanges(generateData.pending_changes || []);
+              
+              // MODIFIED: Merge new pending changes with existing ones from other batches
+              const newChangesFromThisBatch = generateData.pending_changes || [];
+              setPendingChanges(prevPendingChanges => {
+                const otherBatchOrResolvedChanges = prevPendingChanges.filter(
+                  pc => (pc.batch_id !== generateData.pending_batch_id || pc.status !== 'pending')
+                );
+                const currentBatchEnsuredPending = newChangesFromThisBatch.map(c => ({...c, status: 'pending'}));
+                return [...otherBatchOrResolvedChanges, ...currentBatchEnsuredPending];
+              });
 
               let assistantMessageContent = generateData.ai_rationale || "Changes processed.";
               let assistantMessageType: ExtendedChatMessage['type'] = 'edit_response';
@@ -1383,9 +1401,29 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         )
       );
 
-      // Refresh project data as the template has changed
-      console.log('[EditorContext|handleAcceptCurrentBatch] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
-      await fetchAndSetProject(actualProjectId);
+      // PREFER to use HTML and template directly from API response
+      if (result.newHtml && result.updatedTemplate) {
+        console.log('[EditorContext|handleAcceptCurrentBatch] Using newHtml and updatedTemplate from API response.');
+        setLivePreviewHtml(result.newHtml);
+        setProjectData(prevData => {
+          if (!prevData) return null;
+          return {
+            ...prevData,
+            current_html: result.newHtml,
+            semantic_email_v2: result.updatedTemplate,
+            // Potentially update other projectData fields if the API returns them e.g. last_edited_at
+          };
+        });
+        // Optionally, still call fetchAndSetProject if other non-template data needs refresh
+        // For now, let's assume the direct update is sufficient for the email content.
+        // If other parts of projectData (not in updatedTemplate) need refresh, uncomment below:
+        // console.log('[EditorContext|handleAcceptCurrentBatch] API provided HTML/Template. Optionally fetching full project for other data.');
+        // await fetchAndSetProject(actualProjectId); 
+      } else {
+        // Fallback to full fetch if API didn't provide the content (should not happen for accept_batch)
+        console.warn('[EditorContext|handleAcceptCurrentBatch] API did not return newHtml/updatedTemplate. Falling back to fetchAndSetProject.');
+        await fetchAndSetProject(actualProjectId);
+      }
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -1461,7 +1499,23 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // No need to fetch full project data for a batch reject.
       // We just update the local state.
       console.log('[EditorContext|handleRejectCurrentBatch] Successfully rejected batch locally.'); // <<< ADDED
-      await fetchAndSetProject(actualProjectId);
+      // PREFER to use HTML and template directly from API response IF AVAILABLE
+      if (result.newHtml && result.updatedTemplate) {
+        console.log('[EditorContext|handleRejectCurrentBatch] Using newHtml and updatedTemplate from API response for rejection.');
+        setLivePreviewHtml(result.newHtml);
+        setProjectData(prevData => {
+          if (!prevData) return null;
+          return {
+            ...prevData,
+            current_html: result.newHtml,
+            semantic_email_v2: result.updatedTemplate,
+          };
+        });
+      } else {
+        // Fallback to full fetch if API didn't provide the content (current expectation for reject)
+        console.log('[EditorContext|handleRejectCurrentBatch] API did not return newHtml/updatedTemplate for rejection. Falling back to fetchAndSetProject.');
+        await fetchAndSetProject(actualProjectId);
+      }
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -1502,7 +1556,9 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         operation: 'accept_one',
         change_id: changeId,
       };
-      console.log('[EditorContext|handleAcceptOneChange] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+      console.log('[EditorContext|handleAcceptOneChange] Raw changeId param:', changeId); // <<< ADDED
+      console.log('[EditorContext|handleAcceptOneChange] Payload just before fetch:', payload); // <<< ADDED
+      console.log('[EditorContext|handleAcceptOneChange] Calling manage-pending-changes with payload:', payload); 
       
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
@@ -1533,8 +1589,30 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           change.id === changeId ? { ...change, status: 'accepted' } : change
         )
       );
-      console.log('[EditorContext|handleAcceptOneChange] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
-      await fetchAndSetProject(actualProjectId);
+
+      // PREFER to use HTML and template directly from API response
+      if (result.newHtml && result.updatedTemplate) {
+        console.log('[EditorContext|handleAcceptOneChange] Using newHtml and updatedTemplate from API response.');
+        setLivePreviewHtml(result.newHtml);
+        setProjectData(prevData => {
+          if (!prevData) return null;
+          return {
+            ...prevData,
+            current_html: result.newHtml,
+            semantic_email_v2: result.updatedTemplate,
+            // Potentially update other projectData fields if the API returns them e.g. last_edited_at
+          };
+        });
+        // Optionally, still call fetchAndSetProject if other non-template data needs refresh
+        // For now, let's assume the direct update is sufficient for the email content.
+        // If other parts of projectData (not in updatedTemplate) need refresh, uncomment below:
+        // console.log('[EditorContext|handleAcceptOneChange] API provided HTML/Template. Optionally fetching full project for other data.');
+        // await fetchAndSetProject(actualProjectId);
+      } else {
+        // Fallback to full fetch if API didn't provide the content (should not happen for accept_one)
+        console.warn('[EditorContext|handleAcceptOneChange] API did not return newHtml/updatedTemplate. Falling back to fetchAndSetProject.');
+        await fetchAndSetProject(actualProjectId);
+      }
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -1575,7 +1653,9 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         operation: 'reject_one',
         change_id: changeId,
       };
-      console.log('[EditorContext|handleRejectOneChange] Calling manage-pending-changes with payload:', payload); // <<< ADDED
+      console.log('[EditorContext|handleRejectOneChange] Raw changeId param:', changeId); // <<< ADDED
+      console.log('[EditorContext|handleRejectOneChange] Payload just before fetch:', payload); // <<< ADDED
+      console.log('[EditorContext|handleRejectOneChange] Calling manage-pending-changes with payload:', payload); 
       
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-pending-changes`, {
         method: 'POST',
@@ -1607,7 +1687,23 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         )
       );
       console.log('[EditorContext|handleRejectOneChange] Calling fetchAndSetProject to refresh data.'); // <<< ADDED
-      await fetchAndSetProject(actualProjectId);
+      // PREFER to use HTML and template directly from API response IF AVAILABLE
+      if (result.newHtml && result.updatedTemplate) {
+        console.log('[EditorContext|handleRejectOneChange] Using newHtml and updatedTemplate from API response for rejection.');
+        setLivePreviewHtml(result.newHtml);
+        setProjectData(prevData => {
+          if (!prevData) return null;
+          return {
+            ...prevData,
+            current_html: result.newHtml,
+            semantic_email_v2: result.updatedTemplate,
+          };
+        });
+      } else {
+        // Fallback to full fetch if API didn't provide the content (current expectation for reject)
+        console.log('[EditorContext|handleRejectOneChange] API did not return newHtml/updatedTemplate for rejection. Falling back to fetchAndSetProject.');
+        await fetchAndSetProject(actualProjectId);
+      }
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
