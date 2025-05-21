@@ -211,7 +211,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       case 'header':
         const headerProps = element.properties as HeaderElementProperties;
         const headerStyles = this.generateTypographyStyle(headerProps.typography);
-        elementContent = `<${headerProps.level || 'h2'} style="margin:0; ${headerStyles}">${element.content}</${headerProps.level || 'h2'}>`;
+        elementContent = `<${headerProps.level || 'h2'} data-element-id="${element.id}" style="margin:0; ${headerStyles}">${element.content}</${headerProps.level || 'h2'}>`;
         break;
 
       case 'text':
