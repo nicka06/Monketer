@@ -303,26 +303,14 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       // Add cases for ALL types to satisfy exhaustiveness
       case 'subtext':
         const subtextProps = element.properties as SubtextElementProperties;
-        const subtextStyles = this.generateTypographyStyle(subtextProps.typography, { color: '#6c757d', fontSize: '14px' });
-        elementContent = `<p style="margin:0; ${subtextStyles}">${element.content}</p>`; // Use element.content for subtext
+        const subtextStyles = this.generateTypographyStyle(subtextProps.typography);
+        elementContent = `<p data-element-id="${element.id}" style="margin:0; ${subtextStyles}">${element.content}</p>`;
         break;
 
       case 'quote':
         const quoteProps = element.properties as QuoteElementProperties;
-        const quoteStyles = this.generateTypographyStyle(quoteProps.typography, { fontStyle: 'italic' });
-        const quoteBorderStyles = this.generateBorderStyle(quoteProps.border, { width: '4px', style: 'solid', color: '#eeeeee' });
-        const quoteBg = quoteProps.backgroundColor ? `background-color:${quoteProps.backgroundColor};` : '';
-        // Ensure border-left is only applied if there are border styles
-        const quoteTableStyle = `width:100%; ${quoteBg} ${quoteBorderStyles ? `border-left:${quoteBorderStyles};` : ''}`.trim();
-        elementContent = `
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="${quoteTableStyle}">
-            <tr>
-              <td style="padding:10px 20px;">
-                <p style="margin:0; ${quoteStyles}">${element.content}</p> <!-- Use element.content for quote text -->
-                ${quoteProps.citation ? `<p style="margin:5px 0 0 0; text-align:right; font-size:14px; color:#6c757d;">- ${quoteProps.citation}</p>` : ''}
-              </td>
-            </tr>
-          </table>`;
+        const quoteStyles = this.generateTypographyStyle(quoteProps.typography);
+        elementContent = `<blockquote data-element-id="${element.id}" style="margin:0; padding-left: 10px; border-left: 3px solid #ccc; ${quoteStyles}">${element.content}</blockquote>`;
         break;
 
       case 'code':
@@ -420,13 +408,8 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
 
       case 'footer':
         const footerProps = element.properties as FooterElementProperties;
-        const footerStyles = this.generateTypographyStyle(footerProps.typography, {
-          fontSize: '12px',
-          color: '#000000',
-          textAlign: 'center',
-          lineHeight: '1.5'
-        });
-        elementContent = `<p style="margin:0; ${footerStyles}">${element.content}</p>`;
+        const footerStyles = this.generateTypographyStyle(footerProps.typography);
+        elementContent = `<div data-element-id="${element.id}" style="margin:0; ${footerStyles}">${element.content}</div>`;
         break;
 
       default:

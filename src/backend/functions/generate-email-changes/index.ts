@@ -809,6 +809,14 @@ serve(async (req) => {
               }
               // *** END: Ensure required border properties exist ***
 
+              // *** START: Ensure typography.fontStyle has a default ***
+              if (mergedElement.properties?.typography && typeof mergedElement.properties.typography === 'object') {
+                if (mergedElement.properties.typography.fontStyle === undefined) {
+                  mergedElement.properties.typography.fontStyle = 'normal'; // Default fontStyle
+                }
+              }
+              // *** END: Ensure typography.fontStyle has a default ***
+
               // Original attempt to map aiElement.content (KEEP this for backward compatibility/edge cases?)
               if (aiElement.content && typeof aiElement.content === 'string' && !mergedElement.properties.text) {
                   if (elementType === 'header' || elementType === 'text' || elementType === 'subtext') {
