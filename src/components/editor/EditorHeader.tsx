@@ -18,7 +18,8 @@ const EditorHeader = () => {
     setProjectTitle, 
     isEditingTitle, 
     setIsEditingTitle, 
-    handleTitleChange 
+    handleTitleChange,
+    handleNavigateToSendPage
   } = useEditor();
 
   // Handle saving the title changes
@@ -86,7 +87,7 @@ const EditorHeader = () => {
           variant="ghost" 
           size="icon"
           aria-label="Send Email"
-          onClick={() => navigate('/send-email')}
+          onClick={handleNavigateToSendPage}
         >
           <Send className="h-5 w-5" />
           <span className="sr-only">Send Email</span>

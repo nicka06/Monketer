@@ -173,7 +173,7 @@ interface EditorContextType {
   /** Handler for when a file is selected for an image placeholder */
   handleFileSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   /** Function to update a property of an element in the semantic structure */
-  updateElementProperty: (elementId: string, propertyPath: string, value: any) => void;
+  updateElementProperty: (elementId: string, propertyPath: string, value: any) => EmailTemplateV2 | null;
   
   // Clarification section - AI conversation flow for gathering email requirements
   /** Whether the clarification flow is active */
@@ -1734,16 +1734,19 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const updateElementProperty = (elementId: string, propertyPath: string, value: any) => {
     console.log(`[Editor|updateElementProperty] Attempting to update element ${elementId}, path ${propertyPath} with value:`, value);
     
+    let newSemanticV2: EmailTemplateV2 | null = null;
+
     // Update the project data with the modified element
     setProjectData(currentData => {
       // Ensure we have semantic data to work with
       if (!currentData?.semantic_email_v2) {
         console.error("[Editor|updateElementProperty] Error: semantic_email_v2 is missing.");
+        newSemanticV2 = null; // Ensure newSemanticV2 is set before returning currentData
         return currentData;
       }
 
       // Deep copy to avoid mutation issues with nested state
-      const newSemanticV2: EmailTemplateV2 = JSON.parse(JSON.stringify(currentData.semantic_email_v2));
+      const workingSemanticV2: EmailTemplateV2 = JSON.parse(JSON.stringify(currentData.semantic_email_v2));
 
       let elementFound = false;
 
@@ -1807,7 +1810,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       };
 
       // Iterate through sections and call the recursive function
-      for (const section of newSemanticV2.sections) {
+      for (const section of workingSemanticV2.sections) {
         if (findAndUpdateElement(section.elements)) { 
           break; // Stop searching sections once found
         }
@@ -1816,16 +1819,19 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Handle case where element wasn't found
       if (!elementFound) {
         console.error(`[Editor|updateElementProperty] Element with ID ${elementId} not found anywhere in semantic_email_v2`);
+        newSemanticV2 = workingSemanticV2; // Or currentData.semantic_email_v2 if no changes intended
         return currentData; // Return original data if element not found
       }
 
-      // Return the updated project data structure
-      console.log("[Editor|updateElementProperty] Successfully updated. Returning new state object.");
+      // Successfully updated
+      newSemanticV2 = workingSemanticV2;
+      console.log("[Editor|updateElementProperty] Successfully updated. Returning new state object with newSemanticV2 assigned.");
       return {
         ...currentData,
-        semantic_email_v2: newSemanticV2,
+        semantic_email_v2: newSemanticV2, // Use the updated copy for the state
       };
     });
+    return newSemanticV2; // Return the modified structure (or null/original if error/not found)
   };
   
   /**
@@ -1896,7 +1902,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Upload to Supabase storage
       const { data, error } = await supabase.storage
-        .from('email-assets')
+        .from('email_assets')
         .upload(filePath, file, { cacheControl: '3600', upsert: false });
       
       if (error) {
@@ -1909,7 +1915,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Get public URL of the uploaded file
       const { data: urlData } = supabase.storage
-        .from('email-assets')
+        .from('email_assets') // <<< CHANGED 'email-assets' to 'email_assets'
         .getPublicUrl(data.path);
         
       if (!urlData.publicUrl) {
@@ -1921,13 +1927,30 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       // Update the element property with the image URL
       const { elementId, path } = editingPlaceholder;
-      updateElementProperty(elementId, path, imageUrl);
+      console.log(`[EditorContext|handleFileSelected] Calling updateElementProperty for elementId: ${elementId}, path: ${path}, imageUrl: ${imageUrl}`); // <<< ADDED
+      const updatedSemanticEmail = updateElementProperty(elementId, path, imageUrl);
+      console.log("[EditorContext|handleFileSelected] updateElementProperty finished."); // <<< ADDED
       
       // Save updated semantic data to database
-      if (projectData?.semantic_email_v2 && actualProjectId) {
+      if (updatedSemanticEmail && actualProjectId) {
+        console.log("[EditorContext|handleFileSelected] Calling updateProject to save UPDATED semantic_email_v2.");
         await updateProject(actualProjectId, { 
-          semantic_email_v2: projectData.semantic_email_v2 
+          semantic_email_v2: updatedSemanticEmail 
         });
+        console.log("[EditorContext|handleFileSelected] updateProject finished.");
+
+        // Also regenerate and set livePreviewHtml immediately
+        try {
+          const newHtml = await htmlGenerator.generate(updatedSemanticEmail);
+          setLivePreviewHtml(newHtml);
+          // Optionally, also save this newHtml to the database if desired immediately
+          // await updateProject(actualProjectId, { current_html: newHtml }); 
+        } catch (htmlGenError) {
+          console.error("[EditorContext|handleFileSelected] Error generating HTML after image upload:", htmlGenError);
+        }
+
+      } else {
+        console.warn("[EditorContext|handleFileSelected] Skipped updateProject: updatedSemanticEmail is null or actualProjectId missing.");
       }
       
       // Show success message
