@@ -28,10 +28,37 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  console.log('[create-stripe-checkout-session] Received request:', req.method, req.url);
+  // Log all headers
+  const headersObject: { [key: string]: string } = {};
+  req.headers.forEach((value, key) => {
+    headersObject[key] = value;
+  });
+  console.log('[create-stripe-checkout-session] Request Headers:', JSON.stringify(headersObject, null, 2));
+  
+  let requestBodyTextForErrorLogging = "<request body not logged or failed to log>";
+
   try {
-    const { priceId, userId } = await req.json();
+    try {
+      // Try to clone and read text to log, without consuming the original body for req.json()
+      const clonedReq = req.clone();
+      const rawBody = await clonedReq.text();
+      requestBodyTextForErrorLogging = rawBody; // Store for potential error logging
+      console.log('[create-stripe-checkout-session] Raw Request Body Text:', rawBody);
+    } catch (cloneError) {
+      console.error('[create-stripe-checkout-session] Error cloning request or reading text:', cloneError);
+      // If cloning fails, we might not be able to log the body before parsing but have a default message
+    }
+
+    const payload = await req.json();
+    console.log('[create-stripe-checkout-session] Parsed Payload (req.json()):', payload);
+
+    const { priceId, userId } = payload; // Destructure from the parsed payload
+
+    console.log(`[create-stripe-checkout-session] Extracted priceId: ${priceId}, userId: ${userId}`);
 
     if (!priceId || !userId) {
+      console.error('[create-stripe-checkout-session] Validation failed: Missing priceId or userId.', { priceId, userId });
       return new Response(
         JSON.stringify({ error: "Missing priceId or userId" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -54,12 +81,13 @@ serve(async (req: Request) => {
       cancel_url: `${siteUrl}/subscription`, // Back to plan selection
     });
 
+    console.log('[create-stripe-checkout-session] Stripe session created successfully:', session.id);
     return new Response(
       JSON.stringify({ sessionId: session.id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
-    console.error("Error creating Stripe checkout session:", error);
+    console.error("[create-stripe-checkout-session] Error processing checkout session:", error, "Raw body was:", requestBodyTextForErrorLogging);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

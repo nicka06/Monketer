@@ -37,16 +37,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Redirect to subscription page if authenticated
-const RedirectIfAuthenticated = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+// const RedirectIfAuthenticated = ({ children }: { children: React.ReactNode }) => {
+//   const { user } = useAuth();
   
-  if (user) {
-    // First direct users to subscription page
-    return <Navigate to="/subscription" />;
-  }
+//   if (user) {
+//     // First direct users to subscription page
+//     return <Navigate to="/subscription" />;
+//   }
   
-  return <>{children}</>;
-};
+//   return <>{children}</>;
+// };
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
@@ -61,30 +61,20 @@ const AppRoutes = () => {
       <Route 
         path="/" 
         element={
-          user ? (
-            // First direct users to subscription page
-            <Navigate to="/subscription" />
-          ) : (
-            <RedirectIfAuthenticated>
-              <Index />
-            </RedirectIfAuthenticated>
-          )
+          // If user is authenticated, show Index, otherwise show Index (public homepage)
+          <Index />
         } 
       />
       <Route 
         path="/login" 
         element={
-          <RedirectIfAuthenticated>
-            <Login />
-          </RedirectIfAuthenticated>
+          user ? <Navigate to="/" /> : <Login />
         } 
       />
       <Route 
         path="/signup" 
         element={
-          <RedirectIfAuthenticated>
-            <Signup />
-          </RedirectIfAuthenticated>
+          user ? <Navigate to="/" /> : <Signup />
         } 
       />
       <Route 
