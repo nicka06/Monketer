@@ -14,6 +14,25 @@
 
 📁 src/
 ├── 📁 backend/
+│   ├── 📁 functions/
+│   │   ├── 📁 stripe-webhook-handler/
+│   │   │   ├── 📄 index.ts
+│   │   │   │   Purpose: Handles Stripe webhook events for subscription management.
+│   │   │   │   Details:
+│   │   │   │   - Processes various Stripe events (checkout.session.completed, invoice events, subscription updates).
+│   │   │   │   - Updates user subscription status and tier in Supabase database.
+│   │   │   │   - Handles subscription lifecycle (creation, updates, cancellation).
+│   │   │   │   - Integrates with Stripe API and Supabase client.
+│   │   │   │   Usage: Deployed as Supabase Edge Function to handle Stripe webhook notifications.
+│   │   │   │
+│   │   │   └── 📄 types.ts
+│   │   │       Purpose: Type definitions for subscription-related data.
+│   │   │       Details:
+│   │   │       - Defines `SubscriptionTier` type ('free' | 'pro' | 'premium').
+│   │   │       - Defines `SubscriptionPlan` interface.
+│   │   │       - Provides utility function `determineTierFromPriceId`.
+│   │   │       Usage: Used by webhook handler and other subscription-related components.
+│   │   │
 │   ├── 📁 .temp/
 │   │   Purpose: Supabase CLI version tracking
 │   │   Details:
@@ -198,6 +217,28 @@
 │       Usage: Used by the Deno runtime when executing functions in `src/backend/functions/` to resolve aliased imports. Referenced by `src/backend/deno.jsonc` (if present) and `supabase/config.toml`.
 │   
 ├── 📁 components/
+│   ├── 📁 subscription/
+│   │   ├── 📄 PlanSelectionPage.tsx
+│   │   │   Purpose: Displays subscription plan options and handles plan selection.
+│   │   │   Details:
+│   │   │   - Shows three tiers: Free, Pro ($19/month), Premium ($49/month).
+│   │   │   - Lists features and project limits for each tier.
+│   │   │   - Handles free plan selection via API.
+│   │   │   - Initiates Stripe checkout for paid plans.
+│   │   │   Usage: Rendered after signup or when upgrading subscription.
+│   │   │
+│   │   └── 📄 SubscriptionProtectedRoute.tsx
+│   │       Purpose: Route guard component that enforces subscription plan limits and status checks.
+│   │       Details:
+│   │       - Checks user's subscription tier and status.
+│   │       - Enforces project limits (Free: 1, Pro: 25, Premium: unlimited).
+│   │       - Redirects to subscription page if:
+│   │         • No subscription tier selected
+│   │         • Subscription is not active
+│   │         • Project limit is reached
+│   │       - Shows appropriate toast messages for each case.
+│   │       Usage: Wraps editor routes in App.tsx to protect them with subscription checks.
+│   │
 │   ├── 📄 ChatInterface.tsx
 │   │   Purpose: Provides the main chat interface for user-AI interactions
 │   │   Details:
@@ -591,6 +632,25 @@
 └── 📁 pages/
     Purpose: Top-level components representing distinct application pages or views.
     Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
+    ├── 📄 subscription.tsx
+    │   Purpose: Main subscription management page.
+    │   Details:
+    │   - Shows current plan and upgrade options.
+    │   - Uses shadcn/ui components for consistent styling.
+    │   - Handles plan upgrades via Stripe checkout.
+    │   - Shows loading states and error handling.
+    │   Usage: Accessible to authenticated users for subscription management.
+    │
+    ├── 📁 api/
+    │   └── 📁 subscribe/
+    │       └── 📄 free.ts
+    │           Purpose: API route for handling free plan subscriptions.
+    │           Details:
+    │           - Updates user_info table with free tier subscription.
+    │           - Sets subscription status to active.
+    │           - Initializes project count.
+    │           Usage: Called when users select the free plan.
+    │
     ├── 📄 Dashboard.tsx
     │   Purpose: Main user dashboard for managing email projects.
 │   Details:
@@ -823,3 +883,19 @@ Usage: Imported by services (`projectService.ts`) and components that interact d
   └── 📁 venv/
       Purpose: Python virtual environment for the `ai_blog_agent`.
       Details: Contains isolated Python interpreter and installed dependencies. This directory is typically gitignored.
+
+📁 src/
+├── 📁 core/
+│   ├── 📄 App.tsx
+│   │   Purpose: Main application router and provider setup.
+│   │   Details:
+│   │   - Sets up core providers (QueryClient, Auth, Tooltip).
+│   │   - Defines route protection components:
+│   │     • `ProtectedRoute`: Basic auth check
+│   │     • `RedirectIfAuthenticated`: Landing page logic
+│   │   - Routes configuration:
+│   │     • Public routes: /, /login, /signup, /privacy-policy, /terms-of-service, /blog/*
+│   │     • Protected routes: /dashboard, /send-email
+│   │     • Subscription-protected routes: /editor/* (using `SubscriptionProtectedRoute`)
+│   │   - Handles loading states and auth redirects.
+│   │   Usage: Root component of the application, managing routing and auth flow.

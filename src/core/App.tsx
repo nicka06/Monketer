@@ -16,6 +16,8 @@ import PrivacyPolicy from "../pages/PrivacyPolicy";
 import TermsOfService from "../pages/TermsOfService";
 import BlogIndexPage from "@/pages/BlogIndexPage";
 import BlogPostPage from "@/pages/BlogPostPage";
+import SubscriptionProtectedRoute from "@/components/subscription/SubscriptionProtectedRoute";
+import PlanSelectionPage from "@/components/subscription/PlanSelectionPage";
 
 const queryClient = new QueryClient();
 
@@ -34,13 +36,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Redirect to editor if authenticated
+// Redirect to subscription page if authenticated
 const RedirectIfAuthenticated = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   
   if (user) {
-    // Redirect to editor instead of dashboard
-    return <Navigate to="/editor" />;
+    // First direct users to subscription page
+    return <Navigate to="/subscription" />;
   }
   
   return <>{children}</>;
@@ -60,8 +62,8 @@ const AppRoutes = () => {
         path="/" 
         element={
           user ? (
-            // Redirect to editor instead of dashboard
-            <Navigate to="/editor" />
+            // First direct users to subscription page
+            <Navigate to="/subscription" />
           ) : (
             <RedirectIfAuthenticated>
               <Index />
@@ -86,6 +88,14 @@ const AppRoutes = () => {
         } 
       />
       <Route 
+        path="/subscription" 
+        element={
+          <ProtectedRoute>
+            <PlanSelectionPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/dashboard" 
         element={
           <ProtectedRoute>
@@ -97,7 +107,9 @@ const AppRoutes = () => {
         path="/editor" 
         element={
           <ProtectedRoute>
-            <Editor />
+            <SubscriptionProtectedRoute>
+              <Editor />
+            </SubscriptionProtectedRoute>
           </ProtectedRoute>
         } 
       />
@@ -105,7 +117,9 @@ const AppRoutes = () => {
         path="/editor/:projectId" 
         element={
           <ProtectedRoute>
-            <Editor />
+            <SubscriptionProtectedRoute>
+              <Editor />
+            </SubscriptionProtectedRoute>
           </ProtectedRoute>
         } 
       />
@@ -113,7 +127,9 @@ const AppRoutes = () => {
         path="/editor/:username/:projectName" 
         element={
           <ProtectedRoute>
-            <Editor />
+            <SubscriptionProtectedRoute>
+              <Editor />
+            </SubscriptionProtectedRoute>
           </ProtectedRoute>
         } 
       />
@@ -129,23 +145,24 @@ const AppRoutes = () => {
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/blog" element={<BlogIndexPage />} />
       <Route path="/blog/:slug" element={<BlogPostPage />} />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  return (
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <AppRoutes />
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
+  );
+};
 
 export default App;

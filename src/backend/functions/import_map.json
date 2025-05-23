@@ -4,6 +4,9 @@
     "@/types/v2/": "../../src/types/v2/",
     "@/services/v2/": "../../src/services/v2/",
     "shared/": "./_shared/",
-    "@shared/": "../../shared/"
+    "@shared/": "../../shared/",
+    "std/http/server": "https://deno.land/std@0.168.0/http/server.ts",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "stripe": "https://esm.sh/stripe@12.18.0?target=deno"
   }
 } 
