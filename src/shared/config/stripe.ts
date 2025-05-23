@@ -9,6 +9,9 @@ export const FREE_TIER = {
   ]
 };
 
+console.log('[stripe.ts] VITE_STRIPE_PRO_PRICE_ID:', import.meta.env.VITE_PUBLIC_STRIPE_PRO_PRICE_ID);
+console.log('[stripe.ts] VITE_STRIPE_PREMIUM_PRICE_ID:', import.meta.env.VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID);
+
 export const SUBSCRIPTION_PLANS = [
   {
     ...FREE_TIER,
@@ -26,7 +29,7 @@ export const SUBSCRIPTION_PLANS = [
       'Analytics and tracking',
       'Team collaboration'
     ],
-    stripePriceId: import.meta.env.VITE_STRIPE_PRO_PRICE_ID
+    stripePriceId: import.meta.env.VITE_PUBLIC_STRIPE_PRO_PRICE_ID
   },
   {
     id: 'premium',
@@ -42,6 +45,6 @@ export const SUBSCRIPTION_PLANS = [
       'Custom branding',
       'API access'
     ],
-    stripePriceId: import.meta.env.VITE_STRIPE_PREMIUM_PRICE_ID
+    stripePriceId: import.meta.env.VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID
   }
 ]; 

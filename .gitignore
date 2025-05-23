@@ -21,6 +21,7 @@ dist-ssr
 
 # Dependency directories
 node_modules/
+.cursor
 
 # IDE directories
 .idea/

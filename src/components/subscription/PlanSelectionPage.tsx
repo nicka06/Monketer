@@ -41,7 +41,9 @@ const PlanSelectionPage: React.FC = () => {
     setIsLoading(true);
     try {
       if (plan.id === 'free') {
+        console.log('[PlanSelectionPage.tsx] handleSelectFreePlan started. User ID:', user.id);
         const freePlanUrl = getSupabaseFunctionUrl('subscribe-to-free-plan');
+        console.log('[PlanSelectionPage.tsx] Calling Supabase function at URL:', freePlanUrl);
         const response = await fetch(freePlanUrl, {
           method: 'POST',
           headers: {
@@ -50,12 +52,26 @@ const PlanSelectionPage: React.FC = () => {
           },
           body: JSON.stringify({ userId: user.id }),
         });
+        console.log('[PlanSelectionPage.tsx] Response status from subscribe-to-free-plan:', response.status);
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to select free plan with no details' }));
+          let errorData = { error: 'Failed to select free plan with no details' };
+          try {
+            errorData = await response.json();
+            console.error('[PlanSelectionPage.tsx] Error response data from subscribe-to-free-plan:', errorData);
+          } catch (jsonError) {
+            console.error('[PlanSelectionPage.tsx] Failed to parse JSON error response from subscribe-to-free-plan:', jsonError);
+          }
           throw new Error(errorData.error || 'Failed to select free plan');
         }
         
+        try {
+          const responseData = await response.json();
+          console.log('[PlanSelectionPage.tsx] Success response data from subscribe-to-free-plan:', responseData);
+        } catch (jsonError) {
+          console.warn('[PlanSelectionPage.tsx] Could not parse JSON from successful response (subscribe-to-free-plan):', jsonError);
+        }
+
         navigate('/editor');
       } else {
         const checkoutUrl = getSupabaseFunctionUrl('create-stripe-checkout-session');
@@ -78,7 +94,8 @@ const PlanSelectionPage: React.FC = () => {
 
         const { sessionId } = await response.json();
         
-        const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY; // Use import.meta.env
+        console.log('[PlanSelectionPage.tsx] VITE_STRIPE_PUBLISHABLE_KEY just before check:', import.meta.env.VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+        const stripePublishableKey = import.meta.env.VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY;
         if (!stripePublishableKey) {
           throw new Error('Stripe publishable key is not configured.');
         }
