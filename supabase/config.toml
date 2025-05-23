@@ -13,3 +13,15 @@ import_map = "../src/backend/functions/import_map.json"
 [functions.manage-pending-changes]
 entrypoint = "../src/backend/functions/manage-pending-changes/index.ts"
 import_map = "../src/backend/functions/import_map.json"
+
+[functions.stripe-webhook-handler]
+entrypoint = "../src/backend/functions/stripe-webhook-handler/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+
+[functions.create-stripe-checkout-session]
+entrypoint = "../src/backend/functions/create-stripe-checkout-session/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+
+[functions.subscribe-to-free-plan]
+entrypoint = "../src/backend/functions/subscribe-to-free-plan/index.ts"
+import_map = "../src/backend/functions/import_map.json"

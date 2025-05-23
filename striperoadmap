@@ -1,0 +1,78 @@
+# Stripe Integration Progress
+
+## Phase 1: Backend Setup ✅
+
+### Database & Stripe Setup
+- [x] Configure Supabase tables
+- [x] Set up Stripe account and products
+- [x] Configure API keys and secrets
+
+### Webhook Handler Implementation ✅
+- [x] Create webhook handler function
+- [x] Deploy to Supabase Edge Functions
+- [x] Configure basic error handling
+
+## Phase 2: Frontend Integration 🔄
+
+### Post-Signup Plan Selection Flow
+- [ ] Create PlanSelectionPage component
+  - [ ] Display three tier options (Free, Pro, Premium)
+  - [ ] Show features and limitations for each tier
+  - [ ] Implement plan selection logic
+- [ ] Add route guard to editor
+  - [ ] Redirect new users to plan selection
+  - [ ] Check if plan is selected before editor access
+
+### Checkout Integration
+- [ ] Create checkout session function
+- [ ] Implement Stripe Checkout flow
+- [ ] Create success/failure pages
+- [ ] Handle redirect back to editor
+
+### Editor Settings Integration
+- [ ] Add subscription management to settings page
+  - [ ] Show current plan
+  - [ ] Add upgrade/downgrade options
+  - [ ] Display project usage/limits
+- [ ] Implement plan change flow
+  - [ ] Handle upgrades
+  - [ ] Handle downgrades
+  - [ ] Update UI based on subscription status
+
+### Usage Restrictions
+- [ ] Implement project limit checks
+  - [ ] Free tier: 1 project limit
+  - [ ] Pro/Premium: respective limits
+- [ ] Add upgrade prompts when limits reached
+- [ ] Handle project creation restrictions
+
+## Phase 3: Testing & Polish ⏳
+
+### End-to-End Testing
+- [ ] Test signup → plan selection flow
+- [ ] Test subscription upgrades/downgrades
+- [ ] Test project limit enforcement
+- [ ] Verify webhook handling in production
+
+### UI/UX Improvements
+- [ ] Add loading states
+- [ ] Improve error handling
+- [ ] Add success notifications
+- [ ] Polish transitions between states
+
+## Phase 4: Advanced Features ⏳
+
+### Customer Portal
+- [ ] Implement portal session creation
+- [ ] Add billing management options
+- [ ] Test upgrade/downgrade flow
+
+### Additional Features
+- [ ] Add trial periods (if needed)
+- [ ] Implement grace periods
+- [ ] Configure dunning settings
+
+## Testing Resources
+- Monitor webhook logs in Stripe Dashboard
+- Check Supabase logs for function execution
+- Verify database updates in Supabase Dashboard 

@@ -18,5 +18,9 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  "include": [
+    "vite.config.ts", 
+    "server/**/*.ts",
+    "src/env.d.ts"
+  ]
 }

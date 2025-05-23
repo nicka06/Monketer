@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
  * 
  * Provides a registration form for new users to create accounts.
  * Includes email/password inputs, terms acceptance, and error handling.
- * On successful registration, redirects users to the editor page.
+ * On successful registration, redirects users to the subscription page.
  */
 const Signup = () => {
   // Form state for email and password fields
@@ -42,9 +42,9 @@ const Signup = () => {
     
     try {
       await signUp(email, password, email);
-      console.log("Signup successful, navigating to /editor");
-      // Navigate to the editor page after successful signup
-      navigate('/editor');
+      console.log("Signup successful, navigating to subscription page");
+      // Navigate to the subscription page after successful signup
+      navigate('/subscription');
     } catch (error: any) {
       console.error("Signup error:", error);
       
@@ -63,101 +63,77 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
-      {/* Header section with logo and title */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <Link to="/" className="flex items-center">
-            <Mail className="h-10 w-10 text-monketer-purple" />
-            <span className="ml-2 text-2xl font-semibold text-gray-900">monketer</span>
-          </Link>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded-lg shadow-sm w-full max-w-md">
+        <div className="flex flex-col items-center space-y-2 mb-8">
+          <Mail className="h-8 w-8 text-monketer-purple" />
+          <h1 className="text-2xl font-semibold">Create an account</h1>
+          <p className="text-gray-500">Sign up to start creating emails</p>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create your account</h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{" "}
-          <Link to="/login" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
-            sign in to an existing account
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-monketer-purple focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-monketer-purple focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div className="flex items-center">
+            <input
+              id="terms"
+              type="checkbox"
+              className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
+              required
+            />
+            <label htmlFor="terms" className="ml-2 block text-sm text-gray-600">
+              I agree to the{" "}
+              <Link to="#" className="text-monketer-purple hover:text-monketer-purple-dark">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link to="#" className="text-monketer-purple hover:text-monketer-purple-dark">
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full bg-monketer-purple hover:bg-monketer-purple-dark"
+            disabled={loading}
+          >
+            {loading ? "Creating account..." : "Sign up"}
+          </Button>
+        </form>
+
+        <p className="mt-4 text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <Link to="/login" className="text-monketer-purple hover:text-monketer-purple-dark">
+            Sign in
           </Link>
         </p>
-      </div>
-
-      {/* Registration form card */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* Email input field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <div className="mt-1">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Password input field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Terms and conditions checkbox */}
-            <div className="flex items-center">
-              <input
-                id="terms"
-                name="terms"
-                type="checkbox"
-                required
-                className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
-              />
-              <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
-                I agree to the{" "}
-                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
-                  Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
-                  Privacy Policy
-                </a>
-              </label>
-            </div>
-
-            {/* Submit button with loading state */}
-            <div>
-              <Button 
-                type="submit"
-                className="w-full bg-monketer-purple hover:bg-monketer-purple-dark text-white"
-                disabled={loading}
-              >
-                {loading ? 'Creating account...' : 'Sign up'}
-              </Button>
-            </div>
-          </form>
-        </div>
       </div>
     </div>
   );

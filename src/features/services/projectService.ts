@@ -97,39 +97,43 @@ function generateBasicHtml(template: EmailTemplate): string {
 
 // --- Project Service Functions (Consolidated) --- 
 
-export const createProject = async (name: string): Promise<Project | null> => {
-    try {
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) throw new Error("User not authenticated.");
-        
-        const userId = userData.user.id;
-        // const username = userData.user.email; // Or another field if preferred // Commented out as username is not used
+export const createProject = async (title: string): Promise<Project | null> => {
+  try {
+    const user = supabase.auth.getUser();
+    if (!user) {
+      throw new Error('No user found');
+    }
 
-        // const defaultHtml = generateBasicHtml(defaultSemanticTemplate); // Removed: No longer generating default HTML
-
-        const { data, error } = await supabase
+    // Start a transaction to create project and update project count
+    const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
-                name: name,
-                user_id: userId,
-                semantic_email: null, // V1 template set to null
-                semantic_email_v2: null, // V2 template set to null
-                current_html: null, // HTML set to null
-                last_edited_at: new Date(),
-                version: 2 // Set version to 2 for new projects (or consider 0 or 1 if it represents content state)
+        title,
+        owner_id: (await user).data.user?.id,
       })
       .select()
       .single();
 
-        if (error) {
-            console.error("Error creating project:", error);
-            throw error;
-        }
+    if (projectError) throw projectError;
 
-        return data as Project;
+    // Increment project count in user_info table
+    const { error: updateError } = await supabase.rpc('increment_project_count', {
+      user_id: (await user).data.user?.id
+    });
+
+    if (updateError) {
+      // If updating project count fails, delete the project to maintain consistency
+      await supabase
+        .from('projects')
+        .delete()
+        .eq('id', project.id);
+      throw updateError;
+    }
+
+    return project;
   } catch (error) {
-        console.error("Exception in createProject:", error);
-        return null;
+    console.error('Error creating project:', error);
+    return null;
   }
 };
 
