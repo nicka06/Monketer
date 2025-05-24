@@ -23,12 +23,13 @@ import {
   getPendingChanges,
   exportEmailAsHtmlV2,
   saveChatMessage,     // <<< ADDED
-  getChatMessages      // <<< RE-ENABLE for Phase 3
+  getChatMessages,      // <<< RE-ENABLE for Phase 3
+  updateProjectContent // <<< ADDED FOR MANUAL EDITING
 } from '@/features/services/projectService';
 // Type definitions for core data structures
 import { Project, PendingChange, ChatMessage, ExtendedChatMessage, SimpleClarificationMessage } from '@/features/types/editor';
 // Import for email template type definition from the Supabase functions shared types
-import { EmailTemplate as EmailTemplateV2 } from '../../shared/types/template';
+import { EmailTemplate as EmailTemplateV2, EmailElement, EmailSection } from '../../shared/types'; // <<< Added EmailElement and EmailSection
 // Type for AI clarification messages
 import { ClarificationMessage } from '@/features/types/ai';
 // UUID generation utility
@@ -224,6 +225,14 @@ interface EditorContextType {
   handleFinalEmailGeneration: (context: any) => Promise<void>;
   /** Standardized error handler for editor operations */
   handleEditorError: (error: unknown, context: string, severity?: 'warning' | 'error') => string;
+
+  // Manual Editing - New properties for manual element editing
+  /** ID of the element currently selected for manual editing in the panel */
+  selectedManualEditElementId: string | null;
+  /** Function to select an element for manual editing */
+  selectElementForManualEdit: (elementId: string | null) => void;
+  /** Function to commit manual edits to the database */
+  commitManualEditsToDatabase: () => Promise<void>;
 }
 
 /**
@@ -290,6 +299,48 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [hasFirstDraft, setHasFirstDraft] = useState<boolean>(false);
   const [isCreatingFirstEmail, setIsCreatingFirstEmail] = useState<boolean>(false);
   const [imageUploadRequested, setImageUploadRequested] = useState(0);
+  
+  // Moved from below to resolve 'used before declaration' errors
+  const handleEditorError = useCallback((error: unknown, context: string, severity: 'warning' | 'error' = 'error') => {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console[severity === 'error' ? 'error' : 'warn'](`[Editor|${context}] ${errorMessage}`, error);
+    if (severity === 'error') {
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+    return errorMessage;
+  }, [toast]);
+
+  // Manual Editing State & Functions
+  const [selectedManualEditElementId, setSelectedManualEditElementId] = useState<string | null>(null);
+
+  const selectElementForManualEdit = useCallback((elementId: string | null) => {
+    console.log(`[EditorContext|selectElementForManualEdit] Selecting element: ${elementId}`);
+    setSelectedManualEditElementId(elementId);
+  }, []);
+
+  const commitManualEditsToDatabase = useCallback(async () => {
+    if (!projectData || !projectData.semantic_email_v2 || !actualProjectId) {
+      toast({ title: 'Error', description: 'Cannot save, project data or ID missing.', variant: 'destructive' });
+      return;
+    }
+    console.log(`[EditorContext|commitManualEditsToDatabase] Committing changes for project: ${actualProjectId}`);
+    setIsLoading(true);
+    try {
+      // true for createVersion, can be changed if versioning control is added to UI
+      await updateProjectContent(actualProjectId, projectData.semantic_email_v2, true);
+      toast({ title: 'Success', description: 'Manual changes saved to database.' });
+      // Optionally, refresh pending changes or other related data if needed
+      // await fetchAndSetProject(actualProjectId); // Could re-fetch all, or just update specific parts
+    } catch (error) {
+      handleEditorError(error, 'commitManualEditsToDatabase');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [actualProjectId, projectData, toast, handleEditorError, updateProjectContent]);
   
   /**
    * fetchAndSetProject - Core utility function for loading project data
@@ -1731,107 +1782,119 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
    * @param propertyPath - Dot-separated path to the property (e.g., 'url.href')
    * @param value - New value to set for the property
    */
-  const updateElementProperty = (elementId: string, propertyPath: string, value: any) => {
-    console.log(`[Editor|updateElementProperty] Attempting to update element ${elementId}, path ${propertyPath} with value:`, value);
+  const updateElementProperty = (elementId: string, propertyPath: string, value: any): EmailTemplateV2 | null => {
+    console.log(`[EditorContext|updateElementProperty] Attempting to update element ${elementId}, path ${propertyPath} with value:`, value);
     
     let newSemanticV2: EmailTemplateV2 | null = null;
 
-    // Update the project data with the modified element
     setProjectData(currentData => {
-      // Ensure we have semantic data to work with
       if (!currentData?.semantic_email_v2) {
-        console.error("[Editor|updateElementProperty] Error: semantic_email_v2 is missing.");
-        newSemanticV2 = null; // Ensure newSemanticV2 is set before returning currentData
+        console.error("[EditorContext|updateElementProperty] Error: semantic_email_v2 is missing.");
+        newSemanticV2 = null; 
         return currentData;
       }
 
-      // Deep copy to avoid mutation issues with nested state
       const workingSemanticV2: EmailTemplateV2 = JSON.parse(JSON.stringify(currentData.semantic_email_v2));
-
       let elementFound = false;
 
-      /**
-       * Recursive function to find the element and update its property
-       * 
-       * @param elements - Array of elements to search through
-       * @returns Whether the element was found and updated
-       */
       const findAndUpdateElement = (elements: any[]) => { 
         for (let i = 0; i < elements.length; i++) {
-          const element = elements[i];
+          const element = elements[i] as EmailElement; // Type assertion
           if (element.id === elementId) {
-            // Found the element - access its properties
-            const currentProperties = element.properties || {}; 
-            console.log(`[Editor|updateElementProperty] Found element ${elementId}. Current properties:`, 
-              JSON.parse(JSON.stringify(currentProperties)));
-            
+            elementFound = true; // Mark that the element was found
             try {
-              // Navigate the property path and set the value
               const pathParts = propertyPath.split('.');
-              let currentLevel: any = currentProperties; 
-            
-              // Navigate to the parent object of the property to update
-              for (let j = 0; j < pathParts.length - 1; j++) {
-                const part = pathParts[j];
-                // Create intermediate objects if they don't exist
-                if (currentLevel[part] === undefined || currentLevel[part] === null) {
-                  console.log(`[Editor|updateElementProperty] Creating intermediate object for path part: ${part}`);
-                  currentLevel[part] = {}; 
-                }
-                currentLevel = currentLevel[part];
-                
-                // Ensure we're working with an object
-                if (typeof currentLevel !== 'object' || currentLevel === null) {
-                    console.error(`[Editor|updateElementProperty] Error: Path part ${part} is not an object.`);
-                    throw new Error(`Invalid path structure at ${part}`);
-                }
+              let rootObjectToUpdate: any = null;
+              let pathToUpdateInRoot: string[] = [];
+              let updatePerformed = false;
+
+              console.log(`[Editor|updateElementProperty] Found element ${elementId}. Attempting to update path '${propertyPath}' with value:`, value);
+              // console.log("[Editor|updateElementProperty] Element before update:", JSON.parse(JSON.stringify(element)));
+
+              if (propertyPath === 'content') {
+                element.content = value;
+                updatePerformed = true;
+                console.log(`[Editor|updateElementProperty] Directly updated element.content for ${elementId}. New content:`, element.content);
+              } else if (pathParts[0] === 'layout') {
+                rootObjectToUpdate = element.layout || {};
+                element.layout = rootObjectToUpdate; // Ensure layout object exists
+                pathToUpdateInRoot = pathParts.slice(1);
+                console.log(`[Editor|updateElementProperty] Updating layout for ${elementId}. Path in layout: ${pathToUpdateInRoot.join('.')}`);
+              } else if (pathParts[0] === 'properties') {
+                rootObjectToUpdate = element.properties || {};
+                element.properties = rootObjectToUpdate; // Ensure properties object exists
+                pathToUpdateInRoot = pathParts.slice(1);
+                console.log(`[Editor|updateElementProperty] Updating properties for ${elementId}. Path in properties: ${pathToUpdateInRoot.join('.')}`);
+              } else {
+                // Default to properties if no prefix matches, or if propertyPath is like "button.href" (implicit properties)
+                rootObjectToUpdate = element.properties || {};
+                element.properties = rootObjectToUpdate;
+                pathToUpdateInRoot = pathParts; // Use the full path
+                console.log(`[Editor|updateElementProperty] Defaulting to update properties for ${elementId}. Full path: ${pathToUpdateInRoot.join('.')}`);
               }
 
-              // Set the final property value
-              const finalPart = pathParts[pathParts.length - 1];
-              console.log(`[Editor|updateElementProperty] Setting final property: ${finalPart} =`, value);
-              currentLevel[finalPart] = value;
+              if (rootObjectToUpdate && pathToUpdateInRoot.length > 0) {
+                let currentLevel = rootObjectToUpdate;
+                for (let j = 0; j < pathToUpdateInRoot.length - 1; j++) {
+                  const part = pathToUpdateInRoot[j];
+                  if (currentLevel[part] === undefined || currentLevel[part] === null || typeof currentLevel[part] !== 'object') {
+                    console.log(`[Editor|updateElementProperty] Creating intermediate object for path part: ${part} in ${pathParts[0]}`);
+                    currentLevel[part] = {};
+                  }
+                  currentLevel = currentLevel[part];
+                }
+                const finalPart = pathToUpdateInRoot[pathToUpdateInRoot.length - 1];
+                console.log(`[Editor|updateElementProperty] Setting final property '${finalPart}' in ${pathParts[0]} to:`, value);
+                currentLevel[finalPart] = value;
+                updatePerformed = true;
+              }
               
-              // Assign the modified properties back to the element
-              element.properties = currentProperties; 
-              
-              elementFound = true;
-              console.log(`[Editor|updateElementProperty] Element ${elementId} updated. New properties:`, 
-                JSON.parse(JSON.stringify(element.properties)));
-              return true; // Element found and updated in this array
+              if (updatePerformed) {
+                 console.log(`[Editor|updateElementProperty] Element ${elementId} updated. Path: ${propertyPath}. New element state:`, JSON.parse(JSON.stringify(element)));
+              } else if (propertyPath !== 'content') { // Only log if it wasn't a direct content update that failed somehow
+                console.warn(`[Editor|updateElementProperty] Update was not performed for path ${propertyPath} on element ${elementId}. This might be okay if path was empty after prefix.`);
+              }
+
             } catch (error) {
               console.error(`[Editor|updateElementProperty] Error updating property ${propertyPath} for element ${elementId}:`, error);
-              return true; // Even though there was an error, we found the element
+              // Continue, but element might be partially updated or unchanged
+            }
+            return true; // Element found, attempt to update was made.
+          }
+
+          // Recursively search in nested elements if applicable (e.g., for container/box types)
+          if (element.type === 'container' || element.type === 'box') {
+            const containerProperties = element.properties as any; // Adjust type as needed
+            if (containerProperties && Array.isArray(containerProperties.elements)) {
+              if (findAndUpdateElement(containerProperties.elements)) {
+                return true; // Element found in nested structure
+              }
             }
           }
-          // Future: Add recursion for nested elements (like inside containers/boxes) if needed
+
         }
-        return false; // Element not found in this array
+        return false; 
       };
 
-      // Iterate through sections and call the recursive function
       for (const section of workingSemanticV2.sections) {
-        if (findAndUpdateElement(section.elements)) { 
-          break; // Stop searching sections once found
+        if (findAndUpdateElement(section.elements)) {
+          break; 
         }
       }
 
-      // Handle case where element wasn't found
       if (!elementFound) {
-        console.error(`[Editor|updateElementProperty] Element with ID ${elementId} not found anywhere in semantic_email_v2`);
-        newSemanticV2 = workingSemanticV2; // Or currentData.semantic_email_v2 if no changes intended
-        return currentData; // Return original data if element not found
+        console.error(`[EditorContext|updateElementProperty] Element with ID ${elementId} not found.`);
+        newSemanticV2 = workingSemanticV2; 
+        return currentData; 
       }
-
-      // Successfully updated
+      
       newSemanticV2 = workingSemanticV2;
-      console.log("[Editor|updateElementProperty] Successfully updated. Returning new state object with newSemanticV2 assigned.");
       return {
         ...currentData,
-        semantic_email_v2: newSemanticV2, // Use the updated copy for the state
+        semantic_email_v2: newSemanticV2,
       };
     });
-    return newSemanticV2; // Return the modified structure (or null/original if error/not found)
+    return newSemanticV2;
   };
   
   /**
@@ -1991,23 +2054,6 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
    * @param severity - 'warning' or 'error' to control logging and notifications
    * @returns Formatted error message string
    */
-  const handleEditorError = useCallback((error: unknown, context: string, severity: 'warning' | 'error' = 'error') => {
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    
-    // Log to console with appropriate severity
-    console[severity === 'error' ? 'error' : 'warn'](`[Editor|${context}] ${errorMessage}`, error);
-    
-    // Show toast notification for errors (but not warnings)
-    if (severity === 'error') {
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    }
-    
-    return errorMessage;
-  }, [toast]);
   
   /**
    * handleRefreshProject - Reload the project data from the server
@@ -2217,11 +2263,15 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     htmlGenerator,
     handleRefreshProject,
     handleFinalEmailGeneration,
-    handleEditorError
+    handleEditorError,
+    // Manual Editing functions
+    selectedManualEditElementId,
+    selectElementForManualEdit,
+    commitManualEditsToDatabase,
   };
   
   return (
-    <EditorContext.Provider value={contextValue as EditorContextType}>
+    <EditorContext.Provider value={contextValue}>
       {children}
     </EditorContext.Provider>
   );

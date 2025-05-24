@@ -113,7 +113,13 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   const overlayContainerRef = useRef<HTMLDivElement>(null);
   const htmlRendererRef = useRef<{ getContainer: () => HTMLDivElement | null } | null>(null);
 
-  const { handleAcceptOneChange, handleRejectOneChange, isLoading } = useEditor();
+  const { 
+    handleAcceptOneChange, 
+    handleRejectOneChange, 
+    isLoading, 
+    selectElementForManualEdit, // Added for manual editing
+    selectedManualEditElementId // Added for manual editing
+  } = useEditor();
 
   /**
    * calculateAndApplyOverlays
@@ -275,13 +281,38 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
      */
     console.log("[EmailPreview] Processing Placeholder Overlays...");
     let placeholdersFound = 0;
+
+    // Iterate through all semantic elements to make them clickable for manual editing
+    // and to apply selected styling
     if (semanticTemplate?.sections) {
       semanticTemplate.sections.forEach(section => {
         section.elements.forEach((element: EmailElement) => {
+          const targetTdElement = iframeDoc.querySelector<HTMLElement>(`td[data-element-id="${element.id}"]`);
+
+          if (targetTdElement) {
+            // Make the TD clickable for manual editing
+            targetTdElement.style.cursor = 'pointer'; // Indicate it's clickable
+            targetTdElement.addEventListener('click', (e) => {
+              // Prevent click from bubbling to potentially other handlers on inner elements if not needed
+              // For now, direct click on TD selects it.
+              e.stopPropagation(); 
+              console.log(`[EmailPreview] TD Element clicked for manual edit: ${element.id}`);
+              selectElementForManualEdit(element.id);
+            });
+
+            // Apply visual indication if this element is selected for manual editing
+            if (element.id === selectedManualEditElementId) {
+              targetTdElement.style.outline = '2px solid #3b82f6'; // Blue outline for selected
+              targetTdElement.style.outlineOffset = '0px';
+            } else {
+              targetTdElement.style.outline = 'none'; // Remove outline if not selected
+            }
+          }
+
+          // Existing placeholder logic (should be AFTER general clickability so placeholder specific UIs can be on top)
           let isImagePlaceholder = false;
           let isLinkPlaceholder = false;
           
-          // Check for image and link placeholders
           if (element.type === 'image') {
             const props = element.properties as ImageElementProperties;
             if (props.image?.src && isPlaceholder(props.image.src)) {
@@ -346,11 +377,11 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
           }
         });
       });
-      console.log(`[EmailPreview] Placeholder Overlay calculation complete. Found ${placeholdersFound} placeholders.`);
+      // console.log(`[EmailPreview] Placeholder Overlay calculation complete. Found ${placeholdersFound} placeholders.`);
     } else {
-      console.log("[EmailPreview] No semantic template available to find placeholders.");
+      console.log("[EmailPreview] No semantic template available to find placeholders or make elements clickable for manual edit.");
     }
-  }, [pendingChanges, semanticTemplate, onPlaceholderActivate, handleAcceptOneChange, handleRejectOneChange, isLoading]);
+  }, [pendingChanges, semanticTemplate, onPlaceholderActivate, handleAcceptOneChange, handleRejectOneChange, isLoading, selectElementForManualEdit, selectedManualEditElementId]); // Added dependencies
 
   /**
    * handleContentReady
@@ -462,11 +493,10 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
             <div 
               ref={overlayContainerRef}
               className="absolute top-0 left-0 w-full h-full"
-              style={{ zIndex: 5 }}
+              style={{ zIndex: 5, pointerEvents: 'none' }}
             >
               {/* Overlays are dynamically injected here */}
-              {/* Pending change overlays: pointer-events: none */}
-              {/* Placeholder overlays: pointer-events: auto */}
+              {/* Individual overlays that need interaction (placeholders, buttons) will set pointerEvents: 'auto' */}
             </div>
           </>
         )}

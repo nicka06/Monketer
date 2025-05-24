@@ -61,8 +61,7 @@ const AppRoutes = () => {
       <Route 
         path="/" 
         element={
-          // If user is authenticated, show Index, otherwise show Index (public homepage)
-          <Index />
+          user ? <Navigate to="/dashboard" /> : <Index />
         } 
       />
       <Route 

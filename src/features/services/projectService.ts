@@ -732,3 +732,56 @@ export async function getChatMessages(projectId: string): Promise<ChatMessage[]>
     return []; // Return empty array on exception
   }
 }
+
+// New function to update project content with V2 semantic email and create a version
+export async function updateProjectContent(
+  projectId: string,
+  newSemanticEmail: EmailTemplateV2,
+  createVersion: boolean = true // Default to true, can be overridden
+): Promise<void> {
+  if (!projectId || !newSemanticEmail) {
+    console.error("[projectService|updateProjectContent] Project ID and new semantic email data are required.");
+    throw new Error("Project ID and new semantic email data are required.");
+  }
+  console.log(`[projectService|updateProjectContent] Updating project ${projectId}. Create version: ${createVersion}`);
+
+  const htmlGenerator = new HtmlGeneratorV2();
+  const newCurrentHtml = htmlGenerator.generate(newSemanticEmail);
+
+  const updates: Partial<Project> = { 
+    semantic_email_v2: newSemanticEmail as any, // Cast to any for Supabase JSONB
+    current_html: newCurrentHtml,
+    lastEditedAt: new Date(), 
+  };
+
+  const { error: updateError } = await supabase
+    .from('projects')
+    .update(updates)
+    .eq('id', projectId);
+
+  if (updateError) {
+    console.error("[projectService|updateProjectContent] Error updating project content:", updateError);
+    handleSupabaseError(updateError); // Assumes handleSupabaseError is available and appropriate
+    throw updateError;
+  }
+
+  console.log(`[projectService|updateProjectContent] Project ${projectId} content updated successfully.`);
+
+  if (createVersion) {
+    const { error: versionError } = await supabase.from('email_versions').insert({
+      project_id: projectId,
+      name: `Version created at ${new Date().toLocaleString()}`, // Or a more sophisticated naming
+      email_template_v2: newSemanticEmail as any, 
+      html_content: newCurrentHtml,
+      // created_by: userId, // If you have user context
+    });
+
+    if (versionError) {
+      console.error('[projectService|updateProjectContent] Error creating version for project ' + projectId + ':', versionError);
+      // Decide if this should throw or just warn. For now, just warning.
+      handleSupabaseError(versionError); 
+    } else {
+      console.log('[projectService|updateProjectContent] Version created successfully for project ' + projectId + '.');
+    }
+  }
+}

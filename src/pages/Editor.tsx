@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ChatInterface } from '@/components/ChatInterface';
 import { EditorProvider, useEditor } from '@/features/contexts/EditorContext';
+import { EmailElement } from '@/shared/types';
+import { ManualEditPanel } from '@/components/ManualEditPanel';
 
 // Import our extracted components
 import EditorHeader from '@/components/editor/EditorHeader';
@@ -50,7 +52,8 @@ const EditorContent = () => {
     handleSuggestionSelected,
     handleFileSelected,
     actualProjectId,
-    imageUploadRequested
+    imageUploadRequested,
+    selectedManualEditElementId
   } = useEditor();
 
   // Reference to file input for image uploads from placeholders
@@ -81,6 +84,13 @@ const EditorContent = () => {
       fileInputRef.current.click();
     }
   }, [imageUploadRequested]);
+
+  // Find the selected element to edit
+  const elementToEdit: EmailElement | undefined = selectedManualEditElementId && projectData?.semantic_email_v2 ? 
+    projectData.semantic_email_v2.sections
+      .flatMap(section => section.elements)
+      .find(element => element.id === selectedManualEditElementId) 
+    : undefined;
 
   // Initial loading state
   if (isLoadingProject) {
@@ -136,25 +146,29 @@ const EditorContent = () => {
           <ResizablePanel 
             defaultSize={25} 
             minSize={20}
-            className="border-l border-gray-200 bg-gray-50 h-full overflow-hidden"
+            className="border-l border-gray-200 bg-gray-50 h-full overflow-hidden flex flex-col"
           >
-            <div className="h-full">
-              <ChatInterface
-                messages={chatMessages}
-                clarificationMessages={clarificationConversation}
-                isClarifying={isClarifying}
-                onSendMessage={handleSendMessage}
-                onSuggestionClick={handleSuggestionSelected}
-                isLoading={isLoading}
-                initialInputValue={null} // Now handled by InitialPromptScreen
-                selectedMode={selectedMode}
-                onModeChange={handleModeChange}
-                modesAvailable={{
-                  minorEdit: hasFirstDraft,
-                  justAsk: hasFirstDraft,
-                }}
-              />
-            </div>
+            {elementToEdit ? (
+              <ManualEditPanel selectedElement={elementToEdit} />
+            ) : (
+              <div className="h-full">
+                <ChatInterface
+                  messages={chatMessages}
+                  clarificationMessages={clarificationConversation}
+                  isClarifying={isClarifying}
+                  onSendMessage={handleSendMessage}
+                  onSuggestionClick={handleSuggestionSelected}
+                  isLoading={isLoading}
+                  initialInputValue={null} // Now handled by InitialPromptScreen
+                  selectedMode={selectedMode}
+                  onModeChange={handleModeChange}
+                  modesAvailable={{
+                    minorEdit: hasFirstDraft,
+                    justAsk: hasFirstDraft,
+                  }}
+                />
+              </div>
+            )}
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
