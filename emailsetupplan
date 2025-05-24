@@ -1,0 +1,192 @@
+# Email Setup Onboarding Plan
+
+This document outlines the steps to implement a comprehensive email setup onboarding flow.
+
+## Phase 1: User Information Gathering & Goal Setting (Frontend)
+
+**Goal:** Collect necessary information about the user's business and their objectives for using the email service. This will primarily involve changes to `src/pages/DomainInput.tsx` or creating a new multi-step form component.
+
+*   **Step 1.1: Transform `DomainInput.tsx` into a Multi-Step Form.**
+    *   Implement state management for current step, and collected data across steps.
+    *   Consider using a UI library or custom components for a good step-by-step UX.
+
+*   **Step 1.2: Form Step - Area of Business.**
+    *   Input: Select dropdown or radio buttons.
+    *   Options: "Ecommerce", "Blogging", "Software/SaaS", "Services (Consulting, Agency)", "Local Business", "Non-Profit", "Other".
+    *   Store selection in component state.
+
+*   **Step 1.3: Form Step - Business Subcategory (Conditional).**
+    *   Input: Select dropdown or radio buttons, dynamically populated based on "Area of Business".
+    *   Examples:
+        *   If Ecommerce: "Fashion & Apparel", "Electronics", "Home Goods", "Health & Beauty", "Courses & Digital Products", "Other".
+        *   If Blogging: "Tech", "Travel", "Food", "Lifestyle", "Finance", "Other".
+    *   Store selection.
+
+*   **Step 1.4: Form Step - Specific Goals.**
+    *   Input: Checkboxes or a multi-select dropdown.
+    *   Options: "Sending marketing newsletters", "Transactional emails (order confirmations, password resets)", "Cold outreach", "Internal communications", "Improving deliverability", "Automating email sequences".
+    *   Store selections.
+
+*   **Step 1.5: Form Step - Email Sending Timeline.**
+    *   Input: Radio buttons.
+    *   Options: "Immediately", "Within the next week", "Within the next month", "Just planning/exploring".
+    *   Store selection.
+
+*   **Step 1.6: Form Step - Domain Input.**
+    *   This is the existing domain input field. It could be the final step of this information-gathering phase or the first step of the next phase.
+
+## Phase 2: Domain Provider Identification & DNS Configuration Strategy (Frontend & Backend)
+
+**Goal:** Identify the user's DNS provider and determine whether DNS records can be configured automatically via API or if manual instructions are needed.
+
+*   **Step 2.1: Invoke `get-domain-provider` Function.**
+    *   Frontend: After domain input, call the existing Supabase function `get-domain-provider` with the user's domain.
+    *   Handle loading states and display results (provider name, nameservers).
+
+*   **Step 2.2: Backend - New Supabase Function: `initiate-email-setup`.**
+    *   Purpose: Orchestrate the setup process, decide on DNS strategy, and prepare for server-side configuration.
+    *   Trigger: Called from the frontend after the `get-domain-provider` result is known and user info from Phase 1 is collected.
+    *   Input:
+        *   `domainName: string`
+        *   `providerInfo: { name: string, nameservers: string[] }` (from `get-domain-provider`)
+        *   `userInfo: { areaOfBusiness: string, subCategory: string, goals: string[], timeline: string }` (from Phase 1)
+    *   Logic:
+        *   **Determine DNS Configuration Capability:**
+            *   Maintain a configuration map (e.g., in the function or a separate helper file) of providers for which you have API integration capabilities (e.g., `{ "Cloudflare": { apiAvailable: true }, "GoDaddy": { apiAvailable: true }, "Namecheap": { apiAvailable: false } }`).
+            *   Based on `providerInfo.name`, decide if automated DNS setup is possible.
+        *   **Generate DKIM Placeholder:** Even if not fully configuring DKIM yet, decide on the DKIM selector (e.g., `default._domainkey.<domain>`). This will be needed for DNS records.
+    *   Output:
+        *   `dnsSetupStrategy: 'auto' | 'manual'`
+        *   `dkimSelector: string`
+        *   `requiredDnsRecords: { type: string, host: string, value: string, priority?: number }[]` (Always generate these, even for 'auto' strategy as a fallback or for user visibility).
+            *   MX record(s)
+            *   SPF record (e.g., `v=spf1 include:yourmailserver.com ~all`)
+            *   DKIM CNAME record pointing to your DKIM key (e.g., `selector._domainkey.<domain> CNAME dkim.yourmailserver.com`) or TXT record with public key.
+            *   DMARC record (basic default: `_dmarc.<domain> TXT "v=DMARC1; p=none; rua=mailto:dmarc-reports@<domain>"`)
+
+*   **Step 2.3: Frontend - Display DNS Configuration Path.**
+    *   If `dnsSetupStrategy === 'auto'`:
+        *   Inform the user: "We can attempt to set up DNS records for [ProviderName] automatically."
+        *   Display a "Connect to [ProviderName] & Configure DNS" button. This will trigger an OAuth flow or ask for API keys (Phase 6).
+        *   Optionally display the records that will be set.
+    *   If `dnsSetupStrategy === 'manual'`:
+        *   Inform the user: "Please add the following DNS records to your provider, [ProviderName]."
+        *   Clearly display each required DNS record (Type, Host/Name, Value, Priority).
+        *   Provide links to generic DNS setup guides and, if possible, provider-specific guides.
+
+## Phase 3: Server-Side Email Configuration (Backend - `initiate-email-setup` or dedicated function)
+
+**Goal:** Prepare and apply necessary configurations on your email server (e.g., Postfix/OpenDKIM). *This phase heavily depends on your server infrastructure.*
+
+*   **Step 3.1: Generate DKIM Key Pair.**
+    *   Backend: If not already done (e.g., if the public key is needed for DNS records first).
+    *   Use a library or system command (`opendkim-genkey`) to generate a private and public key for the domain.
+    *   **Security Critical:** The private key must be stored securely.
+        *   **Option A (Managed Service):** If using AWS SES, SendGrid, Postmark, etc., they often manage DKIM keys. You'd use their API to configure the domain and retrieve DNS records.
+        *   **Option B (Self-Hosted OpenDKIM):**
+            *   Store the private key in the designated OpenDKIM path (e.g., `/etc/opendkim/keys/<domain>/default.private`).
+            *   **Challenge:** Supabase functions cannot directly write to `/etc/` on a separate server. You'll need an intermediary:
+                *   An API endpoint on your mail server that the Supabase function can securely call to trigger key generation and storage.
+                *   A job queue system where the Supabase function places a task for a worker on the mail server.
+            *   The DKIM public key (from the pair) will be used for the DNS TXT record.
+
+*   **Step 3.2: Update OpenDKIM Configuration Files (if using self-hosted OpenDKIM).**
+    *   Backend: Trigger updates on your mail server for:
+        *   `KeyTable`: Add entry mapping selector and domain to the private key path.
+            *   Example: `default._domainkey.<domain> <domain>:default:/etc/opendkim/keys/<domain>/default.private`
+        *   `SigningTable`: Add entry to specify which domains/emails use which key.
+            *   Example: `*@<domain> default._domainkey.<domain>`
+        *   `TrustedHosts`: Add the new domain to the list of trusted hosts.
+    *   Reload OpenDKIM service to apply changes.
+    *   **Challenge:** Same as 3.1, requires secure communication/triggering from Supabase to the mail server.
+
+*   **Step 3.3: Configure Other Mail Server Settings (as needed).**
+    *   This might include setting up mailboxes, aliases, relay permissions, etc., depending on your mail server software (Postfix, Exim) and requirements.
+
+## Phase 4: Database Persistence (Backend - `initiate-email-setup` and other functions)
+
+**Goal:** Store all relevant information about the user's setup in your Supabase database.
+
+*   **Step 4.1: Create/Update `EmailSetups` Table (or similar).**
+    *   Columns:
+        *   `id` (primary key)
+        *   `user_id` (foreign key to your users table)
+        *   `domain` (text, unique)
+        *   `business_area` (text)
+        *   `business_subcategory` (text)
+        *   `goals` (array of text)
+        *   `send_timeline` (text)
+        *   `dns_provider_name` (text)
+        *   `dns_setup_strategy` ('auto' | 'manual')
+        *   `dkim_selector` (text)
+        *   `dkim_public_key` (text, if self-managed)
+        *   `dkim_private_key_path` (text, if self-managed and storing path, **not the key itself in DB if possible**)
+        *   `status` ('pending_user_info', 'pending_dns_provider_check', 'pending_dns_setup', 'pending_dns_verification', 'active', 'error')
+        *   `dns_records_to_set` (JSONB, storing the records from Step 2.2)
+        *   `provider_api_credentials_status` ('not_connected', 'connected', 'error', if applicable for auto DNS)
+        *   `created_at`, `updated_at`
+    *   Backend: After each major step completion or information gathering, save/update the record for this domain setup.
+
+## Phase 5: DNS Propagation Monitoring & Verification (Frontend & Backend)
+
+**Goal:** Continuously check if the user has correctly set up their DNS records (for manual setup) or if automated setup was successful, and provide feedback.
+
+*   **Step 5.1: Frontend - Progress Indication.**
+    *   Display a persistent bar or section: "Email Setup for [domain]: [Status]".
+    *   Status examples: "Awaiting DNS Records", "Verifying DNS Records...", "DNS Verified!", "Action Required: MX Record Incorrect".
+
+*   **Step 5.2: Backend - New Supabase Function: `check-dns-status`.**
+    *   Trigger: Called periodically by the frontend (e.g., every 30-60 seconds) when status is 'pending_dns_verification' or 'pending_dns_setup' (if auto).
+    *   Input: `domainName: string`
+    *   Logic:
+        *   Retrieve the expected DNS records for this domain from your database (stored in Phase 4).
+        *   Perform actual DNS lookups for MX, SPF (TXT), DKIM (TXT/CNAME), DMARC (TXT) records for the `domainName`.
+        *   Compare the live records against the expected ones.
+    *   Output:
+        *   `verificationStatus: 'all_verified' | 'pending' | 'failed'`
+        *   `recordStatuses: { type: string, host: string, expectedValue: string, currentValue?: string, verified: boolean, error?: string }[]` (detailed status for each record)
+
+*   **Step 5.3: Frontend - Update UI Based on Verification.**
+    *   If `all_verified`:
+        *   Update status to "DNS Verified!" or "Setup Complete!".
+        *   Update status in the database to 'active' via `initiate-email-setup` or a dedicated `update-setup-status` function.
+        *   Stop periodic checks.
+        *   Toast/Notification: "Congratulations! Your email for [domain] is now configured."
+    *   If `pending`: Continue showing "Verifying..." and keep polling.
+    *   If `failed`:
+        *   Highlight which records are incorrect or missing.
+        *   Provide guidance if possible (e.g., "MX record value is incorrect. Expected X, found Y.").
+
+## Phase 6: Automated DNS Configuration (Optional, Advanced)
+
+**Goal:** If `dnsSetupStrategy === 'auto'`, programmatically add/update DNS records using the provider's API.
+
+*   **Step 6.1: Provider API Integration.**
+    *   For each supported provider (Cloudflare, GoDaddy, etc.):
+        *   Research their API for DNS management.
+        *   Implement OAuth2 flow for user authorization or a secure way to collect API keys.
+            *   **Security:** API keys/tokens must be stored encrypted (e.g., using Supabase Vault).
+    *   Frontend: Guide user through connecting their provider account.
+
+*   **Step 6.2: Backend - New Supabase Function: `configure-dns-via-api`.**
+    *   Trigger: Called from frontend after successful provider connection (Phase 6.1).
+    *   Input: `domainName: string`, `providerName: string`, `retrieved_api_credentials`
+    *   Logic:
+        *   Retrieve required DNS records for the domain (from DB or generate them).
+        *   Use the provider's API and user's credentials to:
+            *   List existing relevant records.
+            *   Add/update MX, SPF, DKIM, DMARC records.
+            *   Handle API errors gracefully.
+    *   Output: `success: boolean`, `message: string`
+    *   After this, proceed to DNS verification (Phase 5).
+
+## Key Considerations & Challenges:
+
+*   **Security:** This is paramount, especially for DKIM private keys and DNS provider API credentials. Consider managed services where possible to offload some security burdens.
+*   **Complexity of OpenDKIM/Mail Server Management:** Directly managing mail server configurations from Supabase functions is indirect and requires careful architecture of secure intermediary services/APIs on your mail server.
+*   **DNS Provider APIs:** Each API is different. Start with one or two popular providers if pursuing automated setup.
+*   **Error Handling & User Guidance:** Provide clear, actionable error messages and instructions at every step.
+*   **Idempotency:** Ensure backend operations (like adding DNS records or updating configs) can be safely retried if they fail partway.
+*   **Iterative Development:** This is a large feature set. Plan to build and test it in stages.
+
+This plan provides a comprehensive roadmap. You can adjust the order or details based on your specific infrastructure and priorities.
