@@ -1,0 +1,81 @@
+# Manual Editor Feature: Implementation Plan
+
+## Phase 1: Backend & Context Setup (Core Logic)
+
+### `projectService.ts` (Server-Side Logic)
+- [X] Create `updateProjectContent` function:
+    - Accepts `projectId`, `newSemanticEmail: EmailTemplateV2`, `createVersion: boolean`.
+    - Uses `HtmlGeneratorV2` to regenerate `current_html` from `newSemanticEmail`.
+    - Updates `projects` table: `semantic_email_v2`, `current_html`, `lastEditedAt`.
+    - Optionally creates a new entry in `email_versions`.
+
+### `EditorContext.tsx` (Client-Side State Management)
+- [X] **Imports & Types:**
+    - Import `updateProjectContent` from `projectService.ts`.
+    - Import `EmailElement` type.
+- [X] **State Variables:**
+    - `selectedManualEditElementId: string | null`
+    - `setSelectedManualEditElementId: React.Dispatch<React.SetStateAction<string | null>>`
+- [X] **Core Functions (Initial Implementation):**
+    - `selectElementForManualEdit(elementId: string | null)`: Sets `selectedManualEditElementId`.
+    - `commitManualEditsToDatabase()`: Calls `projectService.updateProjectContent`. Handles `isLoading` and toasts.
+- [ ] **Enhance `updateElementProperty(elementId: string, propertyPath: string, value: any)`:**
+    - **Status:** Partially updated. Needs robust handling for `element.content`, `element.layout.*`, and `element.properties.*`.
+    - Deep clone `semantic_email_v2` before modification.
+    - Update `projectData` state with the modified `semantic_email_v2`.
+- [X] **HTML Regeneration Effect:**
+    - `useEffect` hook watching `projectData.semantic_email_v2`.
+    - When `projectData.semantic_email_v2` changes, use `htmlGenerator.generate()` for new HTML.
+    - Call `setLivePreviewHtml()` with the new HTML.
+    - *(Self-correction: Previous attempt to edit `EditorContext.tsx` for this was interrupted. Will re-apply the `useEffect` and the full `updateElementProperty` enhancement carefully next.)*
+- [X] **Update `EditorContextType` Interface:** Add new state setters and functions.
+
+## Phase 2: Frontend - Rendering & Element Interaction
+
+### `HtmlGeneratorV2` (`src/features/services/htmlGenerator.ts`)
+- [ ] **Ensure Element IDs:**
+    - In `generateElementHtml(element: EmailElement)`, ensure the main wrapping HTML tag for *every* element type has a unique and consistent `id` attribute (e.g., `id="element-${element.id}"` or `data-element-id="${element.id}"`). This ID will be used for click targeting.
+
+### Email Preview Component (Likely `src/components/EmailPreview.tsx`)
+- [ ] **Make All Accepted Elements Clickable:**
+    - Adapt `calculateAndApplyOverlays` or create new logic.
+    - Iterate through all rendered elements from `projectData.semantic_email_v2.sections[].elements[]`.
+    - Find the corresponding HTML element in the preview's DOM using its ID.
+    - Attach an `onClick` listener to each of these elements.
+    - `onClick` handler calls `editorContext.selectElementForManualEdit(element.id)`.
+- [ ] **Visual Indication for Selected Element:**
+    - When an element's ID matches `editorContext.selectedManualEditElementId`, apply a distinct visual style (e.g., border, overlay, subtle background) to it in the preview.
+
+## Phase 3: Frontend - Manual Editing UI ("Popup")
+
+### Create `ManualElementEditor.tsx` (New Component)
+- [ ] **Component Structure:**
+    - Design as a popup/sidebar.
+    - Consumes `useEditor()` for `selectedManualEditElementId`, `projectData`, `updateElementProperty`, `commitManualEditsToDatabase`.
+- [ ] **Dynamic Form Rendering:**
+    - If an element is selected, display its type (e.g., "Editing Text Element").
+    - Based on `selectedElement.type`, dynamically render appropriate input fields for its editable properties.
+- [ ] **Input Controls (User Preferences):**
+    - **Text Fields:** For `content`, `properties.text`, URLs, colors (can also use color pickers).
+    - **Dropdowns:** For `properties.typography.fontFamily`, `properties.typography.fontSize`, `properties.header.level`, etc.
+    - **Sliders/Draggable Bars (or Number Inputs):** For `layout.padding` (top, right, bottom, left), `layout.margin`, `properties.spacer.height`.
+    - **Color Pickers:** For color properties.
+    - **Switches/Checkboxes:** For boolean properties if any.
+- [ ] **Live Updates to Preview:**
+    - Each input field, on change, calls `editorContext.updateElementProperty(selectedElement.id, propertyPath, newValue)`.
+    - Preview updates via the `useEffect` in `EditorContext`.
+- [ ] **"Save Element Changes" Button (within the popup):**
+    - Positioned at the bottom/bottom-right of the `ManualElementEditor` UI.
+    - Calls `editorContext.commitManualEditsToDatabase()`.
+    - Provides feedback (disable during save, success/error toast).
+- [ ] **Closing/Hiding the Editor:**
+    - Implement a way to close (e.g., "X" button). Calls `editorContext.selectElementForManualEdit(null)`.
+
+## Phase 4: Styling & Refinements
+- [ ] Style the `ManualElementEditor.tsx` UI for usability and appearance.
+- [ ] Refine visual feedback for selected elements in the main preview.
+- [ ] Test thoroughly across different element types and edge cases.
+
+## Sitemap Update
+- [ ] Add `src/components/editor/ManualElementEditor.tsx` to `sitemap.md` (when sitemap is recreated).
+- [ ] Create `sitemap.md` at the root of the project once this feature is substantially complete.

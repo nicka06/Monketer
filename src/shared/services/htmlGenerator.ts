@@ -211,21 +211,17 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       case 'header':
         const headerProps = element.properties as HeaderElementProperties;
         const headerStyles = this.generateTypographyStyle(headerProps.typography);
-        elementContent = `<${headerProps.level || 'h2'} data-element-id="${element.id}" style="margin:0; ${headerStyles}">${element.content}</${headerProps.level || 'h2'}>`;
+        elementContent = `<${headerProps.level || 'h2'} style="margin:0; ${headerStyles}">${element.content}</${headerProps.level || 'h2'}>`;
         break;
 
       case 'text':
         const textProps = element.properties as TextElementProperties;
         const textStyles = this.generateTypographyStyle(textProps.typography);
-        elementContent = `<p data-element-id="${element.id}" style="margin:0; ${textStyles}">${element.content}</p>`;
+        elementContent = `<p style="margin:0; ${textStyles}">${element.content}</p>`;
         break;
 
       case 'button':
         const btnProps = element.properties as ButtonElementProperties;
-        // Use optional chaining directly on btnProps.button for accessing nested properties
-        // Provide defaults for everything
-
-        // Defaults
         const defaultText = 'Button';
         const defaultHref = '#';
         const defaultTarget = '_blank';
@@ -233,9 +229,8 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         const defaultBgColor = '#007bff';
         const defaultBorderRadius = '0px';
         const defaultPadding = { top: '10px', right: '25px', bottom: '10px', left: '25px' };
-        const defaultBorder = undefined; // Or specific default like 'none'
+        const defaultBorder = undefined;
 
-        // Style for the <a> tag itself
         const buttonStyle = `display:inline-block; 
           ${this.generateBorderStyle(btnProps.button?.border ?? defaultBorder)} 
           padding:${element.layout?.padding?.top ?? defaultPadding.top} ${element.layout?.padding?.right ?? defaultPadding.right} ${element.layout?.padding?.bottom ?? defaultPadding.bottom} ${element.layout?.padding?.left ?? defaultPadding.left}; 
@@ -245,11 +240,11 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
           border-radius:${btnProps.button?.borderRadius ?? defaultBorderRadius};
           ${this.generateTypographyStyle(btnProps.typography)}`;
 
-        const buttonText = element.content || defaultText; // Button text doesn't rely on btnProps.button
+        const buttonText = element.content || defaultText;
         const buttonHref = btnProps.button?.href ?? defaultHref;
         const buttonTarget = btnProps.button?.target ?? defaultTarget;
 
-        const buttonHtml = `<a data-element-id="${element.id}" href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
+        const buttonHtml = `<a href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
 
         const finalAlign = element.layout?.align || 'left';
         console.log(`[HtmlGeneratorCore] Button (ID: ${element.id}): element.layout.align is '${element.layout?.align}', finalAlign for inner TD is '${finalAlign}'.`);
@@ -262,14 +257,13 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
               </td>
             </tr>
           </table>`;
-        break; // End case 'button'
+        break;
 
       case 'image':
         const imageProps = element.properties as ImageElementProperties;
-        const img = imageProps.image || { src: '#', alt: '' }; // Ensure alt is also defaulted if img is empty
+        const img = imageProps.image || { src: '#', alt: '' };
         const imgBorder = this.generateBorderStyle(imageProps.border);
         
-        // Enforce pixel dimensions, defaulting if necessary
         const defaultImageWidth = '150px';
         const defaultImageHeight = '150px';
 
@@ -277,9 +271,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         const imageHeight = (typeof img.height === 'string' && img.height.endsWith('px')) ? img.height : defaultImageHeight;
 
         const imgTag = `<img src="${img.src}" alt="${img.alt || ''}" width="${imageWidth.replace('px','')}" height="${imageHeight.replace('px','')}" style="display:block; max-width:100%; height:auto; ${imgBorder}" />`;
-        // Note: style="...height:auto;" allows responsive scaling within the pixel-defined container if max-width is hit.
-        // The width and height attributes ensure the space is reserved.
-
+        
         if (img.linkHref) {
           elementContent = `<a href="${img.linkHref}" target="${img.linkTarget || '_blank'}">${imgTag}</a>`;
         } else {
@@ -296,21 +288,19 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       case 'spacer':
         const spacerProps = element.properties as SpacerElementProperties;
         const sp = spacerProps.spacer || { height: '20px' };
-        // Use a table for robust spacing in emails
         elementContent = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td style="height:${sp.height}; line-height:${sp.height}; font-size:${sp.height};">&nbsp;</td></tr></table>`;
         break;
 
-      // Add cases for ALL types to satisfy exhaustiveness
       case 'subtext':
         const subtextProps = element.properties as SubtextElementProperties;
         const subtextStyles = this.generateTypographyStyle(subtextProps.typography);
-        elementContent = `<p data-element-id="${element.id}" style="margin:0; ${subtextStyles}">${element.content}</p>`;
+        elementContent = `<p style="margin:0; ${subtextStyles}">${element.content}</p>`;
         break;
 
       case 'quote':
         const quoteProps = element.properties as QuoteElementProperties;
         const quoteStyles = this.generateTypographyStyle(quoteProps.typography);
-        elementContent = `<blockquote data-element-id="${element.id}" style="margin:0; padding-left: 10px; border-left: 3px solid #ccc; ${quoteStyles}">${element.content}</blockquote>`;
+        elementContent = `<blockquote style="margin:0; padding-left: 10px; border-left: 3px solid #ccc; ${quoteStyles}">${element.content}</blockquote>`;
         break;
 
       case 'code':
@@ -319,7 +309,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         const codeBg = codeProps.backgroundColor ? `background-color:${codeProps.backgroundColor};` : 'background-color:#f8f9fa;';
         const codePadding = codeProps.padding || '10px';
         const codeRadius = codeProps.borderRadius || '4px';
-        elementContent = `<div style="${codeBg} border-radius:${codeRadius}; padding:${codePadding}; overflow:auto;"><pre style="margin:0; white-space:pre-wrap; word-wrap:break-word;"><code style="${codeStyles}">${element.content}</code></pre></div>`; // Use element.content for code
+        elementContent = `<div style="${codeBg} border-radius:${codeRadius}; padding:${codePadding}; overflow:auto;"><pre style="margin:0; white-space:pre-wrap; word-wrap:break-word;"><code style="${codeStyles}">${element.content}</code></pre></div>`;
         break;
         
       case 'list':
@@ -348,7 +338,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         const navProps = element.properties as NavElementProperties;
         const defaultLinkStyle = this.generateTypographyStyle(navProps.typography);
         const linksHtml = navProps.links?.map(link => {
-          const linkStyle = this.generateTypographyStyle(link.typography, navProps.typography); // Merge specific with default
+          const linkStyle = this.generateTypographyStyle(link.typography, navProps.typography);
           return `<a href="${link.href}" target="${link.target || '_blank'}" style="text-decoration:none; ${linkStyle} ${navProps.layout?.spacing ? `padding: 0 ${navProps.layout.spacing};` : 'padding: 0 10px;'}">${link.text}</a>`;
         }).join('') || '';
         elementContent = `<p style="margin:0; ${defaultLinkStyle}">${linksHtml}</p>`;
@@ -409,7 +399,7 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       case 'footer':
         const footerProps = element.properties as FooterElementProperties;
         const footerStyles = this.generateTypographyStyle(footerProps.typography);
-        elementContent = `<div data-element-id="${element.id}" style="margin:0; ${footerStyles}">${element.content}</div>`;
+        elementContent = `<div style="margin:0; ${footerStyles}">${element.content}</div>`;
         break;
 
       default:
@@ -417,10 +407,9 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         elementContent = `<!-- Unhandled Element Type: ${(element as any).type} -->`;
     }
 
-    // Wrap element content in a table row/cell structure
     return `
       <tr>
-        <td id="element-${element.id}" style="${layoutStyles}">
+        <td id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
           ${elementContent}
         </td>
       </tr>`;

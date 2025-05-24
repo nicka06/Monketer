@@ -221,7 +221,6 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     const layoutStyles = this.generateLayoutStyle(element.layout); // Outer TD styles
     const buttonProps = element.properties as ButtonElementProperties;
 
-    // Defaults (same as core)
     const defaultText = 'Button';
     const defaultHref = '#';
     const defaultTarget = '_blank';
@@ -231,7 +230,6 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     const defaultPadding = { top: '10px', right: '25px', bottom: '10px', left: '25px' };
     const defaultBorder = undefined;
 
-    // Style for the <a> tag or <span> placeholder
     const elementStyle = `display:inline-block; 
       ${this.generateBorderStyle(buttonProps.button?.border ?? defaultBorder)} 
       padding:${element.layout?.padding?.top ?? defaultPadding.top} ${element.layout?.padding?.right ?? defaultPadding.right} ${element.layout?.padding?.bottom ?? defaultPadding.bottom} ${element.layout?.padding?.left ?? defaultPadding.left}; 
@@ -245,39 +243,33 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     const buttonHref = buttonProps.button?.href ?? defaultHref;
     const buttonTarget = buttonProps.button?.target ?? defaultTarget;
 
-    // Add data attributes if href is a placeholder
     const isButtonLinkPlaceholder = isPlaceholder(buttonHref);
     const placeholderDataAttrs = isButtonLinkPlaceholder
-        ? `data-element-id="${element.id}" data-property-path="properties.button.href" data-placeholder="true" data-placeholder-type="link"` 
+        ? `data-property-path="properties.button.href" data-placeholder="true" data-placeholder-type="link"` 
         : '';
     const finalButtonHref = isButtonLinkPlaceholder ? '#' : buttonHref;
 
-    // Render a non-clickable span if the link is a placeholder, otherwise the <a> tag
     let buttonHtmlContent;
     if (isButtonLinkPlaceholder) {
         buttonHtmlContent = `<span style="${elementStyle} cursor:default;" ${placeholderDataAttrs}>${buttonText} (Link Required)</span>`;
     } else {
-        // Add data attributes to the <a> tag only if NOT placeholder (for completeness, though maybe not needed)
-        const linkDataAttrs = `data-element-id="${element.id}"`; // Basic ID
-        buttonHtmlContent = `<a href="${finalButtonHref}" target="${buttonTarget}" style="${elementStyle}" ${linkDataAttrs}>${buttonText}</a>`;
+        buttonHtmlContent = `<a href="${finalButtonHref}" target="${buttonTarget}" style="${elementStyle}">${buttonText}</a>`;
     }
     
-    // --- FIX: Re-introduce inner table for robust centering --- 
     const finalAlign = element.layout?.align || 'left';
     const innerTableHtml = `
       <table border="0" cellspacing="0" cellpadding="0" role="presentation" style="display: inline-table;">
         <tr>
           <td align="${finalAlign}" bgcolor="${buttonProps.button?.backgroundColor ?? defaultBgColor}">
-            ${buttonHtmlContent} <!-- Use the generated span or a tag here -->
+            ${buttonHtmlContent} 
           </td>
         </tr>
       </table>`;
 
-    // Wrap the inner table content in the outer table row/cell structure
     return `
       <tr>
-        <td id="element-${element.id}" style="${layoutStyles}"> <!-- Outer TD with layout styles (including text-align) -->
-          ${innerTableHtml} <!-- Embed the centering table here -->
+        <td id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
+          ${innerTableHtml} 
         </td>
       </tr>`;
   }
@@ -295,13 +287,11 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     const isPlaceholderSrc = isPlaceholder(img.src);
     const finalSrc = isPlaceholderSrc ? '@@PLACEHOLDER_IMAGE@@' : img.src;
 
-    // --- Sizing Logic: Enforce Pixels --- 
     const defaultWidthPx = 300;
     const defaultHeightPx = 200;
     let targetWidthPx = defaultWidthPx;
     let targetHeightPx = defaultHeightPx;
 
-    // Helper to parse pixel values
     const parsePixels = (value: string | undefined): number | null => {
       if (value && typeof value === 'string' && value.endsWith('px')) {
         const num = parseInt(value, 10);
@@ -310,11 +300,9 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
       return null;
     };
 
-    // Try image properties first, then layout, then default
     targetWidthPx = parsePixels(img.width) ?? parsePixels(imgLayout.width) ?? defaultWidthPx;
     targetHeightPx = parsePixels(img.height) ?? parsePixels(imgLayout.height) ?? defaultHeightPx;
 
-    // Log warnings if defaults were used
     if (targetWidthPx === defaultWidthPx && !parsePixels(img.width) && !parsePixels(imgLayout.width)) {
          console.warn(`[HtmlGeneratorV2] Image ID ${element.id}: No valid pixel width found in image.width or layout.width. Falling back to ${defaultWidthPx}px.`);
     }
@@ -322,14 +310,11 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
          console.warn(`[HtmlGeneratorV2] Image ID ${element.id}: No valid pixel height found in image.height or layout.height. Falling back to ${defaultHeightPx}px.`);
     }
 
-    // Styles for the WRAPPER div (fixed dimensions)
     let wrapperStyles = `display:inline-block; width:${targetWidthPx}px; height:${targetHeightPx}px; overflow:hidden; line-height:1; ${imgBorder}`; 
 
-    // Styles for the inner IMG tag (fills wrapper, object-fit)
     const objectFit = img.objectFit || 'cover';
     let imgStyles = `display:block; width:100%; height:100%; border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; object-fit:${objectFit};`;
     
-    // Attributes for IMG tag (Outlook compatibility)
     let imgWidthAttr = ` width="${targetWidthPx}"`;
     let imgHeightAttr = ` height="${targetHeightPx}"`;
     
@@ -337,50 +322,33 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
     const isPlaceholderLink = isPlaceholder(link);
     const finalLink = isPlaceholderLink ? '#' : link;
 
-    // --- Element ID and Data Attributes --- 
-    const elementIdAttr = `id="${element.id}"`; // Plain ID for getElementById
-    const baseDataAttrs = `data-element-id="${element.id}"`; // Keep data-element-id as well
-    
-    // --- Image Source Data Attribute ---
     const srcDataAttr = isPlaceholderSrc 
         ? `data-placeholder="true" data-placeholder-type="image" data-property-path="image.src"` 
         : '';
         
-    // --- Link Data Attribute (only if link exists) ---
     const linkDataAttr = link 
         ? `data-has-link="true" ${isPlaceholderLink ? 'data-placeholder-link="true" data-property-path="image.linkHref"' : ''}` 
         : '';
         
-    // --- Element Content Generation ---
-    let imgTagWithAttrs = `<img src="${finalSrc}" alt="${img.alt || ''}"${imgWidthAttr}${imgHeightAttr} style="${imgStyles}" ${baseDataAttrs} ${srcDataAttr} />`;
+    let imgTagWithAttrs = `<img src="${finalSrc}" alt="${img.alt || ''}"${imgWidthAttr}${imgHeightAttr} style="${imgStyles}" ${srcDataAttr} ${linkDataAttr} />`;
     
-    // Wrapper DIV for styling that works across email clients
-    let wrappedImgTag = `<div style="${wrapperStyles}" ${elementIdAttr}>${imgTagWithAttrs}</div>`;
+    let wrappedImgTag = `<div style="${wrapperStyles}">${imgTagWithAttrs}</div>`;
     
-    // If the image has a link and it's not a placeholder link, wrap in an A tag
     let elementContent;
     if (link && !isPlaceholderLink) {
         elementContent = `<a href="${finalLink}" target="${img.linkTarget || '_blank'}" style="text-decoration:none; display:block;">${wrappedImgTag}</a>`;
     } 
-    // Otherwise just use the wrapped image
     else {
         elementContent = wrappedImgTag;
     }
     
-    // Add placeholders for edit mode
     if (isPlaceholderSrc) {
-        // For placeholder images, elementContent (which is wrappedImgTag or an <a> around it) 
-        // already contains the necessary data-placeholder attributes on the <img> tag.
-        // EmailHtmlRenderer.tsx will handle the visual representation of the placeholder.
-        // No additional overlay div is needed here from the generator.
-        // The existing elementContent is sufficient.
         console.log('[HtmlGeneratorV2] Image is placeholder. Passing through existing elementContent for EmailHtmlRenderer to handle:', elementContent.substring(0, 200));
     }
     
-    // Wrap element content in a table row/cell structure
     return `
       <tr>
-        <td style="${layoutStyles}">
+        <td id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
           ${elementContent}
         </td>
       </tr>`;

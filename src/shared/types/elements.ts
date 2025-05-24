@@ -38,6 +38,7 @@ export interface EmailElementLayout {
   };
   align?: 'left' | 'center' | 'right';
   valign?: 'top' | 'middle' | 'bottom';
+  backgroundColor?: string;
 }
 
 export interface EmailElementProperties { }
@@ -54,6 +55,8 @@ export interface HeaderElementProperties extends EmailElementProperties {
     textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
+  fontFamily?: string;
+  align?: 'left' | 'center' | 'right';
 }
 
 export interface TextElementProperties extends EmailElementProperties {
@@ -67,6 +70,8 @@ export interface TextElementProperties extends EmailElementProperties {
     textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
+  fontFamily?: string;
+  align?: 'left' | 'center' | 'right';
 }
 
 export interface ButtonElementProperties extends EmailElementProperties {
