@@ -38,16 +38,19 @@ serve(async (req: Request) => {
 
     const { error } = await supabase
       .from("user_info")
-      .update({
+      .upsert({
+        auth_user_uuid: userId,
         subscription_tier: "free",
-        subscription_status: "active", // Or "free_active", depending on your status conventions
-        stripe_customer_id: null, // Clear any previous Stripe IDs
+        subscription_status: "active",
+        stripe_customer_id: null,
         stripe_subscription_id: null,
-      })
-      .eq("auth_user_uuid", userId);
+        project_count: 0,
+      }, {
+        onConflict: 'auth_user_uuid',
+      });
 
     if (error) {
-      console.error("Error updating user to free plan:", error);
+      console.error("Error upserting user to free plan:", error);
       throw error;
     }
 
