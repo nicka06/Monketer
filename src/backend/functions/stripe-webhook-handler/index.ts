@@ -1,25 +1,36 @@
-import { serve } from "std/http/server";
-import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+// @ts-ignore: Deno-specific import
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+// @ts-ignore: Deno-specific import
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// @ts-ignore: Deno-specific import
+import Stripe from "https://esm.sh/stripe@14.12.0";
 import { determineTierFromPriceId, type SubscriptionTier } from "./types.ts";
 
+// @ts-ignore: Deno-specific environment variable access
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
+  // @ts-ignore: Specific Stripe API version requirement
   apiVersion: '2023-10-16',
+  // @ts-ignore: Deno-specific HTTP client for Stripe
   httpClient: Stripe.createFetchHttpClient(),
 });
 
+// @ts-ignore: Deno-specific environment variable access
 const supabaseClient = createClient(
+  // @ts-ignore: Deno-specific environment variable access
   Deno.env.get('SUPABASE_URL')!,
+  // @ts-ignore: Deno-specific environment variable access
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-serve(async (req) => {
+// @ts-ignore: Deno-specific serve function
+serve(async (req: Request) => {
   try {
     const signature = req.headers.get('stripe-signature');
     if (!signature) {
       return new Response('No signature provided', { status: 400 });
     }
 
+    // @ts-ignore: Deno-specific environment variable access
     const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SIGNING_SECRET')!;
     const body = await req.text();
     

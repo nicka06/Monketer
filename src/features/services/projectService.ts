@@ -108,8 +108,8 @@ export const createProject = async (title: string): Promise<Project | null> => {
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
-        title,
-        owner_id: (await user).data.user?.id,
+        name: title,
+        user_id: (await user).data.user?.id,
       })
       .select()
       .single();
@@ -118,7 +118,7 @@ export const createProject = async (title: string): Promise<Project | null> => {
 
     // Increment project count in user_info table
     const { error: updateError } = await supabase.rpc('increment_project_count', {
-      user_id: (await user).data.user?.id
+      p_user_id: (await user).data.user?.id
     });
 
     if (updateError) {

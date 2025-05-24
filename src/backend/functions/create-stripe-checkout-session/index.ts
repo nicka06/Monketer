@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.12.0"; // Ensure you use a version compatible with your Stripe API version
 import { corsHeadersFactory } from '../_shared/lib/constants.ts';
 
+// @ts-ignore: Deno-specific environment variable access
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   // @ts-ignore: Stripe types might not perfectly align with Deno Stripe SDK
   apiVersion: "2023-10-16",
@@ -64,7 +65,7 @@ serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
+    // @ts-ignore: Deno-specific environment variable access
     const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173"; // Default for local Vite dev
 
     const session = await stripe.checkout.sessions.create({

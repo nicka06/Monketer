@@ -28,6 +28,7 @@ import { getUserProjects, getUsernameFromId } from '@/features/services/projectS
 import { Project } from '@/features/types/editor';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/features/auth/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -79,9 +80,85 @@ const Dashboard = () => {
   /**
    * Navigates to the editor for creating a new project
    * The actual project creation happens in the editor
+   * Updated to check project limits before navigating.
    */
-  const handleCreateProject = () => {
-    navigate('/editor');
+  const handleCreateProject = async () => {
+    if (!user) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to create a project.',
+        variant: 'destructive',
+      });
+      navigate('/login');
+      return;
+    }
+
+    try {
+      // Fetch user_info to check subscription and project count
+      const { data: userInfo, error: userInfoError } = await supabase
+        .from('user_info')
+        .select('subscription_tier, subscription_status, project_count')
+        .eq('auth_user_uuid', user.id)
+        .single();
+
+      if (userInfoError) {
+        console.error('Error fetching user_info:', userInfoError);
+        toast({
+          title: 'Error',
+          description: 'Could not verify your subscription details. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!userInfo) {
+        console.error('User info not found for user:', user.id);
+        toast({
+          title: 'Subscription Error',
+          description: 'Subscription details not found. Please complete your subscription setup.',
+          variant: 'default',
+        });
+        navigate('/subscription');
+        return;
+      }
+      
+      if (userInfo.subscription_status !== 'active') {
+        toast({
+          title: 'Subscription Inactive',
+          description: 'Your subscription is not active. Please update your subscription to create new projects.',
+          variant: 'default',
+        });
+        navigate('/subscription');
+        return;
+      }
+
+      const projectLimits = {
+        free: 1,
+        pro: 25,
+        premium: Infinity,
+      };
+      
+      const currentTier = userInfo.subscription_tier as 'free' | 'pro' | 'premium';
+      const limit = projectLimits[currentTier];
+
+      if (userInfo.project_count >= limit) {
+        toast({
+          title: 'Project Limit Reached',
+          description: `You've reached the project limit for your ${currentTier} plan. Please upgrade to create more projects.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      navigate('/editor');
+    } catch (error) {
+      console.error('Error in handleCreateProject:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred while trying to create a new project.',
+        variant: 'destructive',
+      });
+    }
   };
 
   /**
