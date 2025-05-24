@@ -98,42 +98,94 @@ function generateBasicHtml(template: EmailTemplate): string {
 // --- Project Service Functions (Consolidated) --- 
 
 export const createProject = async (title: string): Promise<Project | null> => {
+  let currentUserId: string | undefined;
   try {
-    const user = supabase.auth.getUser();
-    if (!user) {
-      throw new Error('No user found');
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    if (authError || !authUser) {
+      console.error('Error fetching user for project creation:', authError);
+      throw new Error(authError?.message || 'User not authenticated');
+    }
+    currentUserId = authUser.id;
+
+    // Fetch user_info to check subscription and project count BEFORE creating the project
+    const { data: userInfo, error: userInfoError } = await supabase
+      .from('user_info')
+      .select('subscription_tier, project_count')
+      .eq('auth_user_uuid', currentUserId)
+      .single();
+
+    if (userInfoError) {
+      console.error('Error fetching user_info for project creation limit check:', userInfoError);
+      throw new Error('Could not verify user subscription details to create project.');
     }
 
-    // Start a transaction to create project and update project count
+    if (!userInfo) {
+      console.error('User_info not found for user:', currentUserId);
+      throw new Error('User subscription information not found. Cannot create project.');
+    }
+
+    const projectLimits: { [key: string]: number } = {
+      free: 1,
+      pro: 25,
+      premium: Infinity,
+    };
+
+    const currentTier = userInfo.subscription_tier as 'free' | 'pro' | 'premium';
+    const limit = projectLimits[currentTier];
+
+    if (limit === undefined) { // Should not happen if tiers are well-defined
+        console.error(`Project limit not defined for tier: ${currentTier}`);
+        throw new Error(`Project limit configuration error for your plan.`);
+    }
+
+    if (userInfo.project_count >= limit) {
+      console.warn(`User ${currentUserId} attempted to create project while at limit (${userInfo.project_count}/${limit}) for tier ${currentTier}.`);
+      throw new Error(`Project limit reached for your ${currentTier} plan. Please upgrade to create more projects.`);
+    }
+
+    // If all checks pass, proceed to create the project
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
         name: title,
-        user_id: (await user).data.user?.id,
+        user_id: currentUserId, // Use the fetched and validated user ID
       })
       .select()
       .single();
 
-    if (projectError) throw projectError;
+    if (projectError) {
+      console.error('Error inserting project:', projectError);
+      throw projectError; // Propagate the Supabase error
+    }
+    if (!project) { // Should be caught by projectError, but as a safeguard
+        throw new Error('Project creation failed silently after insert attempt.');
+    }
 
     // Increment project count in user_info table
-    const { error: updateError } = await supabase.rpc('increment_project_count', {
-      p_user_id: (await user).data.user?.id
+    const { error: rpcError } = await supabase.rpc('increment_project_count', {
+      p_user_id: currentUserId
     });
 
-    if (updateError) {
+    if (rpcError) {
+      console.error('Error calling increment_project_count RPC:', rpcError);
       // If updating project count fails, delete the project to maintain consistency
+      console.warn(`Attempting to roll back project creation (ID: ${project.id}) due to RPC error.`);
       await supabase
         .from('projects')
         .delete()
         .eq('id', project.id);
-      throw updateError;
+      throw rpcError; // Propagate the RPC error
     }
 
+    console.log(`Project "${title}" (ID: ${project.id}) created successfully for user ${currentUserId}. New project count should be ${userInfo.project_count + 1}.`);
     return project;
-  } catch (error) {
-    console.error('Error creating project:', error);
-    return null;
+  } catch (error: any) {
+    // Log the specific error message that will be shown to the user or handled by the caller
+    console.error('Error in createProject service:', error.message);
+    // It's often better for the caller (e.g., EditorContext) to handle toast notifications
+    // so they are consistent with other UI interactions.
+    // The function will return null, and the caller can check for this and the error message.
+    throw error; // Re-throw the error to be caught by the calling function
   }
 };
 
