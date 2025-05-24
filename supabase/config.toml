@@ -25,3 +25,8 @@ import_map = "../src/backend/functions/import_map.json"
 [functions.subscribe-to-free-plan]
 entrypoint = "../src/backend/functions/subscribe-to-free-plan/index.ts"
 import_map = "../src/backend/functions/import_map.json"
+
+[functions.get-domain-provider]
+entrypoint = "../src/backend/functions/get-domain-provider/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+
