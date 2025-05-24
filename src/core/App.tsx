@@ -18,6 +18,7 @@ import BlogIndexPage from "@/pages/BlogIndexPage";
 import BlogPostPage from "@/pages/BlogPostPage";
 import SubscriptionProtectedRoute from "@/components/subscription/SubscriptionProtectedRoute";
 import PlanSelectionPage from "@/components/subscription/PlanSelectionPage";
+import DomainInputPage from "../pages/DomainInput";
 
 const queryClient = new QueryClient();
 
@@ -134,6 +135,7 @@ const AppRoutes = () => {
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/blog" element={<BlogIndexPage />} />
       <Route path="/blog/:slug" element={<BlogPostPage />} />
+      <Route path="/domain-input" element={<DomainInputPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
