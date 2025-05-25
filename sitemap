@@ -33,15 +33,20 @@
 │   │   │       - Provides utility function `determineTierFromPriceId`.
 │   │   │       Usage: Used by webhook handler and other subscription-related components.
 │   │   │
-│   ├── 📁 .temp/
-│   │   Purpose: Supabase CLI version tracking
-│   │   Details:
-│   │   - Tracks CLI version information
-│   │   - Manages local development state
-│   │   - Used by Supabase CLI for version control
+│   ├── 📁 .temp/  
+│   │   Purpose: Supabase CLI version tracking or temporary build files for backend.
+│   │   Details: (Clarify based on actual use)
 │   │
-│   ├── 📁 functions/
+│   ├── 📁 functions/ 
 │   │   ├── 📁 _shared/
+│   │   │   Purpose: Contains shared code, types, or utilities used by multiple backend functions.
+│   │   │   Details: For example, `cors.ts` for CORS headers, `lib/` for more complex shared utilities.
+│   │   │   Usage: Imported by other functions to reduce code duplication.
+│   │   │   Files:
+│   │   │     *   **`cors.ts`**
+│   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers for Deno functions.
+│   │   │         *   Details: Exports a `corsHeaders` object: `{"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS"}`. The wildcard origin is suitable for development but should be more restrictive in production.
+│   │   │         *   Usage: Imported directly by Deno functions (e.g., `save-email-setup-form`) for simple OPTIONS request handling and adding permissive CORS headers.
 │   │   │   ├── 📁 lib/
 │   │   │   │   ├── 📄 constants.ts
 │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
@@ -83,819 +88,195 @@
 │   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
 │   │   │       │   Usage: Used by backend functions like `manage-pending-changes` to generate the final HTML for accepted email templates before saving to the database.
 │   │   │       │
-│   │   │       └── 📄 semanticParser.ts
-│   │   │           Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
-│   │   │           Details:
-│   │   │           - Adapts `SemanticParserCore` (from `src/shared/services/semanticParser.ts`) for the frontend.
-│   │   │           - Uses `JSDOM` to create a DOM from an HTML string for parsing.
-│   │   │           - Implements the `parse(html)` method to convert HTML into a structured `EmailTemplateV2` object.
-│   │   │           - Overrides methods for:
-│   │   │             • Extracting global styles (body styles, content width).
-│   │   │             • Locating the main email container and parsing sections/elements.
-│   │   │             • Determining element types, potentially supporting more frontend-specific types (subtext, quote, code, list).
-│   │   │           - Exports `SemanticParser` class.
-│   │   │           Usage: Used to convert raw HTML (e.g., from an imported email or a previous version) into the structured `EmailTemplateV2` format that the editor and other services can work with.
+│   │   │       └── 📄 semanticParser.ts 
+│   │   │           Purpose: Backend adapter for V2 email HTML semantic parsing (if applicable, or if shared and used by backend).
+│   │   │           Details: (Details would depend on its actual backend use)
+│   │   │           Usage: (Usage would depend on its actual backend use)
 │   │   │
-│   │
-│   ├── 📁 clarify-user-intent/
+│   │   ├── 📁 clarify-user-intent/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: AI conversation middleware, served as a Supabase Edge Function.
+│   │   │       Details: (Content as previously listed, summarized for brevity)
+│   │   │       - Analyzes user messages, asks clarifying questions, provides structured data for email generation.
+│   │   │       - Manages context, token limits, error handling.
+│   │   │       Usage: HTTP POST endpoint for frontend, uses OpenAI.
+│   │   │
+│   │   ├── 📁 generate-email-changes/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Supabase Edge Function to process AI-driven modifications to email templates, convert into granular pending changes, and save.
+│   │   │       Details: (Content as previously listed, summarized for brevity)
+│   │   │       - Receives payload, constructs OpenAI prompt for complete `EmailTemplateV2` (new or modified).
+│   │   │       - Parses AI response, merges with defaults, validates, generates batch ID.
+│   │   │       - Calls `convertDiffToGranularRows` to create `GranularPendingChangeInput[]`.
+│   │   │       - Saves granular changes to `pending_changes` table.
+│   │   │       Usage: Called by frontend after clarification to generate pending changes.
+│   │   │
+│   │   ├── 📁 manage-pending-changes/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Supabase Edge Function to manage granular pending V2 template changes (accept/reject/get).
+│   │   │       Details: (Content as previously listed, summarized for brevity)
+│   │   │       - Handles `accept_one`, `reject_one`, `accept_batch`, `reject_batch`, `get_batch`, `get_all_project`.
+│   │   │       - Uses `applyPendingChanges` helper to modify `EmailTemplateV2`.
+│   │   │       - Regenerates HTML using `HtmlGeneratorV2` on acceptance.
+│   │   │       - Updates project's `semantic_email_v2`, `current_html`, and change statuses in DB.
+│   │   │       Usage: HTTP POST endpoint for frontend to manage pending changes.
+│   │   │
+│   │   ├── 📁 send-preview-email/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Supabase Edge Function to send an email with provided HTML content for preview.
+│   │   │       Details: (Content as previously listed, summarized for brevity)
+│   │   │       - Accepts `recipientEmail` and `emailHtml`.
+│   │   │       - Uses `nodemailer` with Gmail SMTP (env var credentials) to send.
+│   │   │       Usage: HTTP POST endpoint for frontend to send preview emails.
+│   │   │
+│   │   ├── 📁 save-email-setup-form/
+│   │   │   ├── 📄 index.ts
+│   │   │   │   Purpose: Supabase Edge Function to save user's initial email setup information.
+│   │   │   │   Details:
+│   │   │   │     - Receives form data (business area, goals, scenarios, default sender, domain, sendTimeline).
+│   │   │   │     - Authenticates the user.
+│   │   │   │     - Validates required fields like domain, defaultFromEmail, defaultFromName.
+│   │   │   │     - Upserts data into the `email_setups` table (user_id, domain, business_area, etc., status "pending_dns_config", send_timeline).
+│   │   │   │     - Upserts/deletes `scenario_sender_configs` associated with the `email_setup_id`.
+│   │   │   │   Usage: Called by the frontend when the user submits the initial email setup form.
+│   │   │   │
+│   │   │   └── 📄 types.ts  
+│   │   │       Purpose: Defines types and interfaces for save-email-setup-form.
+│   │   │       Details: Contains `EmailSetupFormData` and `ScenarioSenderConfig`.
+│   │   │       Usage: Used by `save-email-setup-form/index.ts`.
+│   │   │
+│   │   ├── 📁 initiate-email-setup/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Orchestrates the initial DNS configuration steps for a user's domain. All configurations are manual. Primarily focuses on DKIM setup by calling an external mail server API.
+│   │   │       Details:
+│   │   │         - Authenticates the user and retrieves the `email_setups` record by ID.
+│   │   │         - **Idempotency Check:** If `dkim_public_key` column in `email_setups` table contains a valid Base64 key, it is reused.
+│   │   │         - **Calls External Mail Server API:**
+│   │   │           - Makes a POST request to `MAIL_SERVER_DKIM_ENDPOINT` (env var) with `{ domain }`. Expects `MAIL_SERVER_API_SECRET` (env var) for Bearer token authentication.
+│   │   │           - Expects the mail server to return a JSON response like `{ dnsTxtRecord: "selector._domainkey.domain IN TXT \"v=DKIM1; k=rsa; p=PUBLIC_KEY_BASE64\"" }`.
+│   │   │         - **DKIM Public Key Parsing & Validation:**
+│   │   │           - Parses the received `dnsTxtRecord` string (using regex) to extract the Base64 public key part (`p=...`).
+│   │   │           - Validates the extracted public key for valid Base64 format.
+│   │   │         - **DNS Record Generation:**
+│   │   │           - Generates required DNS records (MX, SPF TXT, DKIM TXT, DMARC TXT).
+│   │   │           - Uses `DEFAULT_MX_VALUE` (env var) or a fallback for the MX record value.
+│   │   │           - Uses `DEFAULT_SPF_VALUE` (env var) or a fallback for the SPF record value.
+│   │   │           - Constructs the DKIM TXT record value using the (parsed and validated) public key and a DKIM selector (uses existing `dkim_selector` from DB or defaults to "default"). If parsing/validation/API call fails, a placeholder error value is used in the DKIM DNS record.
+│   │   │         - **Database Update:** Updates the `email_setups` record with:
+│   │   │           - `dns_provider_name` (from user input).
+│   │   │           - `dns_setup_strategy` (always "manual").
+│   │   │           - `dkim_selector` (used or defaulted).
+│   │   │           - `dkim_public_key` (the extracted Base64 key, or `null` if provisioning failed).
+│   │   │           - `dns_records_to_set` (the generated DNS records).
+│   │   │           - `status` (always "awaiting_manual_dns_config").
+│   │   │       Input: `{ emailSetupId: string, providerInfo: { name: string, nameservers: string[] } }`
+│   │   │       Output: `{ dnsSetupStrategy: "manual", dkimSelector: string, requiredDnsRecords: DnsRecord[], message: string }`
+│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_API_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`.
+│   │   │
+│   ├── 📁 supabase-admin-example/  
 │   │   └── 📄 index.ts
-│   │       Purpose: AI conversation middleware, served as a Supabase Edge Function.
+│   │       Purpose: Example or utility function demonstrating Supabase admin client usage.
+│   │       Details: (Content would depend on the specific example)
+│   │       Usage: Reference for admin-level operations or a specific utility.
+│   │
+│   └── 📄 import_map.json 
+│       Purpose: Deno import map for backend functions if shared across all, or general backend utilities.
+│       Details: Maps module specifiers to URLs for Deno.
+│       Usage: Used by Deno runtime to resolve imports for functions not having their own `import_map.json` or for shared backend code.
+│
+├── 📁 frontend/
+│   ├── 📁 components/
+│   │   ├── 📄 EmailSetupForm.tsx
+│   │   │   Purpose: React component for the email setup onboarding form.
+│   │   │   Details:
+│   │   │   - Collects user input for business area, goals, scenarios, default sender info, domain.
+│   │   │   - Handles form submission, calling the `save-email-setup-form` Supabase function.
+│   │   │   - Likely includes state management for form fields and validation.
+│   │   │   Usage: Integrated into the onboarding flow pages.
+│   │   │
+│   │   └── 📄 DnsConfigurationGuide.tsx
+│   │       Purpose: React component to display DNS records and guide users on manual configuration.
 │   │       Details:
-│   │       - Core Functionality:
-│   │         • Analyzes user messages for ambiguity
-│   │         • Asks targeted clarifying questions (prioritizing broad over specific, limited to max 8 rounds)
-│   │         • Provides structured data for email generation
-│   │       - Input Processing:
-│   │         • User message analysis
-│   │         • Chat history context
-│   │         • Current email structure
-│   │         • Ongoing clarification context (including question count)
-│   │       - Response Types:
-│   │         • Clarification questions with suggestions and updated context (including question count)
-│   │         • Complete structured data for email generation
-│   │       - Technical Features:
-│   │         • Token limit management
-│   │         • Context window optimization
-│   │         • JSON response validation
-│   │         • Error handling and recovery
-│   │         • Question count tracking and limit enforcement
-│   │       Usage: Invoked as an HTTP POST endpoint by the frontend. It receives user messages, chat history, current email context, and ongoing clarification context (with question count). Based on its analysis and the question limit, it either returns a request for clarification or a structured set of instructions for the `generate-email-changes` function. It utilizes an OpenAI model (e.g., `gpt-4o-mini`) for its core logic.
+│   │       - Takes DNS records (MX, SPF, DKIM, DMARC) as props.
+│   │       - Presents them clearly to the user.
+│   │       - May include instructions or links to common DNS provider help pages.
+│   │       Usage: Shown after `initiate-email-setup` returns, as all setups are manual.
 │   │
-│   ├── 📁 generate-email-changes/
-│   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to process AI-driven modifications to email templates, convert them into granular pending changes, and save these changes.
+│   ├── 📁 contexts/
+│   │   └── 📄 EmailSetupContext.tsx
+│   │       Purpose: React context to manage state related to the email setup process.
 │   │       Details:
-│   │       - Core Functionality:
-│   │         • Receives a structured `GenerateEmailChangesPayload` (likely from `clarify-user-intent`) detailing the desired email modifications, including a "perfect prompt" and elements to process.
-│   │         • Imports updated for new `GranularPendingChange` types from `@shared/types/pendingChangeTypes.ts`.
-│   │         • Fetches the current `EmailTemplateV2` if it exists (`currentV2Template`).
-│   │         • Constructs a system prompt for OpenAI based on whether `currentV2Template` exists:
-│   │           - If creating a new email (`currentV2Template` is null): Instructs the AI to generate a *complete EmailTemplateV2* JSON object based on the prompt, providing a structural example and emphasizing inclusion of all required fields based on `elementDefaults`.
-│   │           - If editing an existing email (`currentV2Template` exists): Instructs the AI to generate a *complete, modified EmailTemplateV2* JSON object reflecting the requested changes.
-│   │           - **Both prompts now explicitly instruct the AI:**
-│   │             1.  To **always include** a top-level `content` field for every element (using `\'\'` if needed).
-│   │             2.  To **OMIT** optional string fields (like image/border properties) entirely if they are not applicable, instead of setting them to `null`.
-│   │         • Calls the OpenAI API (gpt-4o-mini) with the constructed prompt and context.
-│   │         • Parses the AI's JSON response into a proposed `EmailTemplateV2`.
-│   │         • Merges the AI-generated element data with `elementDefaults` using a deep merge, ensuring all necessary properties are present.
-│   │         • Crucially, iterates through the merged elements and explicitly sets a default `content` string (e.g., `\'\'` or text derived from properties like `alt` or `button text`) if the AI omitted it, preventing validation errors.
-│   │         • Also converts any `null` values received from the AI for optional string properties (e.g., in image or border settings) to `undefined` to align with the Zod schema's expectation (string | undefined).
-│   │         • **Also ensures that if a `properties.border` object exists after merging, the required `width`, `style`, and `color` properties have default string values (e.g., '1px', 'solid', '#000000') if they are `undefined`. This happens before the final Zod validation and has been confirmed to work correctly.**
-│   │         • Validates the final `EmailTemplateV2` structure using Zod (`validateEmailTemplateV2`). Throws error if invalid.
-│   │         • **Generates a `batch_id` using `generateId()` for the set of changes.**
-│   │         • **Calls the `convertDiffToGranularRows` helper function:**
-│   │           - Inputs: `diffResult` (from `DifferV2` comparing base and proposed templates), `baseTemplate`, `proposedTemplate`, `projectId`, `batchId`, and `aiRationale` (from `payload.perfectPrompt`).
-│   │           - Logic: Identifies `section_add`, `section_delete`, `section_edit`, `element_add`, `element_delete`, `element_edit`. For `section_add`, also creates `element_add` for its elements. `section_edit` logic determines if a change row is needed based on shallow property comparison. Handles new templates (all adds) and no-change scenarios.
-│   │           - Output: An array of `GranularPendingChangeInput[]`.
-│   │         • **Saves the `GranularPendingChangeInput[]` to the `pending_changes` table using a Supabase batch insert (`supabase.from('pending_changes').insert(granularChanges)`).**
-│   │         • Updates the project's `last_edited_at` timestamp.
-│   │         • The function no longer directly saves the new template or HTML to the project; this is now handled by `manage-pending-changes` upon acceptance.
-│   │       - Input: `GenerateEmailChangesPayload`.
-│   │       - Output: JSON containing `{ pending_batch_id: string, pending_changes: GranularPendingChangeInput[], ai_rationale: string }`.
-│   │       Usage: Called by the frontend (`EditorContext`) after the clarification flow (if any) is complete to generate a batch of granular pending changes based on AI suggestions, which are then presented to the user for individual approval.
+│   │       - Holds state like `emailSetupId`, form data, DNS records, current step.
+│   │       - Provides functions to interact with backend (e.g., save form, initiate DNS setup).
+│   │       Usage: Wraps parts of the application involved in email setup.
 │   │
-│   ├── 📁 manage-pending-changes/
-│   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to manage granular pending V2 template changes, allowing for individual or batch acceptance/rejection, and fetching changes.
+│   ├── 📁 pages/
+│   │   ├── 📄 EmailOnboardingPage.tsx
+│   │   │   Purpose: Main page for the email setup onboarding flow.
+│   │   │   Details:
+│   │   │   - Likely orchestrates different steps of the onboarding (e.g., form, DNS config).
+│   │   │   - Uses `EmailSetupContext` and relevant components.
+│   │   │   Usage: Entry point for users setting up their email.
+│   │
+│   ├── 📁 services/
+│   │   └── 📄 api.ts
+│   │       Purpose: Frontend API service layer to interact with Supabase functions.
 │   │       Details:
-│   │       - Imports updated for new `GranularPendingChange` types and `HtmlGeneratorV2` from `../_shared/services/htmlGenerator.ts`.
-│   │       - **`applyPendingChanges` Function (Refactored Helper):**
-│   │         • Input: `currentTemplate: EmailTemplateV2`, `changesToApply: GranularPendingChangeInput[]`.
-│   │         • Logic: Processes changes in a specific order (section deletions, element deletions, section edits, element edits, section additions, element additions) using `target_id` and `target_parent_id` to apply them to the `currentTemplate`.
-│   │       - **`applyRevert` Function (Refactored Helper):**
-│   │         • Input: `template: EmailTemplateV2`, `changesToRevert: GranularPendingChange[]`.
-│   │         • Logic: Processes reverts in a specific order (element additions (delete new), section additions (delete new), element edits (restore old), section edits (restore old), element deletions (re-add old), section deletions (re-add old)) to revert the template.
-│   │       - **`serve` Function (Overhauled Main Handler):**
-│   │         • Input Payload (`ManagePendingChangesPayload`): `{ projectId: string, operation: 'accept_one' | 'reject_one' | 'accept_batch' | 'reject_batch' | 'get_batch' | 'get_all_project', change_id?: string, batch_id?: string }`.
-│   │         • Handles operations:
-│   │           - `accept_one`: Fetches the specific `GranularPendingChange` by `change_id`. Fetches the current project's `semantic_email_v2`. Applies the single change to the template using `applyPendingChanges`. Regenerates `current_html` using `HtmlGeneratorV2`. Updates the project's `semantic_email_v2` and `current_html` in the database. Updates the status of the specific change to 'accepted'.
-│   │           - `reject_one`: Updates the status of the specific `GranularPendingChange` (by `change_id`) to 'rejected' in the database.
-│   │           - `accept_batch`: Fetches all 'pending' `GranularPendingChange`s for the given `batch_id`. Fetches the current project's `semantic_email_v2`. Iteratively applies all fetched changes to the template using `applyPendingChanges`. Regenerates `current_html` using `HtmlGeneratorV2`. Updates the project's `semantic_email_v2` and `current_html`. Updates statuses of all processed changes for the batch to 'accepted'.
-│   │           - `reject_batch`: Updates the statuses of all 'pending' `GranularPendingChange`s for the given `batch_id` to 'rejected'.
-│   │           - `get_batch`: Fetches and returns all `GranularPendingChange`s for a given `batch_id`.
-│   │           - `get_all_project`: Fetches and returns all `GranularPendingChange`s for a given `project_id`.
-│   │       - Key Dependencies: Supabase client, `corsHeadersFactory`, `HtmlGeneratorV2` (backend shared), shared types (`EmailTemplateV2`, `GranularPendingChange`, `GranularPendingChangeInput`). The previous reliance on RPCs `manage_accept_transaction` and `manage_reject_transaction` has been replaced by direct database operations for template and status updates.
-│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to manage granular pending changes individually or in batches, and to retrieve change information.
+│   │       - Contains functions to call `save-email-setup-form` and `initiate-email-setup`.
+│   │       - Handles Supabase client initialization, auth headers, error handling.
+│   │       Usage: Used by components and context to communicate with the backend.
 │   │
-│   ├── 📁 send-preview-email/
-│   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to send an email with provided HTML content, typically for preview purposes.
-│   │       Details:
-│   │       - Core Functionality:
-│   │         • Accepts a POST request with `recipientEmail` and `emailHtml` in the JSON payload.
-│   │         • Uses `nodemailer` configured with Gmail SMTP (credentials from environment variables `GMAIL_USER`, `GMAIL_APP_PASSWORD`) to send the email.
-│   │         • The provided `emailHtml` is used directly as the email body.
-│   │       - Key Dependencies:
-│   │         • `nodemailer` npm package.
-│   │         • `corsHeadersFactory` from `../_shared/lib/constants.ts`.
-│   │         • Gmail account credentials stored as Supabase secrets.
-│   │       Usage: Invoked as an HTTP POST endpoint by the frontend to send a rendered HTML email to a user-specified address for previewing.
-│   │   ├── 📄 deno.json
-│   │   │   Purpose: Deno configuration specific to the `send-preview-email` function.
-│   │   │   Details: Manages Deno runtime settings, task scripts, import maps, or permissions, potentially related to its use of npm modules like `nodemailer` via esm.sh or similar.
-│   │   └── 📄 .npmrc
-│   │       Purpose: NPM configuration file for the `send-preview-email` function.
-│   │       Details: Specifies settings for npm package management if direct npm dependencies or private registries are used with Deno for this function.
-│   │
-│   ├── 📁 create-blog-post/        # NEW SUPABASE FUNCTION
-│   │   └── 📄 index.ts
-│   │       Purpose: Supabase Edge Function to create a new blog post.
-│   │       Details:
-│   │       - Handles HTTP POST requests with blog post data (title, slug, content, author, category, image_url, excerpt, published_at) in the JSON payload.
-│   │       - Initializes Supabase client using environment variables.
-│   │       - Validates that required fields (title, slug, content) are present.
-│   │       - Inserts the validated post data into the `blog_posts` table.
-│   │       - Returns the newly created blog post data (or an error message).
-│   │       - Handles potential unique constraint violations for the `slug`.
-│   │       - Uses `corsHeadersFactory` for CORS.
-│   │       - Includes `// @ts-ignore` for Deno-specific imports and `Deno.env` access to satisfy local linters.
-│   │       Usage: Intended to be called by an admin interface or a trusted frontend component to add new blog posts.
-│   │
-│   └── 📄 import_map.json
-│       Purpose: Defines path aliases for Deno module imports within the Supabase Edge Functions.
-│       Details: Maps short aliases (like `@/`, `shared/`, `@shared/`) to their actual relative paths from this file's location (`src/backend/functions/`). For example, `@/` maps to `../../src/`, `shared/` maps to `./_shared/` (i.e., `src/backend/functions/_shared/`), and `@shared/` maps to `../../shared/` (i.e., `src/shared/`). This simplifies import statements in the Edge Function code.
-│       Usage: Used by the Deno runtime when executing functions in `src/backend/functions/` to resolve aliased imports. Referenced by `src/backend/deno.jsonc` (if present) and `supabase/config.toml`.
-│   
-├── 📁 components/
-│   ├── 📁 subscription/
-│   │   ├── 📄 PlanSelectionPage.tsx
-│   │   │   Purpose: Displays subscription plan options and handles plan selection.
+│   └── 📄 App.tsx 
+│       Purpose: Main application component.
+│       Details: Sets up routing, global providers (like EmailSetupContext).
+│       Usage: Root of the React application.
+│
+├── 📁 shared/
+│   ├── 📁 types/
+│   │   ├── 📄 emailSetupTypes.ts 
+│   │   │   Purpose: Shared type definitions for data structures used by both frontend and backend for email setup.
 │   │   │   Details:
-│   │   │   - Shows three tiers: Free, Pro ($19/month), Premium ($49/month).
-│   │   │   - Lists features and project limits for each tier.
-│   │   │   - Handles free plan selection via API.
-│   │   │   - Initiates Stripe checkout for paid plans.
-│   │   │   Usage: Rendered after signup or when upgrading subscription.
+│   │   │   - `EmailSetupFormData` (if an identical structure is used, or a base type)
+│   │   │   - `ProviderInfo`
+│   │   │   - `DnsRecord`
+│   │   │   - `InitiateEmailSetupRequest` (or its parts if constructed on frontend)
+│   │   │   - `InitiateEmailSetupResponse` (or its parts)
+│   │   │   Usage: Imported by frontend components/services and backend Supabase functions.
 │   │   │
-│   │   └── 📄 SubscriptionProtectedRoute.tsx
-│   │       Purpose: Route guard component that enforces subscription plan limits and status checks.
-│   │       Details:
-│   │       - Checks user's subscription tier and status.
-│   │       - Enforces project limits (Free: 1, Pro: 25, Premium: unlimited).
-│   │       - Redirects to subscription page if:
-│   │         • No subscription tier selected
-│   │         • Subscription is not active
-│   │         • Project limit is reached
-│   │       - Shows appropriate toast messages for each case.
-│   │       Usage: Wraps editor routes in App.tsx to protect them with subscription checks.
-│   │
-│   ├── 📄 ChatInterface.tsx
-│   │   Purpose: Provides the main chat interface for user-AI interactions
-│   │   Details:
-│   │   - Handles three interaction modes:
-│   │     • Major Edit: For significant changes
-│   │     • Minor Edit: For small adjustments
-│   │     • Just Ask: For questions without edits
-│   │   - Message Features:
-│   │     • Renders markdown content
-│   │     • Supports clarification workflows
-│   │     • Shows suggestion buttons
-│   │     • Displays loading states
-│   │     • Auto-scrolls to new messages
-│   │   - Input Features:
-│   │     • Multi-line support (Shift+Enter)
-│   │     • Focus management
-│   │     • Loading states
-│   │     • Placeholder text
-│   │   - UI Components:
-│   │     • Mode selection buttons
-│   │     • Message history area (`ScrollArea`)
-│   │     • Input area with send button
-│   │     • Clarification banner when needed
-│   │   - **Auto-scrolls to the latest message using `useEffect`, `useRef`, and `setTimeout` to ensure the scrollable viewport (typically an inner child of `ScrollArea`) is scrolled after new messages are rendered.**
-│   │   Dependencies:
-│   │   - UI: Button, Textarea, ScrollArea, ReactMarkdown
-│   │   - Icons: Send, Paperclip, Mic, CornerDownLeft, AlertTriangle, Wand2
-│   │   - Utils: cn (className utility)
-│   │   State Management:
-│   │   - Local: Input value, scroll position
-│   │   - Props: Messages, clarification state, loading state, mode selection
-│   │   Usage: Rendered as the right-hand panel within the main `Editor` page (`src/pages/Editor.tsx`). It receives its state (messages, loading states, mode) and callbacks (message sending, mode changes) from the `EditorContext`.
-│   │
-│   ├── 📄 EmailHtmlRenderer.tsx
-│   │   Purpose: Renders email content in an isolated iframe environment
-│   │   Details:
-│   │   - Transforms HTML email templates into interactive previews
-│   │   - Handles two types of placeholders (images and links)
-│   │   - Manages background colors and styling
-│   │   - Provides auto-resizing functionality
-│   │   - Implements security measures (HTML escaping)
-│   │   - Uses ResizeObserver for dynamic content
-│   │   Dependencies: React, forwardRef, useEffect, useRef
-│   │   Usage: Likely used by the `EmailPreview` component (`src/components/EmailPreview.tsx`) to render the core HTML content within an iframe and process placeholders.
-│   │
-│   ├── 📄 EmailPreview.tsx
-│   │   Purpose: Renders an interactive email preview within an iframe, displaying overlays for pending changes and clickable placeholders.
-│   │   Details:
-│   │   - Core Functionality:
-│   │     • Uses `EmailHtmlRenderer` to display the base HTML content in an iframe.
-│   │     • Manages an overlay system on top of the iframe for:
-│   │       - Visualizing pending changes (adds/edits) with styled borders. This is handled by the `calculateAndApplyOverlays` function which:
-│   │         - Iterates `pendingChanges` (which are `GranularPendingChange[]`), filtering by `status: 'pending'`.
-│   │         - Uses `change.target_id` to identify the affected element or section.
-│   │         - Locates elements in the iframe document via `iframeDoc.querySelector(\`[data-element-id="${change.target_id}"]\`)`.
-│   │         - Locates sections in the iframe document via `iframeDoc.querySelector(\`[data-section-id="${change.target_id}"]\`)` (assumes HTML generator adds this attribute).
-│   │         - Applies overlays based on `change_type`: 'element_add', 'section_add' (e.g., green overlay); 'element_edit', 'section_edit' (e.g., yellow overlay). Deletion changes are typically not visually highlighted with an overlay on the element itself.
-│   │         - **Pending change overlays now have a `z-index` of 20 (buttons inside at 21) to ensure they appear above placeholder overlays.**
-│   │       - Creating interactive, clickable overlays for image and link placeholders identified from the `semanticTemplate`.
-│   │         - **Placeholder overlays now have a `z-index` of 10.**
-│   │     • Handles coordinate mapping between the iframe and the parent document for accurate overlay positioning, accounting for scroll and iframe boundaries.
-│   │   - Props:
-│   │     • `currentHtml`: The HTML string to render.
-│   │     • `pendingChanges`: Array of `GranularPendingChange` to highlight.
-│   │     • `previewMode`: 'light' or 'dark' (applies a CSS filter for dark mode).
-│   │     • `previewDevice`: 'desktop' or 'mobile' (adjusts preview width).
-│   │     • `semanticTemplate`: The structured email template data used to identify placeholders.
-│   │     • `onPlaceholderActivate`: Callback function triggered when a placeholder overlay is clicked, providing element ID, property path, and type.
-│   │   - Key Dependencies:
-│   │     • `EmailHtmlRenderer` (for iframe rendering and initial placeholder transformation).
-│   │     • `isPlaceholder` utility (from `@/features/services/htmlGenerator`).
-│   │     • `cn` utility.
-│   │     • React hooks (`useEffect`, `useRef`, `useCallback`).
-│   │   - Technical Notes:
-│   │     • Uses `requestAnimationFrame` (via `waitForPaintCycle`) for smooth overlay updates.
-│   │     • Listens to iframe scroll and resize events to keep overlays synchronized.
-│   │   Usage: Imported and used by `EmailPreviewPanel` (`src/components/editor/EmailPreviewPanel.tsx`) to display the email content. It receives HTML, template data, and interaction callbacks from the `EditorContext` (via `EmailPreviewPanel`).
-│   │
-│   ├── 📄 FeaturesSection.tsx
-│   │   Purpose: Displays key application features in a responsive grid on the main landing page.
-│   │   Details:
-│   │   - Content:
-│   │     • Hardcoded array of features: "Create", "Automate", "Analyze", each with a description and an Unsplash image URL.
-│   │     • Section header: "Powerful Features", "Everything you need to excel at email marketing", and a subtitle.
-│   │   - Layout:
-│   │     • Responsive grid of feature cards (1 to 3 columns).
-│   │     • Each card contains an image (with hover zoom), title, and description.
-│   │   - Styling: Uses Tailwind CSS for styling, including hover effects on cards.
-│   │   Dependencies: None (React functional component with local data).
-│   │   Usage: Rendered on the main landing page (`src/pages/Index.tsx`) as part of the page's marketing content.
-│   │
-│   ├── 📄 Footer.tsx
-│   │   Purpose: Site-wide footer providing navigation and branding
-│   │   Details:
-│   │   - Content Structure:
-│   │     • Organized into 4 navigation categories:
-│   │       - Product: Features, pricing, roadmap, guides
-│   │       - Company: About, blog, careers, partners
-│   │       - Support: Help, docs, contact, status
-│   │       - Legal: Privacy, terms, cookies
-│   │     • Dynamic copyright year
-│   │     • Brand section with logo and tagline
-│   │   - Layout:
-│   │     • Responsive 3-column grid on XL screens
-│   │     • Left column: Brand section
-│   │     • Center/Right: Navigation sections (2x2 grid)
-│   │   - UI Features:
-│   │     • Dark theme (bg-gray-900)
-│   │     • Hover effects on navigation links
-│   │     • Semantic HTML structure with ARIA labels
-│   │   Dependencies:
-│   │   - Components: Link from react-router-dom
-│   │   - Styling: Tailwind CSS
-│   │   State Management:
-│   │   - Stateless component
-│   │   - Uses static navigation data structure
-│   │
-│   ├── 📄 HeroSection.tsx
-│   │   Purpose: Main hero section for the landing page, capturing initial user email descriptions and guiding them to authentication.
-│   │   Details:
-│   │   - Content:
-│   │     • Headline, subtitle.
-│   │     • `Textarea` for user to describe their desired email.
-│   │     • "Generate Email" button.
-│   │   - Functionality:
-│   │     • On "Generate Email" submit:
-│   │       - Shows an authentication dialog ("Sign Up" / "Sign In").
-│   │       - On auth choice, saves the textarea content to `localStorage` (key: `savedEmailContent`) and navigates to `/signup` or `/login`.
-│   │     • Loads `savedEmailContent` from `localStorage` on mount to pre-fill textarea.
-│   │   - Styling: Decorative gradient background, Tailwind CSS.
-│   │   Dependencies:
-│   │   - `ArrowRight` icon (lucide-react).
-│   │   - UI Components: `Textarea`, `Button`, `Dialog` (from `./ui/`).
-│   │   - `useNavigate` (react-router-dom).
-│   │   - React hooks (`useState`, `useEffect`).
-│   │   Usage: Rendered as the primary section in `src/pages/Index.tsx`.
-│   │
-│   ├── 📄 Navbar.tsx
-│   │   Purpose: Application's main responsive navigation bar.
-│   │   Details:
-│   │   - Content & Branding:
-│   │     • Displays the brand "monketer" with a `Mail` icon, linking to `/`.
-│   │   - Authentication Links:
-│   │     • "Sign in" button linking to `/login`.
-│   │     • "Sign up" button linking to `/signup`.
-│   │   - Responsive Behavior:
-│   │     • Desktop: Horizontal layout with visible auth buttons.
-│   │     • Mobile: Collapsible hamburger menu which, when opened, shows auth buttons vertically.
-│   │   - Styling:
-│   │     • Fixed position at the top.
-│   │     • Semi-transparent background with a blur effect.
-│   │     • Uses Tailwind CSS and "monketer-purple" theme color.
-│   │   Dependencies:
-│   │   - React (`useState`).
-│   │   - `@/components/ui/button`.
-│   │   - `Link` from `react-router-dom`.
-│   │   - `Mail` icon from `lucide-react`.
-│   │   Usage: Rendered at the top of the main landing page (`src/pages/Index.tsx`). Potentially used on other main application pages that require global navigation.
-│   │
-│   ├── 📄 TestimonialsSection.tsx
-│   │   Purpose: Marketing component showcasing customer success stories
-│   │   Details:
-│   │   - Content Structure:
-│   │     • Static testimonials array with customer feedback
-│   │     • Each testimonial includes:
-│   │       - Unique identifier
-│   │       - Customer quote
-│   │       - Name and title
-│   │       - Company information
-│   │   - Layout Design:
-│   │     • Responsive grid system (1/2/3 columns)
-│   │     • Card-based presentation
-│   │     • Centered section header
-│   │     • Consistent spacing and alignment
-│   │   - Visual Elements:
-│   │     • Light purple section background
-│   │     • White testimonial cards
-│   │     • Gradient avatars with initials
-│   │     • Decorative quote marks
-│   │     • Subtle shadows and borders
-│   │   Dependencies:
-│   │   - No external component dependencies
-│   │   - Styling: Tailwind CSS
-│   │   State Management:
-│   │   - Stateless component
-│   │   - Uses static testimonial data
-│   │   Usage: Rendered on the main landing page (`src/pages/Index.tsx`) to showcase customer feedback.
-│   │
-│   ├── 📁 editor/
-│   │   Purpose: Editor-specific UI components
-│   │   Details:
-│   │   ├── 📄 EditorHeader.tsx
-│   │   │   Purpose: Displays the top navigation bar for the email editor interface.
-│   │   │   Details:
-│   │   │   - Back Button: Navigates to `/dashboard`.
-│   │   │   - Editable Project Title: Allows inline editing of the project title, synced with `EditorContext`.
-│   │   │   - Settings Button: Placeholder for future project settings functionality (currently disabled).
-│   │   │   - Layout: Sticky header with back (left), title (center), settings (right).
-│   │   │   Dependencies: `lucide-react` (ArrowLeft, Settings), `@/components/ui/button`, `react-router-dom` (`useNavigate`), `@/features/contexts/EditorContext` (`useEditor`).
-│   │   │   Usage: Rendered as the main header within the `EditorContent` component (`src/pages/Editor.tsx`).
+│   │   ├── 📄 pendingChangeTypes.ts
+│   │   │   Purpose: Defines types related to granular pending changes for V2 email templates.
+│   │   │   Details: Includes `GranularPendingChange`, `GranularPendingChangeInput`, `ChangeOperation`, `ChangeScope`, etc.
+│   │   │   Usage: Used by `generate-email-changes` and `manage-pending-changes` functions, and potentially by frontend components that display or interact with these changes.
 │   │   │
-│   │   ├── 📄 EmailPreviewControls.tsx
-│   │   │   Purpose: Provides UI controls for the email preview panel, allowing users to toggle display modes.
-│   │   │   Details:
-│   │   │   - Dark/Light Mode Toggle: Switch with `Sun` and `Moon` icons, controls `isDarkMode` from `EditorContext`.
-│   │   │   - Device View Toggle: Switch with `Monitor` and `Smartphone` icons, controls `isMobileView` from `EditorContext`.
-│   │   │   - Layout: Sticky, centered controls with adaptive background for dark/light theme. Disabled during loading states.
-│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/switch`, `cn` utility, `useEditor` hook.
-│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to provide preview customization options.
-│   │   │
-│   │   ├── 📄 EmailPreviewPanel.tsx
-│   │   │   Purpose: Displays the rendered email preview along with controls.
-│   │   │   Details:
-│   │   │   - Integrates with `EmailPreview` component for the actual rendering within an iframe and overlay management.
-│   │   │   - Provides UI controls for the preview via `EmailPreviewControls` (toggling dark/light mode, mobile/desktop view), shown only when content is available.
-│   │   │   - Displays a `PendingChangesBar` to manage proposed modifications.
-│   │   │   - Manages the overall layout of the preview area.
-│   │   │   - HTML source: Uses `livePreviewHtml` from context if available, otherwise `projectData.current_html`.
-│   │   │   - Conditionally renders preview and controls based on loading states and content availability (`projectData.semantic_email_v2`).
-│   │   │   - Receives state and callbacks from `EditorContext` (e.g., `livePreviewHtml`, `isDarkMode`, `isMobileView`, `handlePlaceholderActivation`, `pendingChanges`).
-│   │   │   - Accepts an optional `fileInputRef` prop (currently for potential future use by child components like `EmailPreview`).
-│   │   │   Dependencies:
-│   │   │     • `EmailPreview` (from `@/components/EmailPreview`).
-│   │   │     • `EmailPreviewControls` (from `./EmailPreviewControls`).
-│   │   │     • `PendingChangesBar` (from `./PendingChangesBar`).
-│   │   │     • `useEditor` hook.
-│   │   │     • `cn` utility.
-│   │   │   Usage: Rendered as the left-hand panel within the main `EditorContent` component in `src/pages/Editor.tsx`.
-│   │   │
-│   │   ├── 📄 InitialPromptScreen.tsx
-│   │   │   Purpose: Screen for users to input their initial email generation prompt, shown when starting a new project or if an existing project has no email content.
-│   │   │   Details:
-│   │   │   - UI Elements:
-│   │   │     • `Mail` icon.
-│   │   │     • Title and descriptive text.
-│   │   │     • Single `Input` field for the prompt with a placeholder.
-│   │   │     • "Generate Email with AI" `Button`.
-│   │   │   - Functionality:
-│   │   │     • Uses `initialInputValue` from `EditorContext` for the input field.
-│   │   │     • On submit (button click or Enter), calls `handleSendMessage(prompt, 'major')` from `EditorContext`.
-│   │   │     • Shows a validation error if the prompt is empty.
-│   │   │   - Dependencies:
-│   │   │     • `Mail` icon (lucide-react).
-│   │   │     • `Button`, `Input` (from `@/components/ui/`).
-│   │   │     • `useEditor` hook (`@/features/contexts/EditorContext`).
-│   │   │   State Management:
-│   │   │   - Uses `initialInputValue`, `setInitialInputValue`, `handleSendMessage`, `isLoading` from `EditorContext`.
-│   │   │   - Local state for validation visibility.
-│   │   │   Usage: Rendered conditionally within `EditorContent` in `src/pages/Editor.tsx` when `actualProjectId` is not set (and not loading).
-│   │   │
-│   │   ├── 📄 LoadingScreen.tsx
-│   │   │   Purpose: Displays various loading and transitional states for the editor UI
-│   │   │   Details:
-│   │   │   - Adaptable: Shows different messages/animations based on a `type` prop (e.g., "loading", "generating", "clarifying").
-│   │   │   - Visuals: Typically includes a spinner/animation and text.
-│   │   │   - Used during project loading, AI generation, or when AI is clarifying.
-│   │   │   Dependencies: UI components (spinner, text), possibly icons.
-│   │   │   Usage: Rendered conditionally within `EditorContent`
-│   │   │
-│   │   ├── 📄 PendingChangesBar.tsx
-│   │   │   Purpose: Displays a list of individual pending granular changes for the current batch, allowing users to accept or reject each one, as well as accept or reject the entire batch.
-│   │   │   Details:
-│   │   │   - Fetches `pendingChanges` (now `GranularPendingChange[]`), `currentBatchId`, `handleAcceptOneChange`, `handleRejectOneChange`, `handleAcceptCurrentBatch`, `handleRejectCurrentBatch`, and loading states from `useEditor` hook.
-│   │   │   - Filters `pendingChanges` to display only those with `status: 'pending'` belonging to the `currentBatchId`.
-│   │   │   - If pending changes exist for the current batch:
-│   │   │     • Displays a list of individual pending changes. Each item shows change type (e.g., 'element_add', 'section_edit') and target identifier.
-│   │   │     • Each item has an "Accept" button (calls `handleAcceptOneChange(change.id)`) and a "Reject" button (calls `handleRejectOneChange(change.id)`).
-│   │   │     • Includes an "Accept Batch" button (calls `handleAcceptCurrentBatch()`) - **label changed to "Accept All" (removed count).**
-│   │   │     • Includes a "Reject Batch" button (calls `handleRejectCurrentBatch()`) - **label changed to "Reject All" (removed count).**
-│   │   │   - Buttons are disabled during relevant loading states.
-│   │   │   - Visibility: Only shown if there are relevant pending changes for the current batch.
-│   │   │   - Styling: UI updated for list display; button sizes adjusted (e.g., to "sm").
-│   │   │   Dependencies: `lucide-react` (icons), `@/components/ui/button`, `useEditor` hook, `GranularPendingChange` type.
-│   │   │   Usage: Rendered within `src/components/editor/EmailPreviewPanel.tsx` to provide fine-grained control over AI-suggested modifications.
-│   │   │
-│   │   └── 📁 ui/
-│   │       Purpose: Collection of foundational, reusable UI components (e.g., Button, Input, Dialog, Card, Switch).
-│   │       Details: These are typically generic building blocks, often sourced from or inspired by a UI library like shadcn/ui, styled with Tailwind CSS. They ensure a consistent look and feel across the application. Specific props and behaviors follow common UI component patterns. Detailed documentation for each individual primitive is omitted for brevity.
+│   │   └── 📄 templateV2Types.ts
+│   │       Purpose: Defines the core structure of V2 email templates.
+│   │       Details: Includes `EmailTemplateV2`, `SectionV2`, `ElementV2`, and related style/property types. Uses Zod for validation.
+│   │       Usage: Central type definition used by all services and functions that create, parse, modify, or render V2 email templates.
 │   │
-└── 📁 features/
-    Purpose: Business logic by domain
-    Details:
-    ├── 📁 auth/
-    │   Purpose: Handles user authentication and session management using Supabase.
-    │   Details: Provides a React Context and a custom hook (`useAuth`) for auth operations.
-    │   └── 📄 useAuth.tsx
-    │       Purpose: Provides a React Context and custom hook (`useAuth`) for managing user authentication state and interactions with Supabase.
-│       Details:
-    │       - Manages `session`, `user`, and `loading` states.
-    │       - Synchronizes with Supabase auth events (`onAuthStateChange`, `getSession`).
-    │       - Exports `AuthProvider` component to wrap the application or parts of it.
-    │       - Exports `useAuth` hook to access:
-    │         • `session: Session | null`
-    │         • `user: User | null`
-    │         • `loading: boolean`
-    │         • `signIn(email, password)`: Authenticates a user.
-    │         • `signUp(email, password, username)`: Registers a new user (username defaults to email, also attempts to create a `user_info` record).
-    │         • `signOut()`: Logs out the user.
-    │       - Integrates `useToast` for user feedback on auth operations.
-    │       Usage: `AuthProvider` is used in `App.tsx` to provide global auth context. `useAuth` is used by components like `ProtectedRoute`, `RedirectIfAuthenticated`, and pages like `Login.tsx`, `Signup.tsx`, `Dashboard.tsx` to manage auth state and trigger auth actions.
-    │
-    ├── 📁 contexts/
-    │   Purpose: Provides React Context for sharing state across different parts of a feature or the application.
-    │   Details: Centralizes state management for complex UI sections like the email editor.
-    │   └── 📄 EditorContext.tsx
-    │       Purpose: Central React Context (`EditorContext`) and provider (`EditorProvider`) for managing all state and operations of the email editor, including the new granular pending changes system.
-│       Details:
-    │       - Manages comprehensive editor state including:
-    │         • Project data (`projectData`, `projectTitle`, `actualProjectId`).
-    │         • UI states (`isLoading`, `isLoadingProject`, `isDarkMode`, `isMobileView`, `selectedMode`).
-    │         • Content (`chatMessages`, `livePreviewHtml`, `pendingChanges` (now `GranularPendingChange[]`), `EmailTemplateV2` structure).
-    │         • **New State:** `currentBatchId: string | null`, `setCurrentBatchId`.
-    │         • AI clarification flow (`isClarifying`, `clarificationConversation`, `clarificationContext`).
-    │         • Placeholder editing (`editingPlaceholder`, `linkInputValue`).
-    │       - Initializes editor by fetching or creating project data based on URL parameters and user auth.
-    │       - **`fetchAndSetProject` now loads existing chat messages (both regular and clarification) from the database using `getChatMessages` from `projectService.ts` and populates the `chatMessages` and `clarificationConversation` states respectively. It also loads and restores `clarificationContext` from the project.**
-    │       - Provides core handler functions for:
-    │         • Sending messages to AI for edits, questions, or generation (`handleSendMessage`): 
-    │           - **Processes new response from `/generate-email-changes` (`{ pending_batch_id, pending_changes, ai_rationale }`) by setting the `currentBatchId` and then merging the new `pending_changes` with any existing `pendingChanges` from *other batches* that are still in a 'pending' state. This ensures overlays for all relevant pending items are shown, regardless of when they were generated. This merging logic applies robustly across all scenarios: direct edit/major flows, and when a clarification cycle completes and generates changes.**
-    │           - Manages different interaction modes (`ask`, `edit`, `major`).
-    │           - Handles the multi-turn clarification flow with the AI (`clarify-user-intent` endpoint), including storing and sending `clarificationContext` and updating it.
-    │         • Managing clarification dialogues with AI.
-    │         • **Managing Granular Pending Changes:**
-    │           - `handleAcceptCurrentBatch` (replaces `handleAcceptAll`): Calls `/manage-pending-changes` with `operation: 'accept_batch'`, `batch_id: currentBatchId`. **Prioritizes using `newHtml` and `updatedTemplate` from API response to update `livePreviewHtml` and `projectData.semantic_email_v2`; falls back to `fetchAndSetProject` if not provided.** Updates local `pendingChanges` statuses.
-    │           - `handleRejectCurrentBatch` (replaces `handleRejectAll`): Calls `/manage-pending-changes` with `operation: 'reject_batch'`, `batch_id: currentBatchId`. **Prioritizes using `newHtml` and `updatedTemplate` from API response if available (though backend currently doesn't send it for rejections), otherwise falls back to `fetchAndSetProject`.** Updates local `pendingChanges` statuses.
-    │           - **New `handleAcceptOneChange(changeId: string)`:** Calls `/manage-pending-changes` with `operation: 'accept_one'`, `change_id`. **Prioritizes using `newHtml` and `updatedTemplate` from API response; falls back to `fetchAndSetProject`.** Updates local `pendingChanges` status.
-    │           - **New `handleRejectOneChange(changeId: string)`:** Calls `/manage-pending-changes` with `operation: 'reject_one'`, `change_id`. **Prioritizes using `newHtml` and `updatedTemplate` from API response if available, otherwise falls back to `fetchAndSetProject`.** Updates local `pendingChanges` status.
-    │         • Updating project title, element properties (links, images).
-    │         • Navigating to send preview page.
-    │       - Integrates with `projectService`, Supabase client, `HtmlGeneratorV2`, and `useAuth`.
-    │       - Exports `useEditor` hook for components to access context.
-    │       Usage: `EditorProvider` wraps the main `Editor` page component (`src/pages/Editor.tsx`). `useEditor` is consumed by numerous components within the editor UI (e.g., `ChatInterface`, `EmailPreviewPanel`, `EditorHeader`, `PendingChangesBar`) to display data and trigger actions related to the editor and pending changes.
-    │
-    ├── 📁 services/
-    │   Purpose: Contains modules that provide specific functionalities, often acting as clients or wrappers for backend services, shared core logic, or complex operations.
-    │   Details: These services are typically used by contexts or page components to fetch data, perform actions, and encapsulate business logic.
-    │   ├── 📄 differ.ts
-    │   │   Purpose: Frontend (browser) adapter for the V2 template diffing service.
-│   Details:
-    │   │   - Adapts the shared `DifferCore` (from `src/shared/services/differ.ts`) for the frontend environment.
-    │   │   - Uses the standard `lodash` library.
-    │   │   - Exports `DifferV2` class, which instantiates `DifferCore` with lodash.
-    │   │   - The core diffing logic is in the shared `DifferCore`.
-    │   │   - Re-exports diff-related types from the shared service.
-    │   │   Usage: Likely used by `EditorContext` or other frontend services when needing to compute differences between email template versions, for example, to generate `pendingChanges`.
-    │   │
-    │   ├── 📄 htmlGenerator.ts
-    │   │   Purpose: Frontend (browser) adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
-    │   Details:
-    │   │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the frontend.
-    │   │   - Overrides element generation (`generateElementHtml`) specifically for `button` and `image` types to:
-    │   │     • Detect placeholder content using an `isPlaceholder` utility.
-    │   │     • Render placeholder elements with specific styling and text cues (e.g., "(Link Required)").
-    │   │     • Add `data-*` attributes (`data-element-id`, `data-property-path`, `data-placeholder`) to placeholder elements, enabling the visual editor to identify and manage them.
-    │   │   - Crucially, its `generateLayoutStyle` helper now correctly maps the semantic `layout.align` property (e.g., 'center') to the CSS `text-align` property for the wrapping table cell (`<td>`), ensuring correct alignment in the preview.
-    │   │   - Includes enhanced HTML `<head>` content with more robust CSS resets and email client compatibility meta tags.
-    │   │   - **Inherits the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available for frontend processing like overlays.**
-    │   │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
-    │   │   Usage: Used by `EditorContext` to render the live preview of the email template, providing the necessary data attributes for interactive editing of placeholders and for identifying sections (e.g., by `EmailPreview.tsx`).
-    │   │
-    │   ├── 📄 semanticParser.ts
-    │   │   Purpose: Frontend (browser/Node.js) adapter for the V2 email HTML semantic parsing service, extending `SemanticParserCore`.
-│   │   Details:
-    │   │   - Adapts `SemanticParserCore` (from `src/shared/services/semanticParser.ts`) for the frontend.
-    │   │   - Uses `JSDOM` to create a DOM from an HTML string for parsing.
-    │   │   - Implements the `parse(html)` method to convert HTML into a structured `EmailTemplateV2` object.
-    │   │   - Overrides methods for:
-    │   │     • Extracting global styles (body styles, content width).
-    │   │     • Locating the main email container and parsing sections/elements.
-    │   │     • Determining element types, potentially supporting more frontend-specific types (subtext, quote, code, list).
-    │   │   - Exports `SemanticParser` class.
-    │   │   Usage: Used to convert raw HTML (e.g., from an imported email or a previous version) into the structured `EmailTemplateV2` format that the editor and other services can work with.
-    │   │
-    │   └── 📄 projectService.ts
-    │       Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
-│       Details:
-    │       - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
-    │       - It also manages email templates, including a V1 to V2 upgrade path.
-    │       - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
-    │         - **`getProject(projectId)`:** When fetching a project, this function also fetches its related pending changes. The Supabase query selects all columns for `GranularPendingChange` from the `pending_changes` table (e.g., `id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at`). The result is cast to `PendingChange[]` (which is an alias for `GranularPendingChange[]`).
-    │         - **`getPendingChanges(projectId)`:** Fetches 'pending' status `GranularPendingChange`s for a project. The Supabase query selects all columns necessary for the `GranularPendingChange` type. The result is cast to `PendingChange[]`.
-    │       - **`saveChatMessage(message: ChatMessage)`:** Saves a single chat message to the `chat_messages` table. This includes regular user/AI messages, clarification messages, and error messages, along with `is_clarifying_chat`, `is_error`, and `message_type` flags.
-    │       - **`getChatMessages(projectId: string): Promise<ChatMessage[]>`: Fetches all chat messages for a given `projectId` from the `chat_messages` table, ordered by `created_at` (previously `timestamp`).**
-    │       - Uses the Supabase client for backend communication.
-    │       - Imports `cleanUuid` from `@/lib/uuid-utils`.
-    │       Usage: Used throughout the frontend editor feature by `EditorContext` and other components for all project-related data operations, including fetching and managing the display of granular pending changes.
-    │       - Used throughout the 
+│   └── 📁 services/
+│       ├── 📄 differ.ts (Shared Core)
+│       │   Purpose: Core logic for diffing V2 email templates.
+│       │   Details: Provides `DifferV2Core` class with methods to compare two `EmailTemplateV2` objects and identify differences.
+│       │   Usage: Extended by backend-specific (`src/backend/functions/_shared/services/differ.ts`) and potentially frontend-specific adapters.
+│       │
+│       ├── 📄 htmlGenerator.ts (Shared Core)
+│       │   Purpose: Core logic for generating HTML from V2 email templates.
+│       │   Details: Provides `HtmlGeneratorCore` class with methods to convert an `EmailTemplateV2` object into an HTML string. Adds `data-section-id` attributes.
+│       │   Usage: Extended by backend-specific (`src/backend/functions/_shared/services/htmlGenerator.ts`) and potentially frontend-specific adapters.
+│       │
+│       └── 📄 semanticParser.ts (Shared Core)
+│           Purpose: Core logic for parsing HTML into a V2 email template structure.
+│           Details: Provides `SemanticParserCore` class, defining the interface and shared utilities for converting HTML into `EmailTemplateV2`.
+│           Usage: Extended by frontend-specific (`src/frontend/services/semanticParser.ts` - if it exists) and potentially backend adapters.
+│
+└── 📄 .env.example
+    Purpose: Example environment variables file.
+    Details: Lists required environment variables for the project (Supabase URL/keys, API keys, etc.) with placeholder values.
+    Usage: Users copy this to `.env` and fill in their actual credentials.
 
-
-
-└── 📁 pages/
-    Purpose: Top-level components representing distinct application pages or views.
-    Details: These components are typically mapped to specific routes in the application router (`src/core/App.tsx`). They compose smaller components to build the page UI.
-    ├── 📄 subscription.tsx
-    │   Purpose: Main subscription management page.
-    │   Details:
-    │   - Shows current plan and upgrade options.
-    │   - Uses shadcn/ui components for consistent styling.
-    │   - Handles plan upgrades via Stripe checkout.
-    │   - Shows loading states and error handling.
-    │   Usage: Accessible to authenticated users for subscription management.
-    │
-    ├── 📁 api/
-    │   └── 📁 subscribe/
-    │       └── 📄 free.ts
-    │           Purpose: API route for handling free plan subscriptions.
-    │           Details:
-    │           - Updates user_info table with free tier subscription.
-    │           - Sets subscription status to active.
-    │           - Initializes project count.
-    │           Usage: Called when users select the free plan.
-    │
-    ├── 📄 Dashboard.tsx
-    │   Purpose: Main user dashboard for managing email projects.
-│   Details:
-    │   - Fetches and displays a list of user projects using `projectService.getUserProjects` and `projectService.getUsernameFromId`.
-    │   - Uses `useState` for projects, loading state, and username.
-    │   - Uses `useAuth` for user context and sign out.
-    │   - Uses `useToast` for error feedback.
-    │   - Renders a table (`@/components/ui/table`) to display project names and last edited dates.
-    │   - Provides "Open" links navigating to `/editor/:username/:projectName`.
-    │   - Provides a "Create Project" / "New Project" button navigating to `/editor`.
-    │   - Handles loading and empty states.
-    │   Usage: Routed at `/dashboard` within `App.tsx`, protected by `ProtectedRoute`.
-    │
-    ├── 📄 Editor.tsx
-    │   Purpose: Main entry point and layout component for the email editor interface.
-│   Details:
-    │   - Sets up the `EditorProvider` from `@/features/contexts/EditorContext`.
-    │   - Renders `EditorContent`, which consumes the context and orchestrates the editor UI.
-    │   - `EditorContent` composes `EditorHeader`, `ResizablePanelGroup` containing `EmailPreviewPanel` (or `LoadingScreen` / `InitialPromptScreen`) and `ChatInterface`, and `PlaceholderEditModal`.
-    │   - Manages different UI states based on context (loading, prompting, generating, editing).
-    │   - Handles file input for image uploads via a `useRef`.
-    │   Usage: Routed at `/editor`, `/editor/:projectId`, and `/editor/:username/:projectName` within `App.tsx`, protected by `ProtectedRoute`.
-    │
-    ├── 📄 Index.tsx
-    │   Purpose: Main public landing page for the application.
-    │   Details:
-    │   - Composes marketing section components: `Navbar`, `HeroSection`, `FeaturesSection`, `TestimonialsSection`, `Footer` (all from `@/components/`).
-    │   - Uses a flex column layout to structure the page.
-    │   Usage: Routed at `/` within `App.tsx`. Access is conditional based on authentication status via `RedirectIfAuthenticated`.
-    │
-    ├── 📄 Login.tsx
-    │   Purpose: Authentication page for users to sign in.
-    │   Details:
-    │   - Renders a login form with email and password fields (`input`).
-    │   - Uses `useState` for form state and loading indicator.
-    │   - Calls `signIn` from `useAuth` hook on submission.
-    │   - Includes links to signup (`/signup`) and potentially password reset.
-    │   - Uses `@/components/ui/button` and `lucide-react` icon.
-    │   Usage: Routed at `/login` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
-    │
-    ├── 📄 NotFound.tsx
-    │   Purpose: Displays a 404 error page for non-existent routes.
-    │   Details:
-    │   - Displays a standard "404 Page not found" message.
-    │   - Uses `useAuth` to check user authentication status.
-    │   - Provides a primary navigation button that links to `/dashboard` (if authenticated) or `/` (if not).
-    │   - Conditionally shows a link to `/editor` for authenticated users.
-    │   - Uses `useLocation` to log the invalid path.
-    │   Usage: Routed as the catch-all (`*`) route in `App.tsx`.
-    │
-    ├── 📄 PrivacyPolicy.tsx
-    │   Purpose: Displays the company's privacy policy.
-    │   Details:
-    │   - Static content page.
-    │   - Uses `@/components/ui/container` and `@/components/ui/typography` for layout and styling.
-    │   - Displays policy sections (Introduction, Collection, Usage, Security, Rights, Changes, Contact).
-    │   - Dynamically sets the "Last updated" date.
-    │   Usage: Routed at `/privacy-policy` in `App.tsx`. Publicly accessible.
-    │
-    ├── 📄 SendEmailPage.tsx
-    │   Purpose: Allows users to send a preview of their generated email and copy its HTML.
-    │   Details:
-    │   - Retrieves email HTML from `sessionStorage` ('emailHtmlToSend') on mount. Redirects to `/editor` if not found.
-    │   - Provides an input field (`@/components/ui/input`) for the recipient's email address.
-    │   - Provides a button to send the preview, which calls the `send-preview-email` Supabase Edge Function.
-    │   - Displays the email HTML in a read-only textarea (`@/components/ui/textarea`).
-    │   - Provides a button to copy the HTML to the clipboard (`navigator.clipboard.writeText`).
-    │   - Uses `useState`, `useEffect`, `useNavigate`, `useToast`.
-    │   - Uses `lucide-react` icons (`Loader2`, `Copy`, `Send`, `ArrowLeft`).
-    │   Usage: Routed at `/send-email` in `App.tsx`, protected by `ProtectedRoute`. Likely navigated to from the `Editor` page.
-    │
-    ├── 📄 Signup.tsx
-    │   Purpose: User registration page for creating new accounts.
-    │   Details:
-    │   - Renders a signup form with email, password, and terms agreement checkbox.
-    │   - Uses `useState` for form state and loading indicator.
-    │   - Calls `signUp` from `useAuth` hook on submission. Navigates to `/editor` on success.
-    │   - Includes specific error handling for rate limiting (`useToast`).
-    │   - Includes links to login (`/login`), terms (`#`), and privacy policy (`#`).
-    │   - Uses `@/components/ui/button` and `lucide-react` icon.
-    │   Usage: Routed at `/signup` within `App.tsx`. Access is conditional via `RedirectIfAuthenticated`.
-    │
-    └── 📄 TermsOfService.tsx
-        Purpose: Displays the company's terms of service.
-        Details:
-        - Static content page, similar structure to `PrivacyPolicy.tsx`.
-        - Uses `@/components/ui/container` and `@/components/ui/typography`.
-        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
-        - Dynamically sets the "Last updated" date.
-        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
-
-    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
-    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
-    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
-    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
-    │            - Input and filter button have explicit white backgrounds and borders for contrast.
-    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
-    │            - Shows a "No Posts Found" message if filters/search yield no results.
-    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
-    │            - Includes the standard application `Footer`.
-    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
-    │
-    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
-        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
-        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
-        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
-
-└── 📁 shared/
-    Purpose: Code shared between the frontend (React) and backend (Deno/Supabase Edge Functions).
-    Details: Contains core services logic, utility functions, and type definitions used across the application.
-    ├── 📁 lib/
-    │   Purpose: Shared, low-level utility functions.
-    │   ├── 📄 uuid-utils.ts
-    │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-    │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-    │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-    │   │
-    │   └── 📄 uuid.ts
-    │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
-    │       Details: Uses `v4 as uuidv4` from the `uuid` npm package. Exports `generateId()`.
-    │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations.
-    │
-    ├── 📁 services/
-    │   Purpose: Core implementation logic for key application services, designed to be adapted for specific environments.
-    │   ├── 📄 differ.ts
-    │   │   Purpose: Core, shared implementation for comparing two `EmailTemplate` (V2) objects and generating a detailed diff.
-    │   │   Details: Contains `DifferCore` class. Requires Lodash instance. Methods `diffTemplates`, `diffSections`, `diffElements`, `diffProperties` compare structures based on IDs and properties, tracking additions, removals, modifications, moves. Returns `TemplateDiffResult`.
-    │   │   Usage: Base class for frontend/backend adapters. Used by `generate-email-changes` backend function to compute pending changes.
-    │   │
-    │   ├── 📄 htmlGenerator.ts
-    │   │   Purpose: Core, shared implementation for generating HTML email strings from structured `EmailTemplate` (V2) objects.
-    │   │   Details: Contains `HtmlGeneratorCore` class (implements `IHtmlGenerator`). Main `generate` method builds the document. Protected methods (`generateSectionHtml`, `generateElementHtml`, etc.) handle parts of the template. **The `generateSectionHtml` method adds a `data-section-id` attribute to the primary HTML element of each section.** Follows adapter pattern. Includes robust HTML/CSS, resets, and email client compatibility fixes.
-    │   │   Usage: Base class for frontend/backend adapters. Core logic for converting `EmailTemplateV2` to HTML. Its adapters are used by both frontend (`EditorContext`, `EmailPreview`) and backend (`manage-pending-changes`) to generate HTML that includes section identifiers.
-    │   │
-    │   └── 📄 semanticParser.ts
-    │       Purpose: Core, shared implementation logic for parsing HTML email strings into structured `EmailTemplate` (V2) objects.
-    │       Details: Contains `SemanticParserCore` class (implements `ISemanticParser`). Abstract `parse` method requires adapter implementation. Protected methods (`extractGlobalStyles`, `extractSectionStyles`, `extractElementProperties`, etc.) handle parsing logic. Includes helper utilities.
-    │       Usage: Base class for frontend/backend adapters. Enables converting raw HTML into the application's structured `EmailTemplateV2` format.
-    │
-    └── 📄 projectService.ts
-        Purpose: Handles frontend interactions with Supabase for projects, templates (V1 & V2, including V1 to V2 upgrade logic), chat, and the new granular pending changes system.
-        Details:
-        - This service is a key part of the frontend's data management. It includes logic for fetching, creating, updating, and deleting project data.
-        - It also manages email templates, including a V1 to V2 upgrade path.
-        - **Interactions with `pending_changes` table (for `GranularPendingChange`):**
-        - Static content page, similar structure to `PrivacyPolicy.tsx`.
-        - Uses `@/components/ui/container` and `@/components/ui/typography`.
-        - Displays terms sections (Introduction, Use of Service, Responsibilities, IP, Liability, Changes, Contact).
-        - Dynamically sets the "Last updated" date.
-        Usage: Routed at `/terms-of-service` in `App.tsx`. Publicly accessible.
-
-    ├── 📄 BlogIndexPage.tsx           # NEW: Main page listing all blog posts.
-    │   Purpose: Displays a list of published blog posts with interactive search and category filtering, using a nice UI.
-    │   Details: Uses React state (`useState`, `useMemo`) to manage search terms, selected category, and dynamically filtered post list. 
-    │            - Renders a prominent, centered search input and a unified dropdown menu for category filtering directly on the page's gradient background (removed the distinct background card).
-    │            - Input and filter button have explicit white backgrounds and borders for contrast.
-    │            - Displays posts in a responsive grid with enhanced card UI (category badges, author/date, excerpts, "Read More" links).
-    │            - Shows a "No Posts Found" message if filters/search yield no results.
-    │            - Imports `Input`, `Button`, `DropdownMenu` components from `@/components/ui/` and `Search`, `XCircle`, `ChevronDown`, `Filter` icons from `lucide-react`.
-    │            - Includes the standard application `Footer`.
-    │   Usage: Routed at `/blog` in `App.tsx`. Publicly accessible.
-    │
-    └── 📄 BlogPostPage.tsx            # NEW: Page displaying a single blog post.
-        Purpose: Fetches and displays the full content of a single blog post based on its slug, using a nice UI.
-        Details: Uses `useParams` to get the post slug. Displays placeholder content including title, author, date, header image, and sample article text with various formatting (headings, paragraphs, blockquotes). Styled with Tailwind CSS and `@tailwindcss/typography` for a clean blog post layout. Includes a "Back to Blog" link.
-        Usage: Routed at `/blog/:slug` in `App.tsx`. Publicly accessible.
-
-### Database Types (`src/integrations/supabase/types.ts`)
-
-This file, often generated/updated via Supabase CLI (`supabase gen types typescript`), contains the TypeScript definitions for the entire database schema (`Database` type). It ensures type safety when interacting with Supabase tables, views, and functions.
-
-Key parts:
-- `Json`: Defines the type for JSON/JSONB columns.
-- `Database`: The main type, nesting definitions under `public` schema.
-- `Tables`: Contains `Row`, `Insert`, `Update` types for each table (e.g., `projects`, `chat_messages`, `pending_changes`, `user_info`, `blog_posts`).
-- `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>`: Generic helper types for easier access to table row/insert/update types.
-
-Usage: Imported by services (`projectService.ts`) and components that interact directly with Supabase data to ensure correct data shapes.
-
-## AUTONOMOUS AI BLOG AGENT (PYTHON PROJECT)
-
-📁 ai_blog_agent/
-  Purpose: Contains the Python-based autonomous AI agent for blog content generation, research, and an approval workflow via Telegram.
-  Details: This project is designed to be run as a standalone Python application. It uses Langchain for LLM orchestration and interacts with various APIs (OpenAI, Perplexity, Telegram, Supabase) to autonomously source news, generate blog content, and manage an interactive approval workflow via Telegram.
-  Status: Core functionality for news sourcing, content generation, and Telegram-based approval workflow implemented. Ongoing refinements based on `AIAgentMap`.
-  ├── 📄 AIAgentMap
-  │   Purpose: Detailed multi-phase roadmap and checklist for the development of the AI blog agent.
-  │   Details: Outlines phases from setup, manual trigger, Perplexity integration, Telegram approval, feedback handling, social media promotion, to deployment. Includes key decisions made.
-  │   Usage: Primary planning and tracking document for this sub-project.
-  ├── 📄 .env
-  │   Purpose: Stores sensitive API keys and configuration variables for the AI blog agent.
-  │   Details: Contains `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and potentially Supabase function URLs/keys.
-  │   Usage: Loaded by `python-dotenv` in `main.py` to provide credentials to the application. This file is listed in `.gitignore` and should not be committed to version control.
-  ├── 📄 config.yaml
-  │   Purpose: Main configuration file for the AI blog agent, storing non-sensitive settings, prompts, and parameters.
-  │   Details: Includes sections for Perplexity API settings (env var name, query params), OpenAI API settings (env var name, model choices), Telegram Bot settings (env var names), Supabase function details (URL), various prompts for LLM interaction (research, blog post generation, social media snippets), and job management settings (pending jobs file, max iterations).
-  │   Usage: Loaded by the agent to configure its behavior and interaction with LLMs and other services.
-  ├── 📄 main.py
-  │   Purpose: Main orchestrator script for the AI Blog Agent.
-  │   Details: Initializes the agent, loads configurations, sets up Telegram bot (handlers, polling). Defines the core asynchronous workflow including fetching news topics, generating blog content (research, writing, formatting), and managing an interactive Telegram-based approval process (publish, delete, rewrite). Manages job context for multi-step interactions.
-  │   Usage: The primary entry point to run the AI blog agent (`python3 main.py`).
-  ├── 📄 requirements.txt
-  │   Purpose: Lists all Python dependencies required for the AI blog agent.
-  │   Details: Includes `langchain`, `langchain-openai`, `openai`, `python-dotenv`, `requests`, `PyYAML`, `python-telegram-bot`.
-  │   Usage: Used to install dependencies into the virtual environment (`pip install -r requirements.txt`).
-  ├── 📁 modules/
-  │   Purpose: Contains various service modules, each responsible for a specific part of the agent's functionality.
-  │   Details: Follows a modular design to separate concerns.
-  │   ├── 📄 __init__.py
-  │   │   Purpose: Makes the `modules` directory a Python package.
-  │   │   Details: Currently empty.
-  │   ├── 📄 job_manager.py
-  │   │   Purpose: Manages the state and context of ongoing blog post generation jobs, particularly for asynchronous Telegram interactions.
-  │   │   Details: Provides functions (`store_job_context`, `get_job_context`, `pop_job_context`, `clear_job_context`) to handle an in-memory dictionary for storing job details (e.g., current draft data, user choices, next expected action). Supports a default job ID for single pending interaction.
-  │   ├── 📄 notification_service.py
-  │   │   Purpose: Handles Telegram bot setup and communication.
-  │   │   Details: Uses `python-telegram-bot`. Key functions include `create_bot_application` (initializes bot), `register_handlers` (maps commands, messages, callbacks to handler functions in `main.py`), `start_bot_polling`/`stop_bot_polling` (manages bot lifecycle), and `send_telegram_message` (sends formatted messages with optional inline keyboards). Also retrieves Telegram credentials.
-  │   ├── 📄 perplexity_service.py
-  │   │   Purpose: Interacts with the Perplexity API for news sourcing and uses OpenAI for topic relevance assessment.
-  │   │   Details: Implements `fetch_breaking_news_topic` which queries Perplexity for recent news based on configured keywords and then uses an OpenAI model to evaluate relevance and extract a concise blog topic. Loads Perplexity API and relevance check prompts from `config.yaml`.
-  │   ├── 📄 research_service.py
-  │   │   Purpose: Conducts research on a given topic using an LLM (via Perplexity API direct call).
-  │   │   Details: Implements `conduct_research` which takes a topic, queries the Perplexity API (model `llama-3.1-sonar-small-128k-online` by default) with a specific system prompt to gather information, and returns a synthesized research brief. Loads configuration from `config.yaml`.
-  │   ├── 📄 supabase_service.py
-  │   │   Purpose: Interacts with the Supabase backend for formatting blog post data and posting it.
-  │   │   Details: Provides `format_for_supabase` to map generated blog components (title, slug, content, author_id, etc.) to the JSON payload expected by the Supabase Edge Function. Provides `post_blog_to_supabase` to send this payload to the `create-blog-post` Supabase Edge Function. Handles API responses and errors.
-  │   └── 📄 writing_service.py
-  │       Purpose: Generates various components of a blog post (title, slug, content, excerpt) using LLM calls via Langchain, and can incorporate rewrite instructions.
-  │       Details: Implements `generate_blog_post_components` which orchestrates multiple OpenAI calls with specific prompts (from `config.yaml`) for each component. Accepts an initial research brief and optional user feedback for rewrites. Uses Langchain's `ChatOpenAI`.
-  └── 📁 venv/
-      Purpose: Python virtual environment for the `ai_blog_agent`.
-      Details: Contains isolated Python interpreter and installed dependencies. This directory is typically gitignored.
-
-📁 src/
-├── 📁 core/
-│   ├── 📄 App.tsx
-│   │   Purpose: Main application router and provider setup.
-│   │   Details:
-│   │   - Sets up core providers (QueryClient, Auth, Tooltip).
-│   │   - Defines route protection components:
-│   │     • `ProtectedRoute`: Basic auth check
-│   │     • `RedirectIfAuthenticated`: Landing page logic
-│   │   - Routes configuration:
-│   │     • Public routes: /, /login, /signup, /privacy-policy, /terms-of-service, /blog/*
-│   │     • Protected routes: /dashboard, /send-email
-│   │     • Subscription-protected routes: /editor/* (using `SubscriptionProtectedRoute`)
-│   │   - Handles loading states and auth redirects.
-│   │   Usage: Root component of the application, managing routing and auth flow.
+---
+**Notes on Structure:**
+- The sitemap had some duplicate entries or unclear nesting for `src/backend/.temp/` and `src/backend/functions/`. I've tried to rationalize this into a single main `src/backend/functions/` path for the Edge Functions.
+- The `semanticParser.ts` under `src/backend/functions/_shared/services/` was noted as a "Frontend adapter" in the original read. I've kept it there but added a note. If it's purely for frontend, it should be in `src/frontend/services/`. If it's a shared core or a backend adapter, its description should reflect that. The one under `src/shared/services/` is correctly labeled as "Shared Core".
+- Added placeholder entries for typical frontend files and a shared `emailSetupTypes.ts` based on the project's needs. These would need to be confirmed or created.
+---
