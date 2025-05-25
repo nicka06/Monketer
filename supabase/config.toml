@@ -30,3 +30,10 @@ import_map = "../src/backend/functions/import_map.json"
 entrypoint = "../src/backend/functions/get-domain-provider/index.ts"
 import_map = "../src/backend/functions/import_map.json"
 
+[functions.save-email-setup-form]
+entrypoint = "../src/backend/functions/save-email-setup-form/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+
+[functions.initiate-email-setup]
+entrypoint = "../src/backend/functions/initiate-email-setup/index.ts"
+import_map = "../src/backend/functions/import_map.json"

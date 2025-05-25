@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 // Define the total number of data input steps in the form
-const TOTAL_STEPS = 5; // 1: Area of Business, 2: SubCategory, 3: Goals, 4: Email Scenarios, 5: Domain
+const TOTAL_STEPS = 6; // 1: Area of Business, 2: SubCategory, 3: Goals, 4: Email Scenarios, 5: Sending Addresses, 6: Domain
 
 // Define options for subcategories based on area of business
 const subCategoryOptions: Record<string, { value: string; label: string }[]> = {
@@ -85,12 +85,23 @@ const emailScenarioOptions: { id: string; label: string; category: string }[] = 
   { id: "other", label: "Other specific email scenario", category: "Other" },
 ];
 
+// NEW: Interface for scenario-specific sender configuration
+interface ScenarioSenderConfig {
+  scenarioId: string; // Corresponds to the id from emailScenarioOptions
+  fromName?: string;
+  fromEmail?: string;
+}
+
 interface EmailSetupFormData {
   areaOfBusiness?: string;
   subCategory?: string;
   goals?: string[];
-  emailScenarios?: string[]; // REPLACED sendTimeline
+  emailScenarios?: string[]; // IDs of selected scenarios from Step 4
+  defaultFromName?: string; // Global default
+  defaultFromEmail?: string; // Global default
+  scenarioSenders?: ScenarioSenderConfig[]; // Specific overrides for selected scenarios
   domain?: string;
+  sendTimeline?: string; // Ensure this matches the backend if it's used in save-email-setup-form
 }
 
 interface DomainCheckResult {
@@ -98,6 +109,21 @@ interface DomainCheckResult {
   nameservers?: string[];
   error?: string;
   domain?: string;
+}
+
+interface DnsRecord {
+  type: "MX" | "TXT" | "CNAME";
+  host: string;
+  value: string;
+  priority?: number;
+  ttl?: number;
+}
+
+interface InitiateEmailSetupResult {
+  dnsSetupStrategy: 'manual';
+  dkimSelector: string;
+  requiredDnsRecords: DnsRecord[];
+  message: string;
 }
 
 const DomainInputPage = () => {
@@ -117,7 +143,29 @@ const DomainInputPage = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handler for checkbox changes (for multi-select like goals)
+  // Handler for scenario-specific sender input changes
+  const handleScenarioSenderChange = (
+    scenarioId: string, 
+    field: 'fromName' | 'fromEmail', 
+    value: string
+  ) => {
+    setFormData(prev => {
+      const existingSenders = prev.scenarioSenders || [];
+      const scenarioIndex = existingSenders.findIndex(s => s.scenarioId === scenarioId);
+      let newSenders = [...existingSenders];
+
+      if (scenarioIndex > -1) {
+        // Update existing scenario sender config
+        newSenders[scenarioIndex] = { ...newSenders[scenarioIndex], [field]: value };
+      } else {
+        // Add new scenario sender config
+        newSenders.push({ scenarioId, [field]: value });
+      }
+      return { ...prev, scenarioSenders: newSenders };
+    });
+  };
+
+  // Handler for checkbox changes (for multi-select like goals and emailScenarios)
   const handleCheckboxChange = (field: keyof EmailSetupFormData, goalId: string, checked: boolean | 'indeterminate') => {
     setFormData(prev => {
       const existingGoals = prev[field] as string[] || [];
@@ -173,6 +221,50 @@ const DomainInputPage = () => {
         return;
       }
     }
+    // Validation for Step 5: Sending Addresses (now includes scenario-specific)
+    if (currentStep === 5) {
+      // Validate global defaults first
+      if (!formData.defaultFromName?.trim()) {
+        toast({ title: "Missing Information", description: "Please enter a global default 'From' name.", variant: "destructive" });
+        return;
+      }
+      if (!formData.defaultFromEmail?.trim()) {
+        toast({ title: "Missing Information", description: "Please enter a global default 'From' email address.", variant: "destructive" });
+        return;
+      }
+      const emailRegex = /^\S+@\S+\.\S+$/;
+      if (!emailRegex.test(formData.defaultFromEmail.trim())) {
+        toast({ title: "Invalid Email", description: "Please enter a valid global default 'From' email address.", variant: "destructive" });
+        return;
+      }
+
+      // Validate scenario-specific senders if any scenarios were selected
+      if (formData.emailScenarios && formData.emailScenarios.length > 0) {
+        for (const scenarioId of formData.emailScenarios) {
+          const senderConfig = formData.scenarioSenders?.find(s => s.scenarioId === scenarioId);
+          const scenarioLabel = emailScenarioOptions.find(opt => opt.id === scenarioId)?.label || scenarioId;
+
+          // Use global default if specific is not set, or enforce specific entry?
+          // For now, let's ensure specific entries are made if the scenario was selected.
+          // This could be changed to fallback to global defaults if desired.
+          const fromName = senderConfig?.fromName || formData.defaultFromName;
+          const fromEmail = senderConfig?.fromEmail || formData.defaultFromEmail;
+
+          if (!fromName?.trim()) {
+            toast({ title: "Missing Information", description: `Please enter a 'From' name for scenario: ${scenarioLabel}.`, variant: "destructive" });
+            return;
+          }
+          if (!fromEmail?.trim()) {
+            toast({ title: "Missing Information", description: `Please enter a 'From' email for scenario: ${scenarioLabel}.`, variant: "destructive" });
+            return;
+          }
+          if (!emailRegex.test(fromEmail.trim())) {
+            toast({ title: "Invalid Email", description: `Please enter a valid 'From' email for scenario: ${scenarioLabel}.`, variant: "destructive" });
+            return;
+          }
+        }
+      }
+    }
     
     // Prevent going beyond the last data input step with "Next"
     if (currentStep < TOTAL_STEPS) {
@@ -186,8 +278,6 @@ const DomainInputPage = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // This function is now primarily for the final domain submission
-    // Ensure all required formData is present before actual submission to backend
     if (currentStep !== TOTAL_STEPS || !formData.domain?.trim()) {
         toast({
             title: "Missing Domain",
@@ -198,50 +288,123 @@ const DomainInputPage = () => {
     }
 
     const domainToSubmit = formData.domain.trim();
-
     setIsLoading(true);
     setResultText(null);
 
     try {
-      const { data, error: functionError } = await supabase.functions.invoke<DomainCheckResult>(
-        'get-domain-provider',
-        { body: { domainName: domainToSubmit, ...formData } }
+      // Step 1: Save form data
+      const { data: saveData, error: saveError } = await supabase.functions.invoke<{success: boolean, emailSetupId: string, message: string}>(
+        'save-email-setup-form',
+        { body: { ...formData, domain: domainToSubmit } }
       );
 
-      if (functionError) throw functionError;
-      const resultData = data;
+      if (saveError || !saveData?.success || !saveData?.emailSetupId) {
+        console.error("Error saving email setup form data:", saveError, saveData);
+        toast({
+          title: "Save Failed",
+          description: `Could not save your setup preferences: ${saveError?.message || saveData?.message || 'Unknown error'}. Please try again.`,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      console.log("Form data saved successfully:", saveData);
+      const emailSetupId = saveData.emailSetupId;
 
-      console.log('[DomainInputPage] Full response from get-domain-provider:', resultData);
+      // Step 2: Get domain provider information
+      const { data: providerData, error: providerError } = await supabase.functions.invoke<DomainCheckResult>(
+        'get-domain-provider',
+        // Send only the domain name, not the entire formData for get-domain-provider
+        { body: { domainName: domainToSubmit } } 
+      );
 
-      if (resultData?.error) {
-        setResultText(`Domain: ${resultData.domain}\nError: ${resultData.error}`);
+      if (providerError) {
+        console.error("Error fetching domain provider:", providerError);
         toast({
           title: 'Provider Check Failed',
-          description: resultData.error,
+          description: `Error fetching provider: ${providerError.message}`,
           variant: 'destructive',
         });
-      } else if (resultData?.provider) {
-        setResultText(`Domain: ${resultData.domain}\nProvider: ${resultData.provider}\nNameservers: ${resultData.nameservers?.join(', ') || 'N/A'}`);
+        setResultText(`Error fetching provider for ${domainToSubmit}: ${providerError.message}`);
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('[DomainInputPage] Full response from get-domain-provider:', providerData);
+
+      if (providerData?.error) {
+        setResultText(`Domain: ${providerData.domain || domainToSubmit}
+Error from provider check: ${providerData.error}`);
         toast({
-          title: 'Provider Check Complete',
-          description: `Detected provider: ${resultData.provider}`,
+          title: 'Provider Check Failed',
+          description: providerData.error,
+          variant: 'destructive',
         });
-      } else {
-        setResultText(`Domain: ${resultData?.domain || domainToSubmit}\nCould not determine provider or an unexpected response was received.`);
+        setIsLoading(false); // Stop here if provider check itself returns an error
+        return;
+      }
+      
+      if (!providerData?.provider || !providerData?.nameservers) {
+        setResultText(`Domain: ${providerData?.domain || domainToSubmit}
+Could not reliably determine DNS provider. Please ensure your domain is correctly configured and publicly accessible.`);
         toast({
           title: 'Provider Check Uncertain',
-          description: 'Could not determine provider.',
+          description: 'Could not reliably determine DNS provider.',
           variant: 'default',
         });
+        setIsLoading(false); // Stop if provider cannot be determined
+        return;
       }
 
-    } catch (error) {
-      console.error('Error checking domain provider:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
-      setResultText(`Domain: ${domainToSubmit}\nError: ${errorMessage}`);
+      // Step 3: Initiate email setup to get DNS records
+      const providerInfoForBackend = {
+        name: providerData.provider,
+        nameservers: providerData.nameservers,
+      };
+
+      console.log(`[DomainInputPage] Calling initiate-email-setup with emailSetupId: ${emailSetupId} and providerInfo:`, providerInfoForBackend);
+
+      const { data: initiateData, error: initiateError } = await supabase.functions.invoke<InitiateEmailSetupResult>(
+        'initiate-email-setup',
+        { body: { emailSetupId: emailSetupId, providerInfo: providerInfoForBackend } }
+      );
+
+      if (initiateError || !initiateData) {
+        console.error("Error initiating email setup:", initiateError, initiateData);
+        toast({
+          title: "DNS Setup Failed",
+          description: `Could not retrieve DNS setup instructions: ${initiateError?.message || 'Unknown error'}.`,
+          variant: "destructive",
+        });
+        setResultText(`Failed to get DNS setup instructions for ${domainToSubmit}. Error: ${initiateError?.message || 'Function returned no data.'}`);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('[DomainInputPage] Response from initiate-email-setup:', initiateData);
+
+      let dnsRecordsString = "Required DNS Records:\n";
+      initiateData.requiredDnsRecords.forEach(record => {
+        dnsRecordsString += `  Type: ${record.type}, Host: ${record.host}, Value: ${record.value}${record.priority ? ', Priority: ' + record.priority : ''}\n`;
+      });
+      
+      setResultText(
+        `Domain: ${domainToSubmit}\nProvider: ${providerData.provider}\nStatus: ${initiateData.message}\n\n${dnsRecordsString}`
+      );
       toast({
-        title: 'Error',
-        description: `Failed to check domain provider: ${errorMessage}`,
+        title: "DNS Configuration Ready",
+        description: initiateData.message, // Use the message from the backend
+        duration: 7000, // Longer duration for important info
+      });
+
+    } catch (error) { // Catch any other unexpected errors
+      console.error('Generic error in handleSubmit:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during the setup process.';
+      setResultText(`Domain: ${domainToSubmit}
+Error: ${errorMessage}`);
+      toast({
+        title: 'Setup Process Error',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -254,10 +417,11 @@ const DomainInputPage = () => {
     if (resultText) return "Domain Check Result";
     switch (currentStep) {
       case 1: return "Step 1: Your Business";
-      case 2: return "Step 2: Business Details"; // Placeholder for SubCategory
-      case 3: return "Step 3: Your Goals"; // Placeholder for Goals
-      case 4: return "Step 4: Email Sending Scenarios"; // Placeholder for Email Scenarios
-      case 5: return "Step 5: Domain Information"; // Domain input step
+      case 2: return "Step 2: Business Details";
+      case 3: return "Step 3: Your Goals";
+      case 4: return "Step 4: Email Sending Scenarios";
+      case 5: return "Step 5: Configure Sending Address";
+      case 6: return "Step 6: Domain Information";
       default: return "Email Setup";
     }
   };
@@ -269,8 +433,9 @@ const DomainInputPage = () => {
       case 1: return "Tell us about your primary area of business.";
       case 2: return "Provide more details about your specific business category.";
       case 3: return "What are your main goals for using our email platform?";
-      case 4: return "What types of emails or for which scenarios do you primarily intend to send? Select all that apply."; // UPDATED for Step 4
-      case 5: return "Enter the domain name you wish to set up.";
+      case 4: return "What types of emails or for which scenarios do you primarily intend to send? Select all that apply.";
+      case 5: return "Configure the 'From' name and email address for your emails. You can set defaults and then customize for specific scenarios.";
+      case 6: return "Enter the domain name you wish to set up for email sending.";
       default: return "Follow the steps to set up your email.";
     }
   };
@@ -408,7 +573,85 @@ const DomainInputPage = () => {
                 </div>
             )}
             
-            {/* Step 5: Domain Input (Moved to be the last data input step) */}
+            {/* Step 5: Configure Sending Address - REVISED for per-scenario */}
+            {currentStep === 5 && (
+                <div className="space-y-6">
+                    {/* Global Defaults First */}
+                    <div className="p-4 border rounded-md bg-muted/40">
+                        <h4 className="font-semibold text-lg mb-3">Global Default Sender</h4>
+                        <div className="space-y-4">
+                            <div>
+                                <Label htmlFor="defaultFromName">Default "From" Name</Label>
+                                <Input 
+                                    id="defaultFromName"
+                                    placeholder="e.g., Your Company or Your Name"
+                                    value={formData.defaultFromName || ''}
+                                    onChange={(e) => handleInputChange('defaultFromName', e.target.value)}
+                                />
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    This name will be the default sender for your emails.
+                                </p>
+                            </div>
+                            <div>
+                                <Label htmlFor="defaultFromEmail">Default "From" Email Address</Label>
+                                <Input 
+                                    id="defaultFromEmail"
+                                    type="email"
+                                    placeholder="e.g., info@yourdomain.com"
+                                    value={formData.defaultFromEmail || ''}
+                                    onChange={(e) => handleInputChange('defaultFromEmail', e.target.value)}
+                                />
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    This email will be the default sender. We recommend using an address at the domain you'll enter in the next step.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Scenario-Specific Senders (if any scenarios selected) */}
+                    {formData.emailScenarios && formData.emailScenarios.length > 0 && (
+                        <div className="space-y-4 pt-4">
+                            <h4 className="font-semibold text-lg mb-3">Customize Sender for Specific Scenarios (Optional)</h4>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                For each type of email you selected in the previous step, you can specify a different "From" name and email. 
+                                If left blank, the global defaults above will be used.
+                            </p>
+                            {formData.emailScenarios.map(scenarioId => {
+                                const scenario = emailScenarioOptions.find(opt => opt.id === scenarioId);
+                                const senderConfig = formData.scenarioSenders?.find(s => s.scenarioId === scenarioId);
+                                if (!scenario) return null;
+
+                                return (
+                                    <div key={scenarioId} className="p-4 border rounded-md space-y-3">
+                                        <h5 className="font-medium text-md">Scenario: <span className="text-primary">{scenario.label}</span></h5>
+                                        <div>
+                                            <Label htmlFor={`scenarioFromName-${scenarioId}`}>"From" Name for this scenario</Label>
+                                            <Input 
+                                                id={`scenarioFromName-${scenarioId}`}
+                                                placeholder={`Default: ${formData.defaultFromName || "Not set"}`}
+                                                value={senderConfig?.fromName || ''} // Fallback to empty if not specifically set
+                                                onChange={(e) => handleScenarioSenderChange(scenarioId, 'fromName', e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor={`scenarioFromEmail-${scenarioId}`}>"From" Email for this scenario</Label>
+                                            <Input 
+                                                id={`scenarioFromEmail-${scenarioId}`}
+                                                type="email"
+                                                placeholder={`Default: ${formData.defaultFromEmail || "Not set"}`}
+                                                value={senderConfig?.fromEmail || ''} // Fallback to empty if not specifically set
+                                                onChange={(e) => handleScenarioSenderChange(scenarioId, 'fromEmail', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            {/* Step 6: Domain Input (Was Step 5) */}
             {currentStep === TOTAL_STEPS && !resultText && (
               <div className="space-y-2">
                 <Label htmlFor="domain">Domain Name</Label>
