@@ -61,30 +61,26 @@ serve(async (req) => {
     const defaultMxValue = Deno.env.get("DEFAULT_MX_VALUE");
     // @ts-ignore
     const defaultSpfValue = Deno.env.get("DEFAULT_SPF_VALUE");
+    // @ts-ignore
+    const defaultDmarcValue = Deno.env.get("DEFAULT_DMARC_VALUE");
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("initiate-email-setup: Missing Supabase server configuration.");
-      return new Response(JSON.stringify({ error: "Server configuration error (Supabase)." }), {
+    const missingEnvVars: string[] = [];
+    if (!supabaseUrl) missingEnvVars.push("SUPABASE_URL");
+    if (!supabaseServiceKey) missingEnvVars.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!mailServerDkimEndpoint) missingEnvVars.push("MAIL_SERVER_DKIM_ENDPOINT");
+    // MAIL_SERVER_SHARED_SECRET is critical for DKIM API auth
+    if (!mailServerApiKey) missingEnvVars.push("MAIL_SERVER_SHARED_SECRET"); 
+    if (!defaultMxValue) missingEnvVars.push("DEFAULT_MX_VALUE");
+    if (!defaultSpfValue) missingEnvVars.push("DEFAULT_SPF_VALUE");
+    if (!defaultDmarcValue) missingEnvVars.push("DEFAULT_DMARC_VALUE");
+
+    if (missingEnvVars.length > 0) {
+      const errorMsg = `Server configuration error: Missing required environment variable(s): ${missingEnvVars.join(", ")}.`;
+      console.error("initiate-email-setup: " + errorMsg);
+      return new Response(JSON.stringify({ error: errorMsg }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });
-    }
-    if (!mailServerDkimEndpoint) { // API key check removed if Express app doesn't use it yet, but highly recommended
-      console.error("initiate-email-setup: Missing Mail Server DKIM endpoint configuration.");
-      return new Response(JSON.stringify({ error: "Server configuration error (Mail Server DKIM)." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      });
-    }
-    // Add this check once your Express app supports API key
-    if (!mailServerApiKey) {
-        console.warn("initiate-email-setup: WARNING - MAIL_SERVER_SHARED_SECRET is not set. Calls to mail server will be unauthenticated.");
-    }
-    if (!defaultMxValue) {
-        console.warn("initiate-email-setup: WARNING - DEFAULT_MX_VALUE environment variable not set. Using a placeholder.");
-    }
-    if (!defaultSpfValue) {
-        console.warn("initiate-email-setup: WARNING - DEFAULT_SPF_VALUE environment variable not set. Using a placeholder.");
     }
     
     const supabaseAdminClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -221,38 +217,66 @@ serve(async (req) => {
     const dnsSetupStrategy = 'manual'; // Always manual
     console.log("initiate-email-setup: Determined DNS setup strategy:", dnsSetupStrategy);
 
-    const finalMxValue = defaultMxValue || `mail.${domain}`;
-    const finalSpfValue = defaultSpfValue || `v=spf1 include:_spf.${domain} ~all`;
+    // Values are now guaranteed to be present due to the check above, no fallbacks needed here.
+    const actualMxValue = defaultMxValue!;
+    const actualSpfValue = defaultSpfValue!;
+    const actualDmarcValue = defaultDmarcValue!;
 
     const requiredDnsRecords: DnsRecord[] = [
-      { type: "MX", host: "@", value: finalMxValue, priority: 10, ttl: 3600 },
-      { type: "TXT", host: "@", value: finalSpfValue, ttl: 3600 },
+      {
+        type: "MX",
+        host: "@",
+        value: actualMxValue,
+        priority: 10, // Common priority, adjust if needed
+        ttl: 3600,
+      },
+      {
+        type: "TXT",
+        host: "@",
+        value: actualSpfValue,
+        ttl: 3600,
+      },
       {
         type: "TXT",
         host: `${dkimSelectorToUse}._domainkey`,
         value: dkimProvisioningSuccessful && publicKeyBase64 ? `v=DKIM1; k=rsa; p=${publicKeyBase64}` : "v=DKIM1; k=rsa; p=ERROR_DKIM_NOT_PROVISIONED_OR_INVALID_KEY",
-        ttl: 3600
+        ttl: 3600,
       },
-      { type: "TXT", host: "_dmarc", value: `v=DMARC1; p=none; rua=mailto:dmarc-reports@${domain}`, ttl: 3600 },
+      {
+        type: "TXT",
+        host: "_dmarc",
+        value: actualDmarcValue,
+        ttl: 3600,
+      },
     ];
-    console.log("initiate-email-setup: Generated required DNS records:", requiredDnsRecords.length);
-    // Explicitly log the records for easier debugging in Supabase function logs
-    console.log("Required DNS Records Details:", JSON.stringify(requiredDnsRecords, null, 2));
 
-    // 4. Update email_setups table
-    const newStatus = "awaiting_manual_dns_config"; // Always manual
-    
-    const updatePayload: any = {
-        dns_provider_name: requestData.providerInfo.name,
-        dns_setup_strategy: dnsSetupStrategy,
-        dkim_selector: dkimSelectorToUse, 
-        dkim_public_key: dkimProvisioningSuccessful ? publicKeyBase64 : null, // Store public key or null
-        dns_records_to_set: requiredDnsRecords,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
+    console.log("initiate-email-setup: Generated requiredDnsRecords:", JSON.stringify(requiredDnsRecords, null, 2));
+
+    // 3. Update email_setups table with DNS info
+    const updatePayload = {
+      dns_provider_name: requestData.providerInfo.name,
+      dns_setup_strategy: "manual", // Always manual for now
+      dkim_selector: dkimSelectorToUse,
+      dkim_public_key: dkimProvisioningSuccessful ? publicKeyBase64 : null, // This will be the extracted key or null if failed
+      dns_records_to_set: requiredDnsRecords, // Storing the records for user display
+      status: "awaiting_manual_dns_config", // General status for the setup
+      // New fields for DNS record values and verification statuses
+      mx_record_value: actualMxValue,
+      spf_record_value: actualSpfValue,
+      dmarc_record_value: actualDmarcValue,
+      mx_status: 'pending',
+      spf_status: 'pending',
+      dkim_status: 'pending',
+      dmarc_status: 'pending',
+      overall_dns_status: 'pending', 
+      // We might want to clear previous verification_failure_reason if re-initiating
+      // verification_failure_reason: null, 
+      // last_verification_attempt_at: null, // Or set to current time if we consider this an attempt
     };
 
-    const { data: updatedSetup, error: updateError } = await supabaseAdminClient
+    console.log("initiate-email-setup: Update payload for email_setups:", JSON.stringify(updatePayload, null, 2));
+
+    const { error: updateError } = await supabaseAdminClient
       .from("email_setups")
       .update(updatePayload)
       .eq("id", requestData.emailSetupId)

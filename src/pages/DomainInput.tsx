@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  getInstructionsForProvider,
+  type ProviderInstruction,
+  type ProviderInstructionStep
+} from '../backend/functions/_shared/lib/dns-provider-instructions'; // Adjust path as necessary
 
 // Define the total number of data input steps in the form
 const TOTAL_STEPS = 6; // 1: Area of Business, 2: SubCategory, 3: Goals, 4: Email Scenarios, 5: Sending Addresses, 6: Domain
@@ -126,6 +131,33 @@ interface InitiateEmailSetupResult {
   message: string;
 }
 
+// NEW: Types for DNS Verification
+interface DnsVerificationStatusItem {
+  recordType: "MX" | "SPF" | "DKIM" | "DMARC";
+  status: "verified" | "failed" | "pending" | "error";
+  queriedValue?: string | string[];
+  expectedValue?: string;
+  message?: string;
+}
+
+interface DnsVerificationState {
+  overall: "pending" | "partially_verified" | "verified" | "failed_to_verify" | "not_started";
+  mx: DnsVerificationStatusItem | null;
+  spf: DnsVerificationStatusItem | null;
+  dkim: DnsVerificationStatusItem | null;
+  dmarc: DnsVerificationStatusItem | null;
+}
+
+interface VerifyDnsResponse {
+  overallDnsStatus: DnsVerificationState['overall'];
+  mxStatus: DnsVerificationStatusItem;
+  spfStatus: DnsVerificationStatusItem;
+  dkimStatus: DnsVerificationStatusItem;
+  dmarcStatus: DnsVerificationStatusItem;
+  lastVerificationAttemptAt: string;
+  verificationFailureReason?: string;
+}
+
 const DomainInputPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<EmailSetupFormData>({});
@@ -133,7 +165,66 @@ const DomainInputPage = () => {
   // const [domain, setDomain] = useState(''); // Keep this commented or remove, as domain is in formData
   const [isLoading, setIsLoading] = useState(false);
   const [resultText, setResultText] = useState<string | null>(null);
+  const [dnsRecordsToDisplay, setDnsRecordsToDisplay] = useState<DnsRecord[]>([]);
+  const [currentProviderInstructions, setCurrentProviderInstructions] = useState<ProviderInstruction | null>(null);
+  const [errorOccurred, setErrorOccurred] = useState(false);
+  // NEW: State for DNS Verification
+  const [verificationStatus, setVerificationStatus] = useState<DnsVerificationState>({
+    overall: "not_started",
+    mx: null,
+    spf: null,
+    dkim: null,
+    dmarc: null,
+  });
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [lastVerificationTime, setLastVerificationTime] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [emailSetupId, setEmailSetupId] = useState<string | null>(null); // To store the ID for verification
   const { toast } = useToast();
+
+  // Effect for initial load of verification status and polling
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | undefined = undefined;
+
+    const initialLoadAndPoll = async () => {
+      if (emailSetupId && verificationStatus.overall === "not_started") {
+        // If we have an ID but haven't started verification, trigger it once.
+        // This covers page reloads where setup was done but verification state isn't loaded yet.
+        console.log("[useEffect] Initial verification triggered for emailSetupId:", emailSetupId);
+        await handleVerifyDns(); // await to get the first status before potentially polling
+      }
+
+      // Setup polling only if appropriate conditions are met after the potential initial load
+      // Need to read the LATEST verificationStatus after handleVerifyDns might have updated it.
+      // This is tricky because handleVerifyDns updates state asynchronously.
+      // A better way might be to let handleVerifyDns itself schedule the next poll if needed.
+      // For now, let's rely on the state being updated by the first call if it happened.
+    };
+
+    initialLoadAndPoll(); // Call it once to check for initial load.
+
+    // This useEffect will re-run if verificationStatus.overall or emailSetupId changes.
+    // We'll set up or clear the interval based on the new state.
+    if (emailSetupId && (verificationStatus.overall === "pending" || verificationStatus.overall === "partially_verified")) {
+      console.log(`[useEffect] Starting polling for ${emailSetupId} with status ${verificationStatus.overall}`);
+      pollInterval = setInterval(() => {
+        console.log(`[Polling] Verifying DNS for ${emailSetupId}`);
+        handleVerifyDns();
+      }, 5 * 60 * 1000); // 5 minutes
+    } else {
+      if (pollInterval) {
+        console.log(`[useEffect] Clearing polling for ${emailSetupId} (status: ${verificationStatus.overall})`);
+        clearInterval(pollInterval);
+      }
+    }
+
+    return () => {
+      if (pollInterval) {
+        console.log(`[useEffect] Cleanup: Clearing polling for ${emailSetupId}`);
+        clearInterval(pollInterval);
+      }
+    };
+  }, [emailSetupId, verificationStatus.overall]); // Dependencies: emailSetupId and overall status
 
   const handleInputChange = (field: keyof EmailSetupFormData, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -290,6 +381,9 @@ const DomainInputPage = () => {
     const domainToSubmit = formData.domain.trim();
     setIsLoading(true);
     setResultText(null);
+    setDnsRecordsToDisplay([]);
+    setCurrentProviderInstructions(null);
+    setErrorOccurred(false);
 
     try {
       // Step 1: Save form data
@@ -309,7 +403,8 @@ const DomainInputPage = () => {
         return;
       }
       console.log("Form data saved successfully:", saveData);
-      const emailSetupId = saveData.emailSetupId;
+      const retrievedEmailSetupId = saveData.emailSetupId;
+      setEmailSetupId(retrievedEmailSetupId);
 
       // Step 2: Get domain provider information
       const { data: providerData, error: providerError } = await supabase.functions.invoke<DomainCheckResult>(
@@ -326,6 +421,7 @@ const DomainInputPage = () => {
           variant: 'destructive',
         });
         setResultText(`Error fetching provider for ${domainToSubmit}: ${providerError.message}`);
+        setErrorOccurred(true);
         setIsLoading(false);
         return;
       }
@@ -340,6 +436,7 @@ Error from provider check: ${providerData.error}`);
           description: providerData.error,
           variant: 'destructive',
         });
+        setErrorOccurred(true);
         setIsLoading(false); // Stop here if provider check itself returns an error
         return;
       }
@@ -352,6 +449,7 @@ Could not reliably determine DNS provider. Please ensure your domain is correctl
           description: 'Could not reliably determine DNS provider.',
           variant: 'default',
         });
+        setErrorOccurred(true);
         setIsLoading(false); // Stop if provider cannot be determined
         return;
       }
@@ -362,11 +460,11 @@ Could not reliably determine DNS provider. Please ensure your domain is correctl
         nameservers: providerData.nameservers,
       };
 
-      console.log(`[DomainInputPage] Calling initiate-email-setup with emailSetupId: ${emailSetupId} and providerInfo:`, providerInfoForBackend);
+      console.log(`[DomainInputPage] Calling initiate-email-setup with emailSetupId: ${retrievedEmailSetupId} and providerInfo:`, providerInfoForBackend);
 
       const { data: initiateData, error: initiateError } = await supabase.functions.invoke<InitiateEmailSetupResult>(
         'initiate-email-setup',
-        { body: { emailSetupId: emailSetupId, providerInfo: providerInfoForBackend } }
+        { body: { emailSetupId: retrievedEmailSetupId, providerInfo: providerInfoForBackend } }
       );
 
       if (initiateError || !initiateData) {
@@ -377,31 +475,33 @@ Could not reliably determine DNS provider. Please ensure your domain is correctl
           variant: "destructive",
         });
         setResultText(`Failed to get DNS setup instructions for ${domainToSubmit}. Error: ${initiateError?.message || 'Function returned no data.'}`);
+        setErrorOccurred(true);
         setIsLoading(false);
         return;
       }
 
       console.log('[DomainInputPage] Response from initiate-email-setup:', initiateData);
-
-      let dnsRecordsString = "Required DNS Records:\n";
-      initiateData.requiredDnsRecords.forEach(record => {
-        dnsRecordsString += `  Type: ${record.type}, Host: ${record.host}, Value: ${record.value}${record.priority ? ', Priority: ' + record.priority : ''}\n`;
-      });
       
-      setResultText(
-        `Domain: ${domainToSubmit}\nProvider: ${providerData.provider}\nStatus: ${initiateData.message}\n\n${dnsRecordsString}`
-      );
+      // Successfully got DNS records and message
+      setResultText(initiateData.message); // General status message
+      setDnsRecordsToDisplay(initiateData.requiredDnsRecords);
+      
+      // Get provider-specific instructions
+      const instructions = getInstructionsForProvider(providerData.provider);
+      setCurrentProviderInstructions(instructions);
+      setErrorOccurred(false); // Clear error state on success
+
       toast({
         title: "DNS Configuration Ready",
-        description: initiateData.message, // Use the message from the backend
-        duration: 7000, // Longer duration for important info
+        description: initiateData.message, 
+        duration: 7000,
       });
 
-    } catch (error) { // Catch any other unexpected errors
+    } catch (error) { 
       console.error('Generic error in handleSubmit:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during the setup process.';
-      setResultText(`Domain: ${domainToSubmit}
-Error: ${errorMessage}`);
+      setResultText(`Domain: ${domainToSubmit}\nError: ${errorMessage}`);
+      setErrorOccurred(true);
       toast({
         title: 'Setup Process Error',
         description: errorMessage,
@@ -412,9 +512,85 @@ Error: ${errorMessage}`);
     }
   };
 
+  // Function to handle DNS verification call
+  const handleVerifyDns = async () => {
+    if (!emailSetupId) {
+      toast({
+        title: "Error",
+        description: "Email Setup ID is missing. Cannot verify DNS.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerificationError(null);
+    // Optimistically set individual statuses to pending if not already set, or keep current.
+    setVerificationStatus(prev => ({
+      overall: prev.overall === "not_started" || prev.overall === "failed_to_verify" ? "pending" : prev.overall,
+      mx: prev.mx || { recordType: "MX", status: "pending" },
+      spf: prev.spf || { recordType: "SPF", status: "pending" },
+      dkim: prev.dkim || { recordType: "DKIM", status: "pending" },
+      dmarc: prev.dmarc || { recordType: "DMARC", status: "pending" },
+    }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke<VerifyDnsResponse>(
+        'verify-dns-records',
+        { body: { emailSetupId } }
+      );
+
+      if (error || !data) {
+        console.error("Error verifying DNS records:", error);
+        const errorMsg = error?.message || data?.verificationFailureReason || "Failed to verify DNS. Unknown error.";
+        setVerificationError(errorMsg);
+        setVerificationStatus(prev => ({ ...prev, overall: "failed_to_verify" }));
+        toast({
+          title: "DNS Verification Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("DNS Verification successful:", data);
+      setVerificationStatus({
+        overall: data.overallDnsStatus,
+        mx: data.mxStatus,
+        spf: data.spfStatus,
+        dkim: data.dkimStatus,
+        dmarc: data.dmarcStatus,
+      });
+      setLastVerificationTime(new Date(data.lastVerificationAttemptAt).toLocaleString());
+      if (data.verificationFailureReason) {
+        setVerificationError(data.verificationFailureReason);
+      }
+      
+      toast({
+        title: `DNS Verification: ${data.overallDnsStatus.replace('_', ' ').toUpperCase()}`,
+        description: data.verificationFailureReason || "DNS status updated.",
+        variant: data.overallDnsStatus === "verified" ? "default" : (data.overallDnsStatus === "failed_to_verify" ? "destructive" : "default"),
+        duration: 7000,
+      });
+
+    } catch (e) {
+      console.error("Exception verifying DNS:", e);
+      const errorMsg = e instanceof Error ? e.message : "An unexpected error occurred during DNS verification.";
+      setVerificationError(errorMsg);
+      setVerificationStatus(prev => ({ ...prev, overall: "failed_to_verify" }));
+      toast({
+        title: "DNS Verification Exception",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   // Helper to get the title for the current step
   const getStepTitle = () => {
-    if (resultText) return "Domain Check Result";
+    if (currentProviderInstructions || dnsRecordsToDisplay.length > 0 || errorOccurred) return "DNS Setup Instructions";
     switch (currentStep) {
       case 1: return "Step 1: Your Business";
       case 2: return "Step 2: Business Details";
@@ -428,7 +604,9 @@ Error: ${errorMessage}`);
 
   // Helper to get the description for the current step
   const getStepDescription = () => {
-    if (resultText) return "Details about your domain provider.";
+    if (currentProviderInstructions || dnsRecordsToDisplay.length > 0 || errorOccurred) {
+      return `Follow these steps to configure DNS for ${formData.domain || 'your domain'}.`;
+    }
     switch (currentStep) {
       case 1: return "Tell us about your primary area of business.";
       case 2: return "Provide more details about your specific business category.";
@@ -440,15 +618,106 @@ Error: ${errorMessage}`);
     }
   };
 
+  // NEW: Function to render DNS Verification UI
+  const renderVerificationUI = () => {
+    if (!dnsRecordsToDisplay.length || !currentProviderInstructions || !emailSetupId) {
+      return null; // Only show if initial setup is done and DNS records are displayed
+    }
+
+    let bannerClass = "p-4 rounded-md mb-4 text-sm ";
+    let bannerText = "DNS Verification Status: Unknown";
+
+    switch (verificationStatus.overall) {
+      case "not_started":
+        bannerClass += "bg-gray-100 text-gray-700";
+        bannerText = "DNS verification has not started. Click 'Verify DNS Records' to check.";
+        break;
+      case "pending":
+        bannerClass += "bg-yellow-100 text-yellow-700";
+        bannerText = "DNS Verification Pending... Click 'Verify DNS Records' or wait for automatic check.";
+        break;
+      case "partially_verified":
+        bannerClass += "bg-blue-100 text-blue-700";
+        bannerText = "DNS Verification Partially Complete. Some records are verified, some are pending or failed.";
+        break;
+      case "verified":
+        bannerClass += "bg-green-100 text-green-700";
+        bannerText = "All DNS records verified successfully!";
+        break;
+      case "failed_to_verify":
+        bannerClass += "bg-red-100 text-red-700";
+        bannerText = "DNS Verification Failed. Please check the errors below and your DNS settings.";
+        break;
+      default:
+        bannerClass += "bg-gray-100 text-gray-700";
+    }
+
+    const renderStatusItem = (item: DnsVerificationStatusItem | null, type: string) => {
+      if (!item) return <p>{type}: Status not yet available.</p>;
+      let itemClass = "";
+      switch (item.status) {
+        case "verified": itemClass = "text-green-600 font-semibold"; break;
+        case "failed": itemClass = "text-red-600 font-semibold"; break;
+        case "pending": itemClass = "text-yellow-600 font-semibold"; break;
+        case "error": itemClass = "text-orange-600 font-semibold"; break;
+      }
+      return (
+        <div className="mb-1">
+          <span className={itemClass}>{type}: {item.status.toUpperCase()}</span>
+          {item.message && <span className="text-xs block text-gray-500">Details: {item.message}</span>}
+          {item.queriedValue && <span className="text-xs block text-gray-500">Queried: {Array.isArray(item.queriedValue) ? item.queriedValue.join(', ') : item.queriedValue}</span>}
+        </div>
+      );
+    };
+
+    return (
+      <div className="mt-6 p-4 border border-gray-200 rounded-lg shadow-sm">
+        <h3 className="text-lg font-semibold mb-3">DNS Verification</h3>
+        <div className={bannerClass} role="alert">
+          {bannerText}
+        </div>
+        
+        {verificationStatus.overall !== "not_started" && (
+          <div className="mb-4 space-y-2">
+            {renderStatusItem(verificationStatus.mx, "MX")}
+            {renderStatusItem(verificationStatus.spf, "SPF")}
+            {renderStatusItem(verificationStatus.dkim, "DKIM")}
+            {renderStatusItem(verificationStatus.dmarc, "DMARC")}
+          </div>
+        )}
+
+        {verificationError && (
+          <p className="text-red-600 text-sm mb-3">Error: {verificationError}</p>
+        )}
+        {lastVerificationTime && (
+          <p className="text-gray-500 text-xs mb-3">Last checked: {lastVerificationTime}</p>
+        )}
+
+        <Button 
+          onClick={handleVerifyDns} 
+          disabled={isVerifying || !emailSetupId}
+          className="w-full sm:w-auto"
+        >
+          {isVerifying ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Verifying...
+            </>
+          ) : "Verify DNS Records"}
+        </Button>
+      </div>
+    );
+  };
+
   return (
-    // Adjusted padding-top for better centering of a larger card
     <div className="flex justify-center items-start min-h-screen bg-background pt-12 px-4 md:pt-20">
-      {/* Increased max-width for a larger card on medium screens and up */}
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <div className="flex justify-between items-center mb-2">
             <CardTitle>{getStepTitle()}</CardTitle>
-            {/* Show step progress if not showing results */}
             {!resultText && currentStep <= TOTAL_STEPS && (
               <span className="text-sm text-muted-foreground">
                 Step {currentStep} of {TOTAL_STEPS}
@@ -457,23 +726,18 @@ Error: ${errorMessage}`);
           </div>
           <CardDescription>{getStepDescription()}</CardDescription>
         </CardHeader>
-        {/* Form submission is handled by the button in the footer for the final step */}
         <form onSubmit={handleSubmit}>
-          {/* Increased vertical spacing for form elements */}
           <CardContent className="space-y-6">
-            {/* Step 1: Area of Business */}
             {currentStep === 1 && (
               <div className="space-y-2">
                 <Label htmlFor="areaOfBusiness">Area of Business</Label>
                 <Select
-                  value={formData.areaOfBusiness || ''} // Ensure value is not undefined for Select
+                  value={formData.areaOfBusiness || ''}
                   onValueChange={(value) => {
-                    // When area of business changes, reset subCategory if it's no longer valid
-                    // or if the new area has different subcategories.
                     handleSelectChange('areaOfBusiness')(value);
                     const newAreaSubcategories = subCategoryOptions[value];
                     if (!newAreaSubcategories || !newAreaSubcategories.find(sc => sc.value === formData.subCategory)) {
-                        handleInputChange('subCategory', ''); // Reset subCategory
+                        handleInputChange('subCategory', '');
                     }
                   }}
                 >
@@ -493,13 +757,12 @@ Error: ${errorMessage}`);
               </div>
             )}
 
-            {/* Step 2: Business Subcategory - Implemented */}
             {currentStep === 2 && (
               <div className="space-y-2">
                 <Label htmlFor="subCategory">Business Subcategory</Label>
                 {formData.areaOfBusiness && subCategoryOptions[formData.areaOfBusiness] && subCategoryOptions[formData.areaOfBusiness].length > 0 ? (
                   <Select
-                    value={formData.subCategory || ''} // Ensure value is not undefined
+                    value={formData.subCategory || ''}
                     onValueChange={handleSelectChange('subCategory')}
                   >
                     <SelectTrigger id="subCategory">
@@ -520,7 +783,6 @@ Error: ${errorMessage}`);
                 )}
               </div>
             )}
-            {/* Placeholder for Step 3: Specific Goals - Implemented */}
             {currentStep === 3 && (
                  <div className="space-y-2">
                     <Label className="mb-2 block">What are your specific goals?</Label>
@@ -543,14 +805,12 @@ Error: ${errorMessage}`);
                     </div>
                 </div>
             )}
-            {/* Step 4: Email Sending Scenarios - REVISED */}
-             {currentStep === 4 && (
+            {currentStep === 4 && (
                  <div className="space-y-2">
                     <Label className="mb-2 block">Key Email Sending Scenarios</Label>
                     <p className="text-sm text-muted-foreground mb-4">
                         What types of emails will you be sending? Select all that apply.
                     </p>
-                    {/* Grouping checkboxes by category for better readability */}
                     {["User Actions", "Marketing & Engagement", "Automated", "Other"].map(category => (
                         <div key={category} className="mb-4">
                             <h4 className="font-semibold text-md mb-2 text-foreground/80">{category}</h4>
@@ -573,10 +833,8 @@ Error: ${errorMessage}`);
                 </div>
             )}
             
-            {/* Step 5: Configure Sending Address - REVISED for per-scenario */}
             {currentStep === 5 && (
                 <div className="space-y-6">
-                    {/* Global Defaults First */}
                     <div className="p-4 border rounded-md bg-muted/40">
                         <h4 className="font-semibold text-lg mb-3">Global Default Sender</h4>
                         <div className="space-y-4">
@@ -608,7 +866,6 @@ Error: ${errorMessage}`);
                         </div>
                     </div>
 
-                    {/* Scenario-Specific Senders (if any scenarios selected) */}
                     {formData.emailScenarios && formData.emailScenarios.length > 0 && (
                         <div className="space-y-4 pt-4">
                             <h4 className="font-semibold text-lg mb-3">Customize Sender for Specific Scenarios (Optional)</h4>
@@ -629,7 +886,7 @@ Error: ${errorMessage}`);
                                             <Input 
                                                 id={`scenarioFromName-${scenarioId}`}
                                                 placeholder={`Default: ${formData.defaultFromName || "Not set"}`}
-                                                value={senderConfig?.fromName || ''} // Fallback to empty if not specifically set
+                                                value={senderConfig?.fromName || ''}
                                                 onChange={(e) => handleScenarioSenderChange(scenarioId, 'fromName', e.target.value)}
                                             />
                                         </div>
@@ -639,7 +896,7 @@ Error: ${errorMessage}`);
                                                 id={`scenarioFromEmail-${scenarioId}`}
                                                 type="email"
                                                 placeholder={`Default: ${formData.defaultFromEmail || "Not set"}`}
-                                                value={senderConfig?.fromEmail || ''} // Fallback to empty if not specifically set
+                                                value={senderConfig?.fromEmail || ''}
                                                 onChange={(e) => handleScenarioSenderChange(scenarioId, 'fromEmail', e.target.value)}
                                             />
                                         </div>
@@ -651,8 +908,7 @@ Error: ${errorMessage}`);
                 </div>
             )}
             
-            {/* Step 6: Domain Input (Was Step 5) */}
-            {currentStep === TOTAL_STEPS && !resultText && (
+            {currentStep === TOTAL_STEPS && !(currentProviderInstructions || dnsRecordsToDisplay.length > 0 || errorOccurred) && (
               <div className="space-y-2">
                 <Label htmlFor="domain">Domain Name</Label>
                 <Input
@@ -666,15 +922,157 @@ Error: ${errorMessage}`);
               </div>
             )}
             
-            {resultText && (
-              <div className="mt-6 p-4 bg-muted rounded-md w-full">
-                <h4 className="font-semibold mb-2">Result:</h4>
-                <pre className="text-sm whitespace-pre-wrap">{resultText}</pre>
+            {(currentProviderInstructions || dnsRecordsToDisplay.length > 0 || errorOccurred) && (
+              <div className="mt-6 space-y-6">
+                {resultText && (
+                  <div className={`p-4 rounded-md ${errorOccurred ? 'bg-destructive/10 text-destructive' : 'bg-muted'}`}>
+                    <h4 className="font-semibold mb-1">Status:</h4>
+                    <p className="text-sm whitespace-pre-wrap">{resultText}</p>
+                  </div>
+                )}
+
+                {currentProviderInstructions && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        Instructions for: {currentProviderInstructions.displayName}
+                      </CardTitle>
+                      {currentProviderInstructions.dnsManagementUrl && (
+                        <a 
+                          href={currentProviderInstructions.dnsManagementUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Go to {currentProviderInstructions.displayName} DNS Management
+                        </a>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {currentProviderInstructions.generalNotes && currentProviderInstructions.generalNotes.length > 0 && (
+                        <div>
+                          <h5 className="font-semibold mb-1">General Notes:</h5>
+                          <ul className="list-disc list-inside text-sm space-y-1">
+                            {currentProviderInstructions.generalNotes.map((note, idx) => <li key={idx}>{note}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      <div>
+                        <h5 className="font-semibold mb-2">Setup Steps:</h5>
+                        <ol className="list-decimal list-inside space-y-3">
+                          {currentProviderInstructions.instructionSteps.map((step, idx) => (
+                            <li key={idx}>
+                              <strong className="block">{step.title}</strong>
+                              <p className="text-sm text-muted-foreground">{step.description} 
+                                {step.link && <a href={step.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Learn more</a>}
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {dnsRecordsToDisplay.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>DNS Records to Add</CardTitle>
+                      <CardDescription>
+                        Add the following DNS records to your provider ({currentProviderInstructions?.displayName || formData.domain}). 
+                        The 'Host' field might also be called 'Name' or 'Hostname'. The 'Value' might be 'Content' or 'Points to'.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                                {currentProviderInstructions?.uiFieldNames?.host || 'Host/Name'}
+                              </th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">
+                                {currentProviderInstructions?.uiFieldNames?.value || 'Value/Points To'}
+                              </th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">TTL</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Copy</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {dnsRecordsToDisplay.map((record, idx) => (
+                              <tr key={idx}>
+                                <td className="px-3 py-2 whitespace-nowrap">{record.type}</td>
+                                <td className="px-3 py-2 whitespace-nowrap font-mono bg-gray-50 rounded">{record.host}</td>
+                                <td className="px-3 py-2">
+                                  <pre className="whitespace-pre-wrap break-all font-mono bg-gray-50 p-1 rounded">{record.value}</pre>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">{record.priority || 'N/A'}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{record.ttl || 'Default'}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <Button 
+                                    type="button" 
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(`${record.type} ${record.host} ${record.value}${record.priority ? ' ' + record.priority : ''}`);
+                                      toast({ title: "Copied!", description: "Record details copied to clipboard." });
+                                    }}
+                                  >
+                                    Copy
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {currentProviderInstructions?.recordSpecificTips && (
+                        <div className="mt-4 space-y-2">
+                          {dnsRecordsToDisplay.map(record => {
+                            const tips = currentProviderInstructions.recordSpecificTips?.[record.type as keyof ProviderInstruction['recordSpecificTips']];
+                            if (tips && tips.length > 0) {
+                              return (
+                                <div key={`${record.type}-${record.host}-tips`} className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                  <h6 className="font-semibold text-blue-700">Tips for {record.type} records with {currentProviderInstructions.displayName}:</h6>
+                                  <ul className="list-disc list-inside text-xs text-blue-600 space-y-1">
+                                    {tips.map((tip, tipIdx) => <li key={tipIdx}>{tip}</li>)}
+                                  </ul>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {renderVerificationUI()}
+
+                {(currentProviderInstructions || dnsRecordsToDisplay.length > 0) && (
+                     <Button 
+                        type="button" 
+                        className="w-full mt-4" 
+                        onClick={() => { 
+                            setCurrentStep(1);
+                            setFormData({});
+                            setResultText(null);
+                            setDnsRecordsToDisplay([]);
+                            setCurrentProviderInstructions(null);
+                            setErrorOccurred(false);
+                        }}
+                    >
+                        Configure Another Domain / Start Over
+                    </Button>
+                )}
+
               </div>
             )}
           </CardContent>
           <CardFooter className="flex flex-col items-start pt-6">
-            {/* Navigation Buttons Container - ensures consistent layout */}
             {!resultText && (
               <div className="flex w-full justify-between mb-4">
                 {currentStep > 1 ? (
@@ -682,7 +1080,6 @@ Error: ${errorMessage}`);
                     Previous
                   </Button>
                 ) : (
-                  /* Placeholder div to keep "Next" button to the right if no "Previous" button */
                   <div />
                 )}
 
@@ -694,12 +1091,11 @@ Error: ${errorMessage}`);
               </div>
             )}
 
-            {/* Submit button - shown on the last data input step or if results are shown */}
             {(currentStep === TOTAL_STEPS || resultText) && (
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading || (currentStep === TOTAL_STEPS && !formData.domain?.trim())} // Disable if domain is empty on domain step
+                  disabled={isLoading || (currentStep === TOTAL_STEPS && !formData.domain?.trim())}
                 >
                   {isLoading ? 'Checking...' : (resultText ? 'Start Over / Check Another' : 'Check Domain Provider')}
                 </Button>

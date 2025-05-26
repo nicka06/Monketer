@@ -33,66 +33,66 @@
 │   │   │       - Provides utility function `determineTierFromPriceId`.
 │   │   │       Usage: Used by webhook handler and other subscription-related components.
 │   │   │
-│   ├── 📁 .temp/  
-│   │   Purpose: Supabase CLI version tracking or temporary build files for backend.
-│   │   Details: (Clarify based on actual use)
-│   │
-│   ├── 📁 functions/ 
-│   │   ├── 📁 _shared/
-│   │   │   Purpose: Contains shared code, types, or utilities used by multiple backend functions.
-│   │   │   Details: For example, `cors.ts` for CORS headers, `lib/` for more complex shared utilities.
-│   │   │   Usage: Imported by other functions to reduce code duplication.
-│   │   │   Files:
-│   │   │     *   **`cors.ts`**
-│   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers for Deno functions.
-│   │   │         *   Details: Exports a `corsHeaders` object: `{"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS"}`. The wildcard origin is suitable for development but should be more restrictive in production.
-│   │   │         *   Usage: Imported directly by Deno functions (e.g., `save-email-setup-form`) for simple OPTIONS request handling and adding permissive CORS headers.
-│   │   │   ├── 📁 lib/
-│   │   │   │   ├── 📄 constants.ts
-│   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
-│   │   │   │   │   Details:
-│   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173, localhost:8080).
-│   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers. It returns the `requestOrigin` if it's in `ALLOWED_ORIGINS`, otherwise defaults to the primary production origin. This is the recommended method.
-│   │   │   │   │   - Specifies allowed HTTP headers (authorization, x-client-info, apikey, content-type) and methods (GET, POST, PUT, DELETE, OPTIONS).
-│   │   │   │   │   - Sets `Access-Control-Max-Age` to `86400` (24 hours) for preflight request caching.
-│   │   │   │   │   - Includes legacy `corsHeaders` with a wildcard `Access-Control-Allow-Origin: '*'`, which is deprecated but maintained for backward compatibility.
-│   │   │   │   │   Usage:
-│   │   │   │   │   - `corsHeadersFactory` is imported and used by multiple Supabase Edge Functions (`clarify-user-intent`, `generate-email-changes`, `manage-pending-changes`, `send-preview-email`) to set response headers for main requests, error responses, and OPTIONS preflight requests.
-│   │   │   │   │   - The legacy `corsHeaders` is directly used for OPTIONS preflight request handling in `generate-email-changes/index.ts`.
-│   │   │   │   │
-│   │   │   │   ├── 📄 uuid-utils.ts
-│   │   │   │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-│   │   │   │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-│   │   │   │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-│   │   │   │   │
-│   │   │   │   └── 📄 uuid.ts
-│   │   │   │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
-│   │   │   │       Details: Uses `v4 as uuidv4` imported from a URL (`https://esm.sh/uuid`) for Deno/browser compatibility. A `@ts-ignore` comment is used to suppress a local TypeScript linter error related to resolving types from the URL, as Deno handles this at runtime. Exports `generateId()`.
-│   │   │   │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations that might have used direct npm package imports.
-│   │   │   │
-│   │   │   └── 📁 services/
-│   │   │       ├── 📄 differ.ts
-│   │   │       │   Purpose: Backend-specific adapter for the V2 template diffing service.
-│   │   │       │   Details:
-│   │   │       │   - Extends `DifferV2Core` from `src/shared/services/differ.ts`.
-│   │   │       │   - Currently provides no backend-specific overrides, simply inherits core diffing logic.
-│   │   │       │   - Exports `DifferV2` class.
-│   │   │       │   Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
-│   │   │       │
-│   │   │       ├── 📄 htmlGenerator.ts
-│   │   │       │   Purpose: Backend adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
-│   │   │       │   Details:
-│   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the backend Deno environment.
-│   │   │       │   - Does not override any core methods, simply inherits the HTML generation logic.
-│   │   │       │   - **This means it includes the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available in the HTML stored in the database.**
-│   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
-│   │   │       │   Usage: Used by backend functions like `manage-pending-changes` to generate the final HTML for accepted email templates before saving to the database.
-│   │   │       │
-│   │   │       └── 📄 semanticParser.ts 
-│   │   │           Purpose: Backend adapter for V2 email HTML semantic parsing (if applicable, or if shared and used by backend).
-│   │   │           Details: (Details would depend on its actual backend use)
-│   │   │           Usage: (Usage would depend on its actual backend use)
+│   │   ├── 📁 .temp/  
+│   │   │   Purpose: Supabase CLI version tracking or temporary build files for backend.
+│   │   │   Details: (Clarify based on actual use)
 │   │   │
+│   │   ├── 📁 functions/ 
+│   │   │   ├── 📁 _shared/
+│   │   │   │   Purpose: Contains shared code, types, or utilities used by multiple backend functions.
+│   │   │   │   Details: For example, `cors.ts` for CORS headers, `lib/` for more complex shared utilities.
+│   │   │   │   Usage: Imported by other functions to reduce code duplication.
+│   │   │   │   Files:
+│   │   │   │     *   **`cors.ts`**
+│   │   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers for Deno functions.
+│   │   │   │         *   Details: Exports a `corsHeaders` object: `{"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS"}`. The wildcard origin is suitable for development but should be more restrictive in production.
+│   │   │   │         *   Usage: Imported directly by Deno functions (e.g., `save-email-setup-form`) for simple OPTIONS request handling and adding permissive CORS headers.
+│   │   │   │   ├── 📁 lib/
+│   │   │   │   │   ├── 📄 constants.ts
+│   │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
+│   │   │   │   │   │   Details:
+│   │   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173, localhost:8080).
+│   │   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers. It returns the `requestOrigin` if it's in `ALLOWED_ORIGINS`, otherwise defaults to the primary production origin. This is the recommended method.
+│   │   │   │   │   │   - Specifies allowed HTTP headers (authorization, x-client-info, apikey, content-type) and methods (GET, POST, PUT, DELETE, OPTIONS).
+│   │   │   │   │   │   - Sets `Access-Control-Max-Age` to `86400` (24 hours) for preflight request caching.
+│   │   │   │   │   │   - Includes legacy `corsHeaders` with a wildcard `Access-Control-Allow-Origin: '*'`, which is deprecated but maintained for backward compatibility.
+│   │   │   │   │   │   Usage:
+│   │   │   │   │   │   - `corsHeadersFactory` is imported and used by multiple Supabase Edge Functions (`clarify-user-intent`, `generate-email-changes`, `manage-pending-changes`, `send-preview-email`) to set response headers for main requests, error responses, and OPTIONS preflight requests.
+│   │   │   │   │   │   - The legacy `corsHeaders` is directly used for OPTIONS preflight request handling in `generate-email-changes/index.ts`.
+│   │   │   │   │   │
+│   │   │   │   │   ├── 📄 uuid-utils.ts
+│   │   │   │   │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+│   │   │   │   │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+│   │   │   │   │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
+│   │   │   │   │   │
+│   │   │   │   │   └── 📄 uuid.ts
+│   │   │   │   │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
+│   │   │   │   │       Details: Uses `v4 as uuidv4` imported from a URL (`https://esm.sh/uuid`) for Deno/browser compatibility. A `@ts-ignore` comment is used to suppress a local TypeScript linter error related to resolving types from the URL, as Deno handles this at runtime. Exports `generateId()`.
+│   │   │   │   │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations that might have used direct npm package imports.
+│   │   │   │   │
+│   │   │   │   └── 📁 services/
+│   │   │   │       ├── 📄 differ.ts
+│   │   │   │       │   Purpose: Backend-specific adapter for the V2 template diffing service.
+│   │   │   │       │   Details:
+│   │   │   │       │   - Extends `DifferV2Core` from `src/shared/services/differ.ts`.
+│   │   │   │       │   - Currently provides no backend-specific overrides, simply inherits core diffing logic.
+│   │   │   │       │   - Exports `DifferV2` class.
+│   │   │   │       │   Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
+│   │   │   │       │
+│   │   │   │       ├── 📄 htmlGenerator.ts
+│   │   │   │       │   Purpose: Backend adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
+│   │   │   │       │   Details:
+│   │   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the backend Deno environment.
+│   │   │   │       │   - Does not override any core methods, simply inherits the HTML generation logic.
+│   │   │   │       │   - **This means it includes the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available in the HTML stored in the database.**
+│   │   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
+│   │   │   │       │   Usage: Used by backend functions like `manage-pending-changes` to generate the final HTML for accepted email templates before saving to the database.
+│   │   │   │       │
+│   │   │   │       └── 📄 semanticParser.ts 
+│   │   │   │           Purpose: Backend adapter for V2 email HTML semantic parsing (if applicable, or if shared and used by backend).
+│   │   │   │           Details: (Details would depend on its actual backend use)
+│   │   │   │           Usage: (Usage would depend on its actual backend use)
+│   │   │   │
 │   │   ├── 📁 clarify-user-intent/
 │   │   │   └── 📄 index.ts
 │   │   │       Purpose: AI conversation middleware, served as a Supabase Edge Function.
@@ -136,7 +136,7 @@
 │   │   │   │     - Receives form data (business area, goals, scenarios, default sender, domain, sendTimeline).
 │   │   │   │     - Authenticates the user.
 │   │   │   │     - Validates required fields like domain, defaultFromEmail, defaultFromName.
-│   │   │   │     - Upserts data into the `email_setups` table (user_id, domain, business_area, etc., status "pending_dns_config", send_timeline).
+│   │   │   │     - Upserts data into the `email_setups` table (see "Database Schema" section for table details). Key fields set: user_id, domain, business_area, etc., status "pending_dns_config", send_timeline.
 │   │   │   │     - Upserts/deletes `scenario_sender_configs` associated with the `email_setup_id`.
 │   │   │   │   Usage: Called by the frontend when the user submits the initial email setup form.
 │   │   │   │
@@ -149,7 +149,7 @@
 │   │   │   └── 📄 index.ts
 │   │   │       Purpose: Orchestrates the initial DNS configuration steps for a user's domain. All configurations are manual. Primarily focuses on DKIM setup by calling an external mail server API.
 │   │   │       Details:
-│   │   │         - Authenticates the user and retrieves the `email_setups` record by ID.
+│   │   │         - Authenticates the user and retrieves the `email_setups` record by ID (see "Database Schema" for table details).
 │   │   │         - **Idempotency Check:** If `dkim_public_key` column in `email_setups` table contains a valid Base64 key, it is reused.
 │   │   │         - **Calls External Mail Server API:**
 │   │   │           - Makes a POST request to `MAIL_SERVER_DKIM_ENDPOINT` (env var) with `{ domain }`. Expects `MAIL_SERVER_API_SECRET` (env var) for Bearer token authentication.
@@ -161,17 +161,38 @@
 │   │   │           - Generates required DNS records (MX, SPF TXT, DKIM TXT, DMARC TXT).
 │   │   │           - Uses `DEFAULT_MX_VALUE` (env var) or a fallback for the MX record value.
 │   │   │           - Uses `DEFAULT_SPF_VALUE` (env var) or a fallback for the SPF record value.
+│   │   │           - Uses `DEFAULT_DMARC_VALUE` (env var) or a fallback for the DMARC record value (e.g., `v=DMARC1; p=none; rua=mailto:dmarc-reports@domain.com`).
 │   │   │           - Constructs the DKIM TXT record value using the (parsed and validated) public key and a DKIM selector (uses existing `dkim_selector` from DB or defaults to "default"). If parsing/validation/API call fails, a placeholder error value is used in the DKIM DNS record.
-│   │   │         - **Database Update:** Updates the `email_setups` record with:
+│   │   │         - **Database Update:** Updates the `email_setups` record (see "Database Schema" for table details) with fields including:
 │   │   │           - `dns_provider_name` (from user input).
 │   │   │           - `dns_setup_strategy` (always "manual").
 │   │   │           - `dkim_selector` (used or defaulted).
 │   │   │           - `dkim_public_key` (the extracted Base64 key, or `null` if provisioning failed).
 │   │   │           - `dns_records_to_set` (the generated DNS records).
 │   │   │           - `status` (always "awaiting_manual_dns_config").
+│   │   │           - `mx_record_value`, `spf_record_value`, `dmarc_record_value` are populated with the actual values used.
+│   │   │           - `mx_status`, `spf_status`, `dkim_status`, `dmarc_status`, `overall_dns_status` are initialized to 'pending'.
 │   │   │       Input: `{ emailSetupId: string, providerInfo: { name: string, nameservers: string[] } }`
 │   │   │       Output: `{ dnsSetupStrategy: "manual", dkimSelector: string, requiredDnsRecords: DnsRecord[], message: string }`
-│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_API_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`.
+│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_API_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`, `DEFAULT_DMARC_VALUE`.
+│   │   │
+│   │   ├── 📁 verify-dns-records/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Supabase Edge Function to verify DNS records (MX, SPF, DKIM, DMARC) for a given domain setup.
+│   │   │       Details:
+│   │   │         - Authenticates the user.
+│   │   │         - Accepts an `emailSetupId`.
+│   │   │         - Fetches the `email_setups` record to get the domain and expected DNS record values (`mx_record_value`, `spf_record_value`, `dmarc_record_value`, `dkim_public_key`, `dkim_selector`).
+│   │   │         - Uses `Deno.resolveDns(recordName, recordType)` to query actual DNS records from public resolvers.
+│   │   │         - **MX Check**: Compares the exchange part of resolved MX records against `mx_record_value`.
+│   │   │         - **SPF Check**: Looks for a TXT record starting with "v=spf1" that contains the `spf_record_value`.
+│   │   │         - **DKIM Check**: Looks for a TXT record at `dkim_selector._domainkey.domain` containing the `p=<dkim_public_key>`.
+│   │   │         - **DMARC Check**: Looks for a TXT record at `_dmarc.domain` starting with "v=DMARC1" that contains the `dmarc_record_value`.
+│   │   │         - Updates the `email_setups` table with the status for each record (`mx_status`, `spf_status`, `dkim_status`, `dmarc_status` - values: 'verified', 'failed', 'pending', 'error'), the `overall_dns_status`, `last_verification_attempt_at`, and `verification_failure_reason`.
+│   │   │         - Returns the detailed verification statuses.
+│   │   │       Input: `{ "emailSetupId": "uuid" }`
+│   │   │       Output: `{ overallDnsStatus, mxStatus, spfStatus, dkimStatus, dmarcStatus, lastVerificationAttemptAt, verificationFailureReason }` (see function interfaces for `DnsVerificationStatus` details).
+│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`.
 │   │   │
 │   ├── 📁 supabase-admin-example/  
 │   │   └── 📄 index.ts
@@ -217,6 +238,28 @@
 │   │   │   - Likely orchestrates different steps of the onboarding (e.g., form, DNS config).
 │   │   │   - Uses `EmailSetupContext` and relevant components.
 │   │   │   Usage: Entry point for users setting up their email.
+│   │   │
+│   │   └── 📄 DomainInput.tsx
+│   │       Purpose: React page component for the multi-step email setup form, including domain input, DNS provider detection, display of DNS records, and DNS verification.
+│   │       Details:
+│   │       - Manages a multi-step form (business area, goals, scenarios, default sender, domain) using `currentStep` state.
+│   │       - `formData` state stores all collected information.
+│   │       - `handleSubmit` function:
+│   │         - Calls `save-email-setup-form` Supabase function to save preferences and get an `emailSetupId`.
+│   │         - Stores `emailSetupId` in state.
+│   │         - Calls `get-domain-provider` Supabase function.
+│   │         - Calls `initiate-email-setup` Supabase function to get DNS records.
+│   │         - Displays required DNS records (`dnsRecordsToDisplay`) and provider-specific instructions (`currentProviderInstructions` from `dns-provider-instructions.ts`).
+│   │       - **DNS Verification Logic:**
+│   │         - State variables: `emailSetupId`, `verificationStatus` (object with `overall`, `mx`, `spf`, `dkim`, `dmarc` statuses), `isVerifying`, `lastVerificationTime`, `verificationError`.
+│   │         - `handleVerifyDns` async function: Calls the `verify-dns-records` Supabase function, updates verification state, and shows toasts.
+│   │         - `renderVerificationUI` function: Renders a status banner (color-coded by `verificationStatus.overall`), individual record statuses, last check time, errors, and a "Verify DNS Records" button with loading state.
+│   │         - `useEffect` hook: 
+│   │           - Triggers an initial call to `handleVerifyDns` if `emailSetupId` is present and verification hasn't started.
+│   │           - Sets up a 5-minute polling interval to call `handleVerifyDns` if status is 'pending' or 'partially_verified'.
+│   │           - Clears interval on unmount or if status is resolved/failed.
+│   │       - Uses `@/components/ui/*` for UI elements and `@/hooks/use-toast` for notifications.
+│   │       Usage: Central page for the user to input all initial email setup data and then view and verify their DNS configuration.
 │   │
 │   ├── 📁 services/
 │   │   └── 📄 api.ts
@@ -280,3 +323,67 @@
 - The `semanticParser.ts` under `src/backend/functions/_shared/services/` was noted as a "Frontend adapter" in the original read. I've kept it there but added a note. If it's purely for frontend, it should be in `src/frontend/services/`. If it's a shared core or a backend adapter, its description should reflect that. The one under `src/shared/services/` is correctly labeled as "Shared Core".
 - Added placeholder entries for typical frontend files and a shared `emailSetupTypes.ts` based on the project's needs. These would need to be confirmed or created.
 ---
+
+📄 dns-provider-instructions.ts
+   Purpose: Stores structured DNS setup instructions for various common DNS providers.
+   Details:
+     - Exports `DNS_PROVIDER_INSTRUCTIONS`: An array of `ProviderInstruction` objects.
+     - Each `ProviderInstruction` contains:
+       - `id`: Normalized string identifier (e.g., "cloudflare", "godaddy").
+       - `displayName`: User-friendly provider name.
+       - `logoUrl` (optional): Path/URL to a provider logo.
+       - `dnsManagementUrl` (optional): Direct link to the provider's DNS management page.
+       - `generalNotes` (optional): Array of general tips for the provider.
+       - `instructionSteps`: Array of `ProviderInstructionStep` objects (title, description, optional link).
+       - `uiFieldNames` (optional): Object mapping generic DNS field names (host, value, etc.) to provider-specific UI labels (e.g., "Name", "Content").
+       - `recordSpecificTips` (optional): Object with tips for MX, TXT, SPF, DKIM, DMARC records.
+     - Includes example data for Cloudflare, GoDaddy, and a generic "unknown" provider fallback.
+     - Exports `getInstructionsForProvider(providerName)`: A helper function that takes a provider name string, normalizes it, and returns the corresponding `ProviderInstruction` object or the "unknown" provider instructions if not found.
+   Usage: Intended to be imported by frontend components (e.g., a new DNS setup instructions page) to display tailored guidance to users based on their detected or selected DNS provider.
+
+## Database Schema
+
+This section outlines the structure of key tables in the Supabase PostgreSQL database.
+
+### ሠ Table: `email_setups`
+Purpose: Stores information related to a user's email domain setup process. This includes initial configuration, DNS settings, and verification status.
+Details:
+  - `id`: `uuid` (Primary Key) - Unique identifier for the email setup record.
+  - `user_id`: `uuid` (Foreign Key to `auth.users`) - The user who initiated this setup.
+  - `domain`: `text` - The domain name the user is setting up (e.g., "example.com").
+  - `business_area`: `text` - User-provided business area.
+  - `business_subcategory`: `text` - User-provided business subcategory.
+  - `goals`: `TEXT[]` (Array of text) - User-selected goals for using the email service.
+  - `send_timeline`: `text` - User-indicated timeline for starting to send emails.
+  - `dns_provider_name`: `text` - Name of the DNS provider (e.g., "Cloudflare", "GoDaddy").
+  - `dns_setup_strategy`: `text` - The strategy for DNS setup (e.g., "manual", "automated"). Currently always "manual".
+  - `default_from_name`: `text` - Default "From" name for emails sent from this domain.
+  - `default_from_email`: `text` - Default "From" email address (e.g., "contact@example.com").
+  - `email_scenarios`: `TEXT[]` (Array of text) - User-selected email scenarios.
+  - `status`: `text` - General status of the email setup process (e.g., "pending_dns_config", "active", "error").
+  - `dns_records_to_set`: `jsonb` - JSON object containing the DNS records the user needs to set (e.g., MX, SPF, DKIM, DMARC with host, type, value).
+  - `provider_api_credentials_status`: `text` - Status related to DNS provider API credential validation (if applicable).
+  - `error_message`: `text` - Stores any error message related to the setup process.
+  - `created_at`: `timestamp with time zone` - Timestamp of creation.
+  - `updated_at`: `timestamp with time zone` - Timestamp of last update.
+  - **Existing DNS/DKIM Fields:**
+    - `dkim_selector`: `text` - The DKIM selector used (e.g., "default").
+    - `dkim_public_key`: `text` - The public part of the DKIM key (Base64 encoded).
+  - **New Fields for DNS Record Values & Verification (Phase 1 Plan):**
+    - `mx_record_value`: `TEXT` - Expected MX record value (e.g., "mx.yourmailserver.com").
+    - `spf_record_value`: `TEXT` - Expected SPF record value (e.g., "v=spf1 include:yourmailserver.com ~all").
+    - `dmarc_record_value`: `TEXT` - Expected DMARC record value (e.g., "v=DMARC1; p=none; rua=mailto:dmarc-reports@yourdomain.com").
+    - `mx_status`: `TEXT` - Verification status for MX record (e.g., 'pending', 'verified', 'failed'). Default: 'pending'.
+    - `spf_status`: `TEXT` - Verification status for SPF record. Default: 'pending'.
+    - `dkim_status`: `TEXT` - Verification status for DKIM record. Default: 'pending'.
+    - `dmarc_status`: `TEXT` - Verification status for DMARC record. Default: 'pending'.
+    - `overall_dns_status`: `TEXT` - Overall DNS verification status (e.g., 'pending', 'partially_verified', 'verified', 'failed_to_verify'). Default: 'pending'.
+    - `last_verification_attempt_at`: `TIMESTAMPTZ` - Timestamp of the last DNS verification attempt.
+    - `verification_failure_reason`: `TEXT` - Stores any error message if the overall verification process fails.
+Usage:
+  - Read and written by `save-email-setup-form` to store initial data.
+  - Read and updated by `initiate-email-setup` to store generated DNS records, DKIM key, and initialize verification statuses.
+  - Will be read and updated by the new `verify-dns-records` function to check and store DNS verification statuses.
+  - Read by frontend components to display setup progress and DNS instructions.
+
+## PROJECT STRUCTURE MAP
