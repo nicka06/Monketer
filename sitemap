@@ -215,14 +215,27 @@
 │   │   │   - Likely includes state management for form fields and validation.
 │   │   │   Usage: Integrated into the onboarding flow pages.
 │   │   │
-│   │   └── 📄 DnsConfigurationGuide.tsx
-│   │       Purpose: React component to display DNS records and guide users on manual configuration.
-│   │       Details:
-│   │       - Takes DNS records (MX, SPF, DKIM, DMARC) as props.
-│   │       - Presents them clearly to the user.
-│   │       - May include instructions or links to common DNS provider help pages.
-│   │       Usage: Shown after `initiate-email-setup` returns, as all setups are manual.
-│   │
+│   │   ├── 📄 DnsConfigurationGuide.tsx
+│   │   │   Purpose: React component to display DNS records and guide users on manual configuration.
+│   │   │   Details:
+│   │   │   - Takes DNS records (MX, SPF, DKIM, DMARC) as props.
+│   │   │   - Presents them clearly to the user.
+│   │   │   - May include instructions or links to common DNS provider help pages.
+│   │   │   Usage: Shown after `initiate-email-setup` returns, as all setups are manual.
+│   │   │
+│   │   ├── 📄 Navbar.tsx
+│   │   │   Purpose: Navigation bar for the application, themed for the jungle look.
+│   │   │   Details: Provides main site navigation links. Styled with a dark green background, white text, and yellow accents to fit the jungle theme.
+│   │   │   Usage: Used in `Index.tsx` and potentially other authenticated pages.
+│   │   │
+│   │   ├── 📄 Footer.tsx
+│   │   │   Purpose: Site-wide footer component, themed for the jungle look and compacted.
+│   │   │   Details:
+│   │   │   - Displays centered links for "Privacy Policy" and "Terms of Service".
+│   │   │   - Includes the centered text "a westwood innovation" in a smaller font below the links.
+│   │   │   - Styled with a dark background and reduced vertical padding.
+│   │   │   Usage: Used in `Index.tsx`.
+│   │   │
 │   ├── 📁 contexts/
 │   │   └── 📄 EmailSetupContext.tsx
 │   │       Purpose: React context to manage state related to the email setup process.
@@ -232,6 +245,18 @@
 │   │       Usage: Wraps parts of the application involved in email setup.
 │   │
 │   ├── 📁 pages/
+│   │   ├── 📄 Index.tsx
+│   │   │   Purpose: Main landing page component for the application.
+│   │   │   Details:
+│   │   │   - Serves as the entry point for users visiting the root URL.
+│   │   │   - Displays a jungle-themed layout (green background) with a themed main navigation bar.
+│   │   │   - Content area features a large `<textarea>` (no label) for business description input on the left, and a placeholder monkey image on the right.
+│   │   │   - The `<textarea>` has placeholder text "Explain your business. ex: An ecommerce store selling candles and soaps".
+│   │   │   - A button with text "make me an email marketing machine!" is displayed below the textarea.
+│   │   │   - The Hero, Features, and Testimonials sections have been removed.
+│   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
+│   │   │   Usage: Rendered at the root path ('/') for unauthenticated users.
+│   │   │
 │   │   ├── 📄 EmailOnboardingPage.tsx
 │   │   │   Purpose: Main page for the email setup onboarding flow.
 │   │   │   Details:
@@ -385,5 +410,4 @@ Usage:
   - Read and updated by `initiate-email-setup` to store generated DNS records, DKIM key, and initialize verification statuses.
   - Will be read and updated by the new `verify-dns-records` function to check and store DNS verification statuses.
   - Read by frontend components to display setup progress and DNS instructions.
-
 ## PROJECT STRUCTURE MAP

@@ -43,15 +43,15 @@ const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-sm z-50 shadow-sm">
+    <nav className="fixed top-0 left-0 w-full bg-green-800/90 backdrop-blur-sm z-50 shadow-md">
       <div className="w-full px-0">
         {/* Main navigation bar */}
         <div className="flex items-center justify-between h-16 relative">
           {/* Brand section with logo */}
           <div className="flex items-center pl-6 sm:pl-8">
             <Link to="/" className="flex items-center">
-              <Mail className="h-8 w-8 text-monketer-purple" />
-              <span className="ml-2 text-lg font-semibold text-gray-900">monketer</span>
+              <Mail className="h-8 w-8 text-yellow-400" />
+              <span className="ml-2 text-lg font-semibold text-white">monketer</span>
             </Link>
           </div>
           
@@ -59,7 +59,7 @@ const Navbar = () => {
           <div className="flex md:hidden absolute right-6">
             <button
               type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-monketer-purple"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-300 hover:text-yellow-400"
               aria-controls="mobile-menu"
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -80,10 +80,10 @@ const Navbar = () => {
           
           {/* Desktop navigation - Hidden on mobile */}
           <div className="hidden md:flex md:items-center md:space-x-4 absolute right-6 sm:right-8">
-            <Button variant="ghost" asChild>
+            <Button variant="ghost" className="text-white hover:bg-green-700 hover:text-yellow-300" asChild>
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button className="bg-monketer-purple hover:bg-monketer-purple-dark text-white" asChild>
+            <Button className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
               <Link to="/signup">Sign up</Link>
             </Button>
           </div>
@@ -93,11 +93,11 @@ const Navbar = () => {
       {/* Mobile menu - Conditionally rendered based on state */}
       {mobileMenuOpen && (
         <div className="md:hidden" id="mobile-menu">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white shadow-lg">
-            <Button variant="ghost" className="w-full justify-center" asChild>
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-green-800 shadow-lg">
+            <Button variant="ghost" className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300" asChild>
               <Link to="/login">Sign in</Link>
             </Button>
-            <Button className="w-full justify-center bg-monketer-purple hover:bg-monketer-purple-dark text-white" asChild>
+            <Button className="w-full justify-center bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
               <Link to="/signup">Sign up</Link>
             </Button>
           </div>
