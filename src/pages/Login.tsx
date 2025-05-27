@@ -50,34 +50,34 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-50">
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-green-700 text-white">
       {/* Header section with logo and title */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Brand logo and name */}
         <div className="flex justify-center">
           <Link to="/" className="flex items-center">
-            <Mail className="h-10 w-10 text-monketer-purple" />
-            <span className="ml-2 text-2xl font-semibold text-gray-900">monketer</span>
+            <Mail className="h-10 w-10 text-yellow-400" />
+            <span className="ml-2 text-2xl font-semibold text-white">monketer</span>
           </Link>
         </div>
         
         {/* Page title and signup link */}
-        <h2 className="mt-10 text-2xl font-bold leading-9 tracking-tight text-gray-900">Sign in to your account</h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <h2 className="mt-10 text-center text-3xl font-bold tracking-tight text-yellow-400">Welcome Back to the Jungle!</h2>
+        <p className="mt-2 text-center text-sm text-gray-300">
           Don't have an account?{' '}
-          <Link to="/signup" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
-            Sign up
+          <Link to="/signup" className="font-semibold text-yellow-400 hover:text-yellow-300 underline">
+            Sign up here
           </Link>
         </p>
       </div>
 
       {/* Login form container */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-green-800 bg-opacity-80 py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Email field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-200">
                 Email address
               </label>
               <div className="mt-1">
@@ -87,17 +87,18 @@ const Login = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
+                  className="appearance-none block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent sm:text-sm text-white"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
+                  placeholder="you@example.com"
                 />
               </div>
             </div>
 
             {/* Password field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-200">
                 Password
               </label>
               <div className="mt-1">
@@ -107,32 +108,33 @@ const Login = () => {
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-monketer-purple focus:border-monketer-purple sm:text-sm"
+                  className="appearance-none block w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent sm:text-sm text-white"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
+                  placeholder="••••••••"
                 />
               </div>
             </div>
 
             {/* Remember me and forgot password row */}
             <div className="flex items-center justify-between">
-              {/* Remember me checkbox - Note: Functionality not yet implemented */}
+              {/* Remember me checkbox */}
               <div className="flex items-center">
                 <input
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
+                  className="h-4 w-4 text-yellow-400 focus:ring-yellow-500 border-gray-500 rounded bg-gray-700"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
                   Remember me
                 </label>
               </div>
 
-              {/* Forgot password link - Note: Functionality not yet implemented */}
+              {/* Forgot password link */}
               <div className="text-sm">
-                <a href="#" className="font-medium text-monketer-purple hover:text-monketer-purple-dark">
+                <a href="#" className="font-semibold text-yellow-400 hover:text-yellow-300 underline">
                   Forgot your password?
                 </a>
               </div>
@@ -142,10 +144,10 @@ const Login = () => {
             <div>
               <Button 
                 type="submit"
-                className="w-full bg-monketer-purple hover:bg-monketer-purple-dark text-white"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-green-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out transform hover:scale-105"
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : 'Sign in'}
+                {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </div>
           </form>

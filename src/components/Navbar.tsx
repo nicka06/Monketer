@@ -102,9 +102,6 @@ const Navbar = () => {
                 <Button variant="ghost" className="text-white hover:bg-green-700 hover:text-yellow-300" asChild>
                   <Link to="/login">Sign in</Link>
                 </Button>
-                <Button className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
-                  <Link to="/signup">Sign up</Link>
-                </Button>
               </>
             )}
           </div>
@@ -127,9 +124,6 @@ const Navbar = () => {
               <>
                 <Button variant="ghost" className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300" asChild>
                   <Link to="/login">Sign in</Link>
-                </Button>
-                <Button className="w-full justify-center bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
-                  <Link to="/signup">Sign up</Link>
                 </Button>
               </>
             )}

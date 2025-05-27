@@ -6,6 +6,7 @@ import { AuthProvider } from "../features/auth/useAuth";
 import { useAuth } from "../features/auth/useAuth";
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { FORM_FLOW_ORDER } from '@/core/constants';
 import Index from "../pages/Index";
 import Login from "../pages/Login";
 import Signup from "../pages/Signup";
@@ -49,30 +50,30 @@ const AppRoutes = () => {
   const { user, loading, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const initialRedirectDone = useRef(false);
+  const isNavigatingFormFlow = useRef(false);
 
   useEffect(() => {
-    if (loading) return; 
-
-    if (!user) {
-      initialRedirectDone.current = false;
-    }
+    if (loading) return;
 
     if (location.state?.fromFormFlow) {
-      const { state, ...rest } = location; 
-      const newLocationState = { ...state }; 
-      delete newLocationState.fromFormFlow; 
+      isNavigatingFormFlow.current = true;
+      const { state, ...rest } = location;
+      const newLocationState = { ...state };
+      delete newLocationState.fromFormFlow;
       navigate(location.pathname, { replace: true, state: Object.keys(newLocationState).length > 0 ? newLocationState : null });
-      return; 
+      return;
+    }
+
+    if (isNavigatingFormFlow.current) {
+      isNavigatingFormFlow.current = false;
+      return;
     }
 
     if (user && user.id) {
       const fetchAndRedirect = async () => {
         const { data: emailSetup, error } = await supabase
           .from('email_setups')
-          // Reverting to include all anticipated columns, even if they don't exist in DB yet.
-          // This will cause runtime DB errors until columns are created.
-          .select('form_complete, business_description, goals_form_raw_text, selected_emails_data, clarification_data, website_status_data, dns_confirmation_data, website_tracking_data') 
+          .select('form_complete, business_description, goals_form_raw_text') 
           .eq('user_id', user.id)
           .single();
 
@@ -83,67 +84,42 @@ const AppRoutes = () => {
 
         if (emailSetup) {
           if (emailSetup.form_complete === true) {
-            // If form is marked fully complete, redirect to dashboard if user is on a form page or homepage.
-            if (location.pathname !== '/' && location.pathname !== '/optional-signup') {
-              console.log("App.tsx: Form complete, on form page or /, redirecting to /dashboard");
+            // If form is marked fully complete, redirect to dashboard if user is on a relevant form page.
+            const relevantFormPages = FORM_FLOW_ORDER.filter(p => p !== '/'); // Exclude homepage from auto-redirect to dashboard
+            if (relevantFormPages.includes(location.pathname)) {
+              console.log("App.tsx: Form complete, on a form page (not /), redirecting to /dashboard");
               navigate('/dashboard', { replace: true });
+              return; // Exit after navigation
             }
-            return; // Form is complete, and user is not on a page needing redirection.
+            // User is authenticated, form complete, and not on a page that needs redirection from.
+            return; 
           }
 
           // Form is NOT complete. Determine the earliest incomplete step.
-          if (!initialRedirectDone.current) {
-            let targetResumePath = null;
-
-            if (!emailSetup.business_description) {
-              targetResumePath = '/';
-            } else if (!emailSetup.goals_form_raw_text) {
-              targetResumePath = '/goals-form';
-            // The following checks will result in undefined for now, leading to /select-emails if the above are filled.
-            // This maintains current behavior until DB columns are added.
-            } else if (!emailSetup.selected_emails_data) { 
-              targetResumePath = '/select-emails';
-            } else if (!emailSetup.website_status_data) {
-                targetResumePath = '/website-status';
-            } else if (!emailSetup.clarification_data) {
-              targetResumePath = '/info-clarification';
-            } else if (!emailSetup.dns_confirmation_data) {
-                targetResumePath = '/dns-confirmation';
-            } else if (!emailSetup.website_tracking_data) {
-                targetResumePath = '/website-tracking';
-            } else {
-                // All known data fields are filled, but form_complete is still false.
-                // This implies the very last step's logic to set form_complete=true hasn't run or there is a new unhandled step.
-                // Default to the last known step in the sequence from FORM_FLOW_ORDER
-                const { FORM_FLOW_ORDER } = await import('@/core/constants'); // Dynamically import if not already available
-                targetResumePath = FORM_FLOW_ORDER[FORM_FLOW_ORDER.length -1] || '/'; 
-            }
-            
-            if (targetResumePath && location.pathname !== targetResumePath) {
-              console.log(`App.tsx (Initial): Form incomplete. Resuming to earliest incomplete step: ${targetResumePath}`);
-              navigate(targetResumePath, { replace: true });
-              initialRedirectDone.current = true; // Set flag after the initial redirect attempt
-              return; // Return after navigation to prevent further checks in this effect run
-            } else if (targetResumePath && location.pathname === targetResumePath) {
-              // User is already on the correct earliest incomplete step page
-              initialRedirectDone.current = true; // Also set flag here
-            }
-            // If targetResumePath is null, it means all checks passed, or it's a new state.
-            // We should still mark initial check as done if we reached here for a logged-in user.
-            initialRedirectDone.current = true;
+          let targetResumePath = null;
+          if (!emailSetup.business_description) {
+            targetResumePath = '/';
+          } else if (!emailSetup.goals_form_raw_text) {
+            targetResumePath = '/goals-form';
+          } else {
+            // If business_description and goals_form_raw_text are present,
+            // the next step in the implemented flow is /select-emails.
+            targetResumePath = '/select-emails';
           }
+          
+          if (targetResumePath && location.pathname !== targetResumePath) {
+            console.log(`App.tsx: Form incomplete. Resuming to earliest incomplete step: ${targetResumePath} from ${location.pathname}`);
+            navigate(targetResumePath, { replace: true });
+            return; 
+          } 
 
         } else { // No emailSetup record found for this authenticated user.
-          if (!initialRedirectDone.current) {
-            if (location.pathname !== '/' && location.pathname !== '/optional-signup') {
-              console.log("App.tsx (Initial): Auth user, no email_setups record. Redirecting to /");
+            const nonEntryFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/optional-signup' && p !== '/business-overview');
+            if (nonEntryFormPages.includes(location.pathname)) {
+              console.log("App.tsx: Auth user, no email_setups record, on a non-entry form page. Redirecting to /");
               navigate('/', { replace: true });
-              initialRedirectDone.current = true; // Set flag
-              return; // Return after navigation
-            } else {
-              initialRedirectDone.current = true; // User is on / or /optional-signup, allow it
+              return; 
             }
-          }
         }
       };
 
@@ -152,9 +128,6 @@ const AppRoutes = () => {
       }
 
     } else if (!loading && !user) { // Not loading, no user (unauthenticated)
-        initialRedirectDone.current = false; // Reset flag when user is not authenticated
-        // Pages that unauthenticated users should be redirected from.
-        // /optional-signup, /business-overview and / are entry points/accessible.
         const UNAUTH_REDIRECT_PAGES = [
           '/goals-form', 
           '/select-emails', 
@@ -164,7 +137,6 @@ const AppRoutes = () => {
           '/info-clarification', 
           '/dns-confirmation', 
           '/website-tracking'
-          // Removed '/business-overview' from this list
         ];
         
         if (UNAUTH_REDIRECT_PAGES.includes(location.pathname)) {
