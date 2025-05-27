@@ -10,8 +10,9 @@
 import Navbar from "@/components/Navbar";
 // Site-wide footer component
 import Footer from "@/components/Footer";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import { FORM_FLOW_ORDER } from '@/core/constants';
 
 /**
  * Index component - Landing page layout
@@ -21,7 +22,14 @@ import { useState } from 'react';
  */
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [businessDescription, setBusinessDescription] = useState('');
+
+  // Simplified navigation: Index only goes to /business-overview
+  const handleNavigateToNextStep = () => {
+    const targetPath = '/optional-signup'; // Changed to navigate directly to optional-signup
+    navigate(targetPath, { replace: true, state: { ...location.state, fromFormFlow: true } });
+  };
 
   const handleGenerateClick = () => {
     if (businessDescription.trim() === '') {
@@ -29,7 +37,7 @@ const Index = () => {
       return;
     }
     localStorage.setItem('pendingBusinessDescription', businessDescription);
-    navigate('/optional-signup');
+    handleNavigateToNextStep();
   };
 
   return (

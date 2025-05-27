@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 [{"column_name":"id","data_type":"uuid"},{"column_name":"user_id","data_type":"uuid"},{"column_name":"domain","data_type":"text"},{"column_name":"business_area","data_type":"text"},{"column_name":"business_subcategory","data_type":"text"},{"column_name":"goals","data_type":"ARRAY"},{"column_name":"send_timeline","data_type":"text"},{"column_name":"dns_provider_name","data_type":"text"},{"column_name":"dns_setup_strategy","data_type":"text"},{"column_name":"dkim_selector","data_type":"text"},{"column_name":"dkim_public_key","data_type":"text"},{"column_name":"status","data_type":"text"},{"column_name":"dns_records_to_set","data_type":"jsonb"},{"column_name":"provider_api_credentials_status","data_type":"text"},{"column_name":"error_message","data_type":"text"},{"column_name":"created_at","data_type":"timestamp with time zone"},{"column_name":"updated_at","data_type":"timestamp with time zone"},{"column_name":"default_from_name","data_type":"text"},{"column_name":"default_from_email","data_type":"text"},{"column_name":"email_scenarios","data_type":"ARRAY"},{"column_name":"mx_record_value","data_type":"text"},{"column_name":"spf_record_value","data_type":"text"},{"column_name":"dmarc_record_value","data_type":"text"},{"column_name":"mx_status","data_type":"text"},{"column_name":"spf_status","data_type":"text"},{"column_name":"dkim_status","data_type":"text"},{"column_name":"dmarc_status","data_type":"text"},{"column_name":"overall_dns_status","data_type":"text"},{"column_name":"last_verification_attempt_at","data_type":"timestamp with time zone"},{"column_name":"verification_failure_reason","data_type":"text"}]// import Navbar from '@/components/Navbar'; // Removed Navbar
 // import Footer from '@/components/Footer'; // Removed Footer
 import { Button } from '@/components/ui/button'; // Assuming Button component is available
 import { useAuth } from "@/features/auth/useAuth"; // Added useAuth import
 import { useToast } from "@/hooks/use-toast"; // Added useToast import
 import { supabase } from '@/integrations/supabase/client'; // Corrected Supabase client import path
+import { FORM_FLOW_ORDER } from '@/core/constants'; // Import the constant
 
 // Placeholder for Supabase auth or user context if needed later
 // import { useAuth } from '@/contexts/AuthContext'; 
 
 const OptionalSignUpPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signUp, user } = useAuth(); // user from useAuth will be populated by onAuthStateChange
+  const location = useLocation();
+  const { signUp, user } = useAuth();
   const { toast } = useToast(); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,39 +24,73 @@ const OptionalSignUpPage: React.FC = () => {
   // Effect to run when signedUpUserId is set (meaning signup was successful)
   // and the user object from context is available.
   useEffect(() => {
-    const saveDescription = async () => {
+    const saveDescriptionAndNavigate = async () => {
       if (signedUpUserId && user && user.id === signedUpUserId) {
         const pendingBusinessDescription = localStorage.getItem('pendingBusinessDescription');
         if (pendingBusinessDescription) {
           console.log('User context updated. Business description to save:', pendingBusinessDescription, 'for user:', signedUpUserId);
-          const { error: upsertError } = await supabase
+          const { error: upsertError, data: upsertData } = await supabase
             .from('email_setups')
             .upsert(
-              { user_id: signedUpUserId, business_description: pendingBusinessDescription },
-              { onConflict: 'user_id' } 
-            );
+              {
+                user_id: signedUpUserId,
+                business_description: pendingBusinessDescription,
+                form_complete: false,
+              },
+              { onConflict: 'user_id' }
+            )
+            .select('user_id, business_description, form_complete');
 
           if (upsertError) {
-            console.error('Error saving business description to Supabase:', upsertError);
+            console.error('Error saving business description to Supabase via useEffect:', upsertError);
             toast({
               title: "Account Created, Save Issue",
               description: "Your account is created, but we couldn\'t save your business idea. You can add it later.",
-              // variant: "warning", // Removed unsupported variant, default will be used
             });
           } else {
+            console.log('Supabase upsert successful via useEffect. Returned data:', upsertData);
             localStorage.removeItem('pendingBusinessDescription');
-            console.log('Business description saved to Supabase for user:', signedUpUserId);
+            console.log('Business description and form step saved to Supabase for user:', signedUpUserId);
           }
+        } else {
+          console.warn("useEffect: No pendingBusinessDescription found in localStorage for user:", signedUpUserId);
         }
-        // Whether description was saved or not, navigate now.
-        navigate('/subscription');
+        navigate('/goals-form', { replace: true, state: { fromFormFlow: true } });
       }
     };
 
     if (signedUpUserId) {
-      saveDescription();
+      saveDescriptionAndNavigate();
     }
-  }, [signedUpUserId, user, navigate, toast]); // Added dependencies
+  }, [signedUpUserId, user, navigate, toast]);
+
+  const handleNavigate = (direction: 'next' | 'previous', action?: 'signup' | 'guest') => {
+    const currentPath = location.pathname;
+    const currentIndex = FORM_FLOW_ORDER.indexOf(currentPath);
+    let targetPath = '';
+
+    if (direction === 'next') {
+      // 'Sign Up & Save' and 'Continue as Guest' both go to goals-form
+      targetPath = '/goals-form'; 
+    } else { // direction === 'previous'
+      if (currentIndex > 0) {
+        targetPath = '/business-overview'; // Always go to /business-overview on previous
+      } else {
+        targetPath = '/'; // Fallback, should ideally be /business-overview if FORM_FLOW_ORDER is correct
+      }
+    }
+
+    if (targetPath) {
+      // For signup, the navigation is handled after signup success in useEffect or handleSignUp
+      if (action === 'signup') {
+        // The actual navigation for signup happens after processing, so this might just be a placeholder
+        // or we let handleSignUp fully manage its own navigation upon success.
+        // For now, handleSignUp and useEffect already navigate to /goals-form.
+        return; 
+      }
+      navigate(targetPath, { replace: true, state: { ...location.state, fromFormFlow: true } });
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,18 +118,28 @@ const OptionalSignUpPage: React.FC = () => {
       
       if (session?.user?.id) {
         setSignedUpUserId(session.user.id);
-        // If user from context is already updated, useEffect might run immediately
         if (user && user.id === session.user.id) {
-           // Already handled by useEffect, but for safety, ensure navigation if all conditions met
-           // This direct call is a bit redundant if useEffect works as expected but acts as a safeguard.
            const pendingBusinessDescription = localStorage.getItem('pendingBusinessDescription');
            if (pendingBusinessDescription) {
-             // Perform quick save attempt, errors handled similarly
-             await supabase.from('email_setups').upsert({ user_id: session.user.id, business_description: pendingBusinessDescription }, { onConflict: 'user_id' });
-             localStorage.removeItem('pendingBusinessDescription');
+             console.log('Quick save: Business description to save:', pendingBusinessDescription, 'for user:', session.user.id);
+             const { error: quickUpsertError, data: quickUpsertData } = await supabase.from('email_setups').upsert({
+                user_id: session.user.id,
+                business_description: pendingBusinessDescription,
+                form_complete: false,
+              }, { onConflict: 'user_id' })
+              .select('user_id, business_description, form_complete');
+
+             if (quickUpsertError) {
+                console.error("Quick save upsert error:", quickUpsertError);
+             } else {
+                console.log("Quick save upsert successful. Returned data:", quickUpsertData);
+                localStorage.removeItem('pendingBusinessDescription');
+             }
+           } else {
+             console.warn("Quick save: No pendingBusinessDescription found in localStorage for user:", session.user.id);
            }
-           navigate('/subscription');
-           return; // Skip further processing in this handler
+           navigate('/goals-form', { replace: true, state: { fromFormFlow: true } });
+           return;
         }
       } else if (user?.id && user.email === email) {
         // If user context has updated and email matches, assume it's the new user
@@ -108,6 +154,7 @@ const OptionalSignUpPage: React.FC = () => {
         });
       }
       // If we couldn't navigate immediately, the useEffect will handle it.
+      handleNavigate('next', 'signup'); // Signal that this is a 'next' action from signup
 
     } catch (error: any) {
       // Errors from signUp in useAuth are already toasted.
@@ -120,12 +167,20 @@ const OptionalSignUpPage: React.FC = () => {
     }
   };
 
-  const handleContinueAsGuest = () => {
+  const handleSignUpWrapper = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Data saving and actual navigation to /goals-form is handled by handleSignUp and its useEffect
+    await handleSignUp(e);
+    // Do not call handleNavigate here directly for signup, as it's handled internally by handleSignUp logic
+  };
+
+  const handleContinueAsGuestWrapper = () => {
     console.log('Continuing as guest. Data remains in local storage.');
-    // TODO: Determine where to navigate guests. For now, could be a dashboard-like page
-    // that operates purely on localStorage data or has limited functionality.
-    // navigate('/guest-dashboard'); 
-    alert("Continuing as guest. Navigation to next step pending. Business description is in local storage.");
+    handleNavigate('next', 'guest');
+  };
+
+  const handlePrevious = () => {
+    handleNavigate('previous');
   };
 
   return (
@@ -151,7 +206,17 @@ const OptionalSignUpPage: React.FC = () => {
               Or, continue as a guest and we'll remember you for this session.
             </p>
 
-            <form onSubmit={handleSignUp} className="space-y-4">
+            <Button 
+                type="button"
+                onClick={handlePrevious}
+                variant="outline"
+                className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base mb-4"
+                disabled={isLoading}
+            >
+                Previous
+            </Button>
+
+            <form onSubmit={handleSignUpWrapper} className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
                   Email Address
@@ -197,7 +262,7 @@ const OptionalSignUpPage: React.FC = () => {
 
             <Button
               variant="outline"
-              onClick={handleContinueAsGuest}
+              onClick={handleContinueAsGuestWrapper}
               className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base"
               disabled={isLoading}
             >
