@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
+import { useAuth } from "../features/auth/useAuth";
 
 /**
  * Navbar Component
@@ -41,6 +42,14 @@ const Navbar = () => {
    * Toggled by the hamburger menu button
    */
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    setMobileMenuOpen(false);
+    navigate('/');
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-green-800/90 backdrop-blur-sm z-50 shadow-md">
@@ -80,12 +89,24 @@ const Navbar = () => {
           
           {/* Desktop navigation - Hidden on mobile */}
           <div className="hidden md:flex md:items-center md:space-x-4 absolute right-6 sm:right-8">
-            <Button variant="ghost" className="text-white hover:bg-green-700 hover:text-yellow-300" asChild>
-              <Link to="/login">Sign in</Link>
-            </Button>
-            <Button className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
-              <Link to="/signup">Sign up</Link>
-            </Button>
+            {user ? (
+              <Button 
+                variant="ghost" 
+                className="text-white hover:bg-green-700 hover:text-yellow-300"
+                onClick={handleSignOut}
+              >
+                Sign Out
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" className="text-white hover:bg-green-700 hover:text-yellow-300" asChild>
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
+                  <Link to="/signup">Sign up</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -94,12 +115,24 @@ const Navbar = () => {
       {mobileMenuOpen && (
         <div className="md:hidden" id="mobile-menu">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-green-800 shadow-lg">
-            <Button variant="ghost" className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300" asChild>
-              <Link to="/login">Sign in</Link>
-            </Button>
-            <Button className="w-full justify-center bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
-              <Link to="/signup">Sign up</Link>
-            </Button>
+            {user ? (
+              <Button 
+                variant="ghost" 
+                className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300"
+                onClick={handleSignOut}
+              >
+                Sign Out
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300" asChild>
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button className="w-full justify-center bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold" asChild>
+                  <Link to="/signup">Sign up</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
