@@ -1,5 +1,5 @@
 export interface GetDomainProviderRequest {
-  domainName: string;
+  emailSetupId: string;
 }
 
 export interface GetDomainProviderResponse {

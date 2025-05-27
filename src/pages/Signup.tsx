@@ -11,6 +11,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { useAuth } from "@/features/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { FORM_FLOW_ORDER } from "@/core/constants";
 
 /**
  * Signup Component
@@ -41,10 +43,59 @@ const Signup = () => {
     setLoading(true);
     
     try {
+      // signUp in useAuth likely returns void and handles errors by throwing
+      // or updates user state internally.
       await signUp(email, password, email);
-      console.log("Signup successful, navigating to subscription page");
-      // Navigate to the subscription page after successful signup
-      navigate('/subscription');
+
+      // Attempt to get the user immediately after signUp
+      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+
+      if (getUserError || !user) {
+        console.error("Signup.tsx: Error getting user after signup or no user found:", getUserError);
+        throw getUserError || new Error("User not found after signup.");
+      }
+
+      // If signup is successful and we have a user, save business description
+      const pendingBusinessDescription = localStorage.getItem('pendingBusinessDescription');
+      
+      if (pendingBusinessDescription) {
+        const { error: upsertError } = await supabase
+          .from('email_setups')
+          .upsert({
+            user_id: user.id,
+            business_description: pendingBusinessDescription,
+            form_complete: false, 
+          }, { onConflict: 'user_id' })
+          .select('user_id, business_description, form_complete');
+
+        if (upsertError) {
+          console.error("Signup.tsx: Error upserting business description:", upsertError);
+          toast({
+            title: "Error Saving Progress",
+            description: "Could not save your business description. Please proceed and update it later if needed.",
+            variant: "default", 
+          });
+        } else {
+          localStorage.removeItem('pendingBusinessDescription');
+          console.log("Signup.tsx: Business description saved and removed from localStorage.");
+        }
+      } else {
+         const { error: upsertError } = await supabase
+          .from('email_setups')
+          .upsert({
+            user_id: user.id,
+            form_complete: false,
+          }, { onConflict: 'user_id' })
+          .select('user_id, form_complete');
+          if (upsertError) {
+              console.error("Signup.tsx: Error creating basic email_setups record:", upsertError);
+          }
+      }
+      
+      console.log("Signup successful, navigating to goals form");
+      const goalsFormPath = FORM_FLOW_ORDER.includes('/goals-form') ? '/goals-form' : FORM_FLOW_ORDER[2] || '/';
+      navigate(goalsFormPath, { replace: true, state: { fromFormFlow: true } });
+
     } catch (error: any) {
       console.error("Signup error:", error);
       

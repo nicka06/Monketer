@@ -184,7 +184,7 @@ serve(async (req: Request) => {
       .from("email_setups")
       .select("domain, user_id, dkim_selector, dkim_public_key, mx_record_value, spf_record_value, dmarc_record_value")
       .eq("id", emailSetupId)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !emailSetup) {
       console.error(`verify-dns-records: Error fetching email_setups for ID ${emailSetupId}:`, fetchError?.message);

@@ -32,9 +32,9 @@ const GoalsFormPage: React.FC = () => {
           .from('email_setups')
           .select('goals_form_raw_text, business_description') // also fetch business_description for context
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         
-        if (error && error.code !== 'PGRST116') { 
+        if (error) { 
           console.error("GoalsFormPage: Error fetching data from Supabase:", error);
           toast({ title: "Error", description: "Could not load saved data.", variant: "destructive" });
         } else if (data) {
@@ -165,23 +165,15 @@ const GoalsFormPage: React.FC = () => {
           <p className="text-lg text-gray-200">
             Help us understand what you want to achieve with your email marketing.
           </p>
-          {businessDescription && (
-            <p className="mt-4 text-sm text-gray-300 bg-black bg-opacity-20 p-3 rounded-md">
-              <strong>Your Business:</strong> {businessDescription}
-            </p>
-          )}
         </div>
 
         <form onSubmit={(e) => handleSubmitGoals(e, true)} className="space-y-6 bg-green-700 bg-opacity-50 p-6 md:p-8 rounded-xl shadow-xl">
           <div>
-            <label htmlFor="goals-input" className="block text-lg font-medium text-yellow-300 mb-2">
-              List your main goals (one per line):
-            </label>
             <Textarea
               id="goals-input"
               value={goals}
               onChange={(e) => setGoals(e.target.value)}
-              placeholder="e.g.\nIncrease sales by 20%\nGrow my email list\nImprove customer engagement"
+              placeholder="I run an online store that sells handmade artisan soaps and candles. My main goal right now is to significantly boost sales. I want to see at least a 30% increase in revenue over the next quarter. I'm also looking to grow my customer base, so acquiring new subscribers for my email list is important, maybe aiming for 500 new opt-ins. Ultimately, I want to build a loyal community around my brand and increase repeat purchases through engaging email campaigns."
               className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent min-h-[150px]"
               rows={5}
               required
