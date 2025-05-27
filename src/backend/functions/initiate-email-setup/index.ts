@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts"; // Assuming this path is corre
 
 interface ProviderInfo {
   name: string; // e.g., "Cloudflare", "GoDaddy", "Unknown"
-  nameservers: string[];
+  // nameservers: string[]; // Removed as not currently used by this function
 }
 
 interface InitiateEmailSetupRequest {
@@ -127,7 +127,7 @@ serve(async (req) => {
       .from("email_setups")
       .select("domain, user_id, dkim_public_key, dns_records_to_set, dkim_selector") // Fetch dkim_public_key for idempotency
       .eq("id", requestData.emailSetupId)
-      .single();
+      .maybeSingle();
 
     if (fetchError) {
       console.error("initiate-email-setup: Error fetching email_setups record:", fetchError.message);
@@ -222,6 +222,8 @@ serve(async (req) => {
     const actualSpfValue = defaultSpfValue!;
     const actualDmarcValue = defaultDmarcValue!;
 
+    const dkimValue = dkimProvisioningSuccessful && publicKeyBase64 ? `v=DKIM1; k=rsa; p=${publicKeyBase64}` : "v=DKIM1; k=rsa; p=ERROR_DKIM_NOT_PROVISIONED_OR_INVALID_KEY";
+
     const requiredDnsRecords: DnsRecord[] = [
       {
         type: "MX",
@@ -239,7 +241,7 @@ serve(async (req) => {
       {
         type: "TXT",
         host: `${dkimSelectorToUse}._domainkey`,
-        value: dkimProvisioningSuccessful && publicKeyBase64 ? `v=DKIM1; k=rsa; p=${publicKeyBase64}` : "v=DKIM1; k=rsa; p=ERROR_DKIM_NOT_PROVISIONED_OR_INVALID_KEY",
+        value: dkimValue,
         ttl: 3600,
       },
       {
@@ -250,31 +252,47 @@ serve(async (req) => {
       },
     ];
 
-    console.log("initiate-email-setup: Generated requiredDnsRecords:", JSON.stringify(requiredDnsRecords, null, 2));
+    console.log("initiate-email-setup: Constructed requiredDnsRecords:", JSON.stringify(requiredDnsRecords));
 
-    // 3. Update email_setups table with DNS info
-    const updatePayload = {
-      dns_provider_name: requestData.providerInfo.name,
-      dns_setup_strategy: "manual", // Always manual for now
+    // 3. Update email_setups record with these details
+    const updatePayload: {
+        dns_setup_strategy: string;
+        dkim_selector: string;
+        dns_records_to_set: DnsRecord[];
+        dkim_public_key?: string | null; 
+        status: string; // This will store the main operational status message, e.g. about DKIM provisioning
+        mx_record_value?: string;
+        spf_record_value?: string;
+        dmarc_record_value?: string;
+        mx_status?: string;
+        spf_status?: string;
+        dkim_status?: string;
+        dmarc_status?: string;
+        overall_dns_status?: string; 
+    } = {
+      dns_setup_strategy: dnsSetupStrategy,
       dkim_selector: dkimSelectorToUse,
-      dkim_public_key: dkimProvisioningSuccessful ? publicKeyBase64 : null, // This will be the extracted key or null if failed
-      dns_records_to_set: requiredDnsRecords, // Storing the records for user display
-      status: "awaiting_manual_dns_config", // General status for the setup
-      // New fields for DNS record values and verification statuses
+      dns_records_to_set: requiredDnsRecords,
+      status: mailServerMessage, // Keep this for the DKIM/provisioning message from mail server
       mx_record_value: actualMxValue,
       spf_record_value: actualSpfValue,
       dmarc_record_value: actualDmarcValue,
       mx_status: 'pending',
       spf_status: 'pending',
-      dkim_status: 'pending',
+      dkim_status: 'pending', // This will be updated by verify-dns-records based on the actual dkim value
       dmarc_status: 'pending',
       overall_dns_status: 'pending', 
-      // We might want to clear previous verification_failure_reason if re-initiating
-      // verification_failure_reason: null, 
-      // last_verification_attempt_at: null, // Or set to current time if we consider this an attempt
     };
 
-    console.log("initiate-email-setup: Update payload for email_setups:", JSON.stringify(updatePayload, null, 2));
+    if (dkimProvisioningSuccessful && publicKeyBase64) {
+        updatePayload.dkim_public_key = publicKeyBase64;
+    } else if (publicKeyBase64 === null) { // Explicit failure to provision
+        updatePayload.dkim_public_key = null; // Store null to indicate failed provisioning
+    }
+    // If publicKeyBase64 is undefined (meaning no attempt to re-provision was made, relying on existing),
+    // dkim_public_key is not added to updatePayload, preserving its current value (which might be an old valid key).
+
+    console.log("initiate-email-setup: Update payload for email_setups:", JSON.stringify(updatePayload));
 
     const { error: updateError } = await supabaseAdminClient
       .from("email_setups")

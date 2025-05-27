@@ -247,8 +247,16 @@
 │   │   │
 │   │   ├── 📄 Signup.tsx
 │   │   │   Purpose: User registration page.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
-│   │   │   Usage: Path `/signup`.
+│   │   │   Details: 
+│   │   │   - Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   - **On submit (`handleSubmit`):**
+│   │   │     - Calls `useAuth().signUp()`.
+│   │   │     - Calls `supabase.auth.getUser()` to retrieve the new user details.
+│   │   │     - Retrieves `pendingBusinessDescription` from `localStorage`.
+│   │   │     - Upserts to `email_setups`: `user_id`, `business_description` (if any), and `form_complete: false`.
+│   │   │     - Clears `pendingBusinessDescription` from `localStorage` if it was saved.
+│   │   │     - Navigates to `/goals-form` using `FORM_FLOW_ORDER` with `replace: true` and `state: { fromFormFlow: true }`.
+│   │   │   Usage: Path `/signup`. Allows new users to create an account and initiates their `email_setups` record.
 │   │   │
 │   │   ├── 📄 BusinessOverviewPage.tsx
 │   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
@@ -277,9 +285,9 @@
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
 │   │   │   - Jungle theme, full-screen layout.
-│   │   │   - Displays `pendingBusinessDescription` from `localStorage` (if guest) or fetched `business_description` (if user has one) for context.
-│   │   │   - Textarea for users to list goals (one per line).
-│   │   │   - **Load Existing Goals (`useEffect`):** Loads from `email_setups` (if signed in) or `localStorage` (if guest).
+│   │   │   - The business description display card has been removed.
+│   │   │   - Textarea for users to input their goals as a paragraph (placeholder updated to reflect this, label removed).
+│   │   │   - **Load Existing Goals (`useEffect`):** Loads `goals_form_raw_text` from `email_setups` (if signed in) or `pendingUserGoalsRawText` from `localStorage` (if guest). Also loads `business_description` for context (though not displayed anymore, it's fetched).
 │   │   │   - **Submit Goals Logic (`handleSubmitGoals`):**
 │   │   │     - Processes goals into an array.
 │   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
@@ -297,27 +305,84 @@
 │   │   │   Usage: Step in the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 SelectEmailsPage.tsx
-│   │   │   Purpose: Page for users to select or be presented with types of emails to generate.
+│   │   │   Purpose: Allows users to select specific email campaigns they want to set up from a categorized list.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with image and card.
-│   │   │   - Placeholder for email selection checklist.
-│   │   │   - **Navigation**: Includes "Previous" and "Next" buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a subsequent step in the onboarding flow.
+│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right.
+│   │   │   - Imports `EMAIL_CAMPAIGN_CATEGORIES` from `src/core/emailCampaigns.ts`.
+│   │   │   - Displays campaigns grouped by category, each with a checkbox, name, and description.
+│   │   │   - Uses `useState` for `selectedCampaigns` (string array of campaign IDs) and `isLoading`/`isSaving`.
+│   │   │   - **Load Data (`useEffect` with `loadSelectedCampaigns`):**
+│   │   │     - Authenticated users: Fetches `selected_campaign_ids` from `email_setups` table.
+│   │   │     - Guest users: Loads `pendingSelectedCampaignIds` from `localStorage`.
+│   │   │   - **Save Data (`saveSelections` called by `handleNavigate`):**
+│   │   │     - Authenticated users: Updates `selected_campaign_ids` and sets `form_complete: false` in `email_setups`.
+│   │   │     - Guest users: Saves `selectedCampaigns` to `localStorage` as `pendingSelectedCampaignIds`.
+│   │   │   - Handles errors with toasts.
+│   │   │   - **Navigation**: Includes "Previous" and "Save & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
+│   │   │     - "Previous" button for guests also saves current selections.
+│   │   │     - Next step is `/website-status`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `GoalsFormPage`.
 │   │   │
 │   │   ├── 📄 WebsiteStatusPage.tsx
-│   │   │   Purpose: Placeholder page to display website status, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
+│   │   │   Purpose: Collects website status information from the user (has website, provider, domain name) as part of the multi-step onboarding flow.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - **Internal Sub-steps:**
+│   │   │     1.  **"Do you have a website?"**: Yes/No buttons. "No" shows a modal requiring a website to proceed.
+│   │   │     2.  **"Who hosts your website?"**: Buttons for common providers (Shopify, Wix, etc.).
+│   │   │     3.  **"What's your domain name?"**: Text input for the domain.
+│   │   │   - **State Management**: `currentSubStep`, `selectedProvider`, `domainName`, `showNoWebsiteModal`, `isLoading`, `isSaving`.
+│   │   │   - **Data Handling (`loadData`, `handleSaveAndNavigate`):**
+│   │   │     - Authenticated users: Loads `website_provider` and `domain` from `email_setups`; saves updates to these fields, setting `form_complete: false`.
+│   │   │     - Guest users: Loads from `localStorage` (`pendingWebsiteProvider`, `pendingDomainName`); saves to `localStorage`.
+│   │   │   - **Navigation**: Uses `FORM_FLOW_ORDER`. "Save & Continue" appears at Sub-step 3. "Previous Page" button available on Sub-steps 2 and 3 (not on first question).
+│   │   │   - `PROVIDER_OPTIONS` constant defines website provider choices.
+│   │   │   - Includes error handling with toasts and a loading state.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `SelectEmailsPage`.
 │   │   │
 │   │   ├── 📄 InfoClarificationPage.tsx
-│   │   │   Purpose: Placeholder page for further information clarification, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
+│   │   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout with scrollable content area.
+│   │   │   - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name.
+│   │   │   - Each section is a `Card` component with an "Edit" button that navigates to the respective form page.
+│   │   │   - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
+│   │   │   - **Confirmation**: A checkbox ("Yes, all information is accurate...") must be checked to enable the "Next" button.
+│   │   │   - **Navigation (`handleNavigate`):**
+│   │   │     - "Previous" button navigates to `/website-status`.
+│   │   │     - "Confirm & Proceed" (Next) button navigates to:
+│   │   │       - `/auth-gate` if the user is a guest.
+│   │   │       - `/dns-confirmation` if the user is authenticated.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `WebsiteStatusPage`.
+│   │   │
+│   │   ├── 📄 AuthGatePage.tsx
+│   │   │   Purpose: Mandatory authentication (Sign Up or Sign In) page for guest users after they confirm their information on the InfoClarificationPage.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms.
+│   │   │   - No "Continue as Guest" or "Previous" option (only a "Start Over?" link to `/`).
+│   │   │   - **On successful Sign Up/Sign In (`handleSubmit`):**
+│   │   │     - Retrieves all `pending...` data from `localStorage` (business description, goals, campaigns, website provider, domain).
+│   │   │     - Upserts this data into the `email_setups` table associated with the authenticated `user_id`. Sets `form_complete: false`.
+│   │   │     - Clears the `pending...` data from `localStorage`.
+│   │   │     - Navigates to `/dns-confirmation`.
+│   │   │   - Handles errors with toasts. Redirects already authenticated users to the next step in the flow or dashboard.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 DnsConfirmationPage.tsx
-│   │   │   Purpose: Placeholder page for DNS confirmation, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow related to DNS.
+│   │   │   Purpose: Guides the user through adding DNS records to their domain provider and verifying them.
+│   │   │   Details:
+│   │   │     - Fetches comprehensive `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, current verification statuses) for the authenticated user.
+│   │   │     - Calls the `get-domain-provider` Supabase edge function (passing `emailSetupId`), which attempts auto-detection of the DNS provider based on NS records and updates `email_setups.dns_provider_name`.
+│   │   │     - Displays the required DNS records (MX, SPF, DKIM, DMARC) using `constructDnsRecords`. Shows name, type, value (with copy buttons), purpose, and current verification status for each, fetched from `email_setups`.
+│   │   │     - Shows overall DNS verification status and last check time.
+│   │   │     - Renders a grid of clickable cards for common DNS providers (from `DNS_PROVIDER_DISPLAY_OPTIONS` in `constants.ts`). Highlights the provider from `email_setups.website_provider` (user-set) or `email_setups.dns_provider_name` (auto-detected).
+│   │   │     - Clicking a provider card opens a modal (`Dialog`) showing provider-specific instructions (linking to their DNS page) and re-lists the DNS records.
+│   │   │     - "Verify DNS Records" button: Calls the `verify-dns-records` Supabase edge function. On success, re-fetches `email_setups` to update statuses and provides toast notifications.
+│   │   │     - "Previous" button navigates to `/info-clarification` (skipping `/auth-gate`).
+│   │   │     - "Next Step" button navigates to `/website-tracking`. Advises user to verify DNS first if not all records are 'verified' or 'partially_verified'.
+│   │   │     - Handles loading states (page, provider detection, verification) and errors with toasts and messages.
+│   │   │     - Uses `lucide-react` icons. Jungle-themed styling.
+│   │   │   Usage: Key step in the onboarding flow for users to configure their email sending domain. Path `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 WebsiteTrackingPage.tsx
 │   │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
@@ -389,9 +454,9 @@
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
 │   │   │   - Jungle theme, full-screen layout.
-│   │   │   - Displays `pendingBusinessDescription` from `localStorage` (if guest) or fetched `business_description` (if user has one) for context.
-│   │   │   - Textarea for users to list goals (one per line).
-│   │   │   - **Load Existing Goals (`useEffect`):** Loads from `email_setups` (if signed in) or `localStorage` (if guest).
+│   │   │   - The business description display card has been removed.
+│   │   │   - Textarea for users to input their goals as a paragraph (placeholder updated to reflect this, label removed).
+│   │   │   - **Load Existing Goals (`useEffect`):** Loads `goals_form_raw_text` from `email_setups` (if signed in) or `pendingUserGoalsRawText` from `localStorage` (if guest). Also loads `business_description` for context (though not displayed anymore, it's fetched).
 │   │   │   - **Submit Goals Logic (`handleSubmitGoals`):**
 │   │   │     - Processes goals into an array.
 │   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
@@ -409,27 +474,84 @@
 │   │   │   Usage: Step in the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 SelectEmailsPage.tsx
-│   │   │   Purpose: Page for users to select or be presented with types of emails to generate.
+│   │   │   Purpose: Allows users to select specific email campaigns they want to set up from a categorized list.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with image and card.
-│   │   │   - Placeholder for email selection checklist.
-│   │   │   - **Navigation**: Includes "Previous" and "Next" buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a subsequent step in the onboarding flow.
+│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right.
+│   │   │   - Imports `EMAIL_CAMPAIGN_CATEGORIES` from `src/core/emailCampaigns.ts`.
+│   │   │   - Displays campaigns grouped by category, each with a checkbox, name, and description.
+│   │   │   - Uses `useState` for `selectedCampaigns` (string array of campaign IDs) and `isLoading`/`isSaving`.
+│   │   │   - **Load Data (`useEffect` with `loadSelectedCampaigns`):**
+│   │   │     - Authenticated users: Fetches `selected_campaign_ids` from `email_setups` table.
+│   │   │     - Guest users: Loads `pendingSelectedCampaignIds` from `localStorage`.
+│   │   │   - **Save Data (`saveSelections` called by `handleNavigate`):**
+│   │   │     - Authenticated users: Updates `selected_campaign_ids` and sets `form_complete: false` in `email_setups`.
+│   │   │     - Guest users: Saves `selectedCampaigns` to `localStorage` as `pendingSelectedCampaignIds`.
+│   │   │   - Handles errors with toasts.
+│   │   │   - **Navigation**: Includes "Previous" and "Save & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
+│   │   │     - "Previous" button for guests also saves current selections.
+│   │   │     - Next step is `/website-status`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `GoalsFormPage`.
 │   │   │
 │   │   ├── 📄 WebsiteStatusPage.tsx
-│   │   │   Purpose: Placeholder page to display website status, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
+│   │   │   Purpose: Collects website status information from the user (has website, provider, domain name) as part of the multi-step onboarding flow.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - **Internal Sub-steps:**
+│   │   │     1.  **"Do you have a website?"**: Yes/No buttons. "No" shows a modal requiring a website to proceed.
+│   │   │     2.  **"Who hosts your website?"**: Buttons for common providers (Shopify, Wix, etc.).
+│   │   │     3.  **"What's your domain name?"**: Text input for the domain.
+│   │   │   - **State Management**: `currentSubStep`, `selectedProvider`, `domainName`, `showNoWebsiteModal`, `isLoading`, `isSaving`.
+│   │   │   - **Data Handling (`loadData`, `handleSaveAndNavigate`):**
+│   │   │     - Authenticated users: Loads `website_provider` and `domain` from `email_setups`; saves updates to these fields, setting `form_complete: false`.
+│   │   │     - Guest users: Loads from `localStorage` (`pendingWebsiteProvider`, `pendingDomainName`); saves to `localStorage`.
+│   │   │   - **Navigation**: Uses `FORM_FLOW_ORDER`. "Save & Continue" appears at Sub-step 3. "Previous Page" button available on Sub-steps 2 and 3 (not on first question).
+│   │   │   - `PROVIDER_OPTIONS` constant defines website provider choices.
+│   │   │   - Includes error handling with toasts and a loading state.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `SelectEmailsPage`.
 │   │   │
 │   │   ├── 📄 InfoClarificationPage.tsx
-│   │   │   Purpose: Placeholder page for further information clarification, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
+│   │   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout with scrollable content area.
+│   │   │   - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name.
+│   │   │   - Each section is a `Card` component with an "Edit" button that navigates to the respective form page.
+│   │   │   - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
+│   │   │   - **Confirmation**: A checkbox ("Yes, all information is accurate...") must be checked to enable the "Next" button.
+│   │   │   - **Navigation (`handleNavigate`):**
+│   │   │     - "Previous" button navigates to `/website-status`.
+│   │   │     - "Confirm & Proceed" (Next) button navigates to:
+│   │   │       - `/auth-gate` if the user is a guest.
+│   │   │       - `/dns-confirmation` if the user is authenticated.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `WebsiteStatusPage`.
+│   │   │
+│   │   ├── 📄 AuthGatePage.tsx
+│   │   │   Purpose: Mandatory authentication (Sign Up or Sign In) page for guest users after they confirm their information on the InfoClarificationPage.
+│   │   │   Details:
+│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms.
+│   │   │   - No "Continue as Guest" or "Previous" option (only a "Start Over?" link to `/`).
+│   │   │   - **On successful Sign Up/Sign In (`handleSubmit`):**
+│   │   │     - Retrieves all `pending...` data from `localStorage` (business description, goals, campaigns, website provider, domain).
+│   │   │     - Upserts this data into the `email_setups` table associated with the authenticated `user_id`. Sets `form_complete: false`.
+│   │   │     - Clears the `pending...` data from `localStorage`.
+│   │   │     - Navigates to `/dns-confirmation`.
+│   │   │   - Handles errors with toasts. Redirects already authenticated users to the next step in the flow or dashboard.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 DnsConfirmationPage.tsx
-│   │   │   Purpose: Placeholder page for DNS confirmation, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow related to DNS.
+│   │   │   Purpose: Guides the user through adding DNS records to their domain provider and verifying them.
+│   │   │   Details:
+│   │   │     - Fetches comprehensive `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, current verification statuses) for the authenticated user.
+│   │   │     - Calls the `get-domain-provider` Supabase edge function (passing `emailSetupId`), which attempts auto-detection of the DNS provider based on NS records and updates `email_setups.dns_provider_name`.
+│   │   │     - Displays the required DNS records (MX, SPF, DKIM, DMARC) using `constructDnsRecords`. Shows name, type, value (with copy buttons), purpose, and current verification status for each, fetched from `email_setups`.
+│   │   │     - Shows overall DNS verification status and last check time.
+│   │   │     - Renders a grid of clickable cards for common DNS providers (from `DNS_PROVIDER_DISPLAY_OPTIONS` in `constants.ts`). Highlights the provider from `email_setups.website_provider` (user-set) or `email_setups.dns_provider_name` (auto-detected).
+│   │   │     - Clicking a provider card opens a modal (`Dialog`) showing provider-specific instructions (linking to their DNS page) and re-lists the DNS records.
+│   │   │     - "Verify DNS Records" button: Calls the `verify-dns-records` Supabase edge function. On success, re-fetches `email_setups` to update statuses and provides toast notifications.
+│   │   │     - "Previous" button navigates to `/info-clarification` (skipping `/auth-gate`).
+│   │   │     - "Next Step" button navigates to `/website-tracking`. Advises user to verify DNS first if not all records are 'verified' or 'partially_verified'.
+│   │   │     - Handles loading states (page, provider detection, verification) and errors with toasts and messages.
+│   │   │     - Uses `lucide-react` icons. Jungle-themed styling.
+│   │   │   Usage: Key step in the onboarding flow for users to configure their email sending domain. Path `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 WebsiteTrackingPage.tsx
 │   │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
@@ -443,193 +565,43 @@
 │   │       - Uses `EmailSetupContext` and relevant components.
 │   │       Usage: Entry point for users setting up their email.
 │   │
-│   ├── 📁 contexts/
-│   │   └── 📄 EmailSetupContext.tsx
-│   │       Purpose: React context to manage state related to the email setup process.
-│   │       Details:
-│   │       - Holds state like `emailSetupId`, form data, DNS records, current step.
-│   │       - Provides functions to interact with backend (e.g., save form, initiate DNS setup).
-│   │       Usage: Wraps parts of the application involved in email setup.
-│   │
-│   ├── 📁 pages/
-│   │   ├── 📄 Index.tsx
-│   │   │   Purpose: Main landing page component for the application.
+│   ├── 📁 core/
+│   │   ├── 📄 constants.ts
+│   │   │   Purpose: Centralized location for application-wide constants.
 │   │   │   Details:
-│   │   │   - Serves as the entry point for users visiting the root URL.
-│   │   │   - Displays a jungle-themed layout (green background) with a themed main navigation bar.
-│   │   │   - Content area (Navbar + main section with textarea/image) is set to `min-h-screen`.
-│   │   │   - The `Footer` component is rendered separately, after the main content, making it appear below the initial viewport fold.
-│   │   │   - Button "make me an email marketing machine!" initiates the flow.
-│   │   │   - **Navigation**: The main button now navigates directly to `/optional-signup`.
-│   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   │   Usage: Rendered at the root path ('/') for unauthenticated users.
+│   │   │   - `FORM_FLOW_ORDER`: An array of strings defining the sequence of pages in the multi-step onboarding form.
+│   │   │   - `DNS_PROVIDER_DISPLAY_OPTIONS`: An array of objects, each representing a DNS provider with properties like `id`, `name`, `logo` (path to image), and `instructionsUrl` (a template URL to the provider's DNS settings page). Used by `DnsConfirmationPage.tsx` to render provider selection cards and instruction modals.
+│   │   │   - `PROVIDER_MAP_TO_DISPLAY_OPTION_ID`: A mapping object that translates provider names (as returned by the `get-domain-provider` function or stored as `website_provider` / `dns_provider_name` in `email_setups`) to the `id` used in `DNS_PROVIDER_DISPLAY_OPTIONS`.
+│   │   │   Usage: Imported by various components and pages, especially form pages for navigation and `DnsConfirmationPage.tsx` for provider display and linking.
 │   │   │
-│   │   ├── 📄 Login.tsx
-│   │   │   Purpose: Authentication page for users to sign in.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
-│   │   │   Usage: Path `/login`.
-│   │   │
-│   │   ├── 📄 Signup.tsx
-│   │   │   Purpose: User registration page.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
-│   │   │   Usage: Path `/signup`.
-│   │   │
-│   │   ├── 📄 BusinessOverviewPage.tsx
-│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
+│   │   ├── �� emailCampaigns.ts
+│   │   │   Purpose: Defines the structure and content for selectable email campaigns in the onboarding flow.
 │   │   │   Details:
-│   │   │   - Jungle theme, similar layout to the original Index page (textarea and monkey image).
-│   │   │   - Loads `pendingBusinessDescription` from `localStorage` into the textarea on mount.
-│   │   │   - **No "Previous" button.** Users can only confirm/edit and continue.
-│   │   │   - **"Confirm Business Overview & Continue" button (`handleConfirmAndContinue`):**
-│   │   │     - Saves `businessDescription` to `localStorage`.
-│   │   │     - **Authenticated User:** Navigates directly to `/goals-form` (skipping `/optional-signup`).
-│   │   │     - **Guest User:** Navigates to `/optional-signup`.
-│   │   │   - Uses `useAuth` to determine if a user is authenticated.
-│   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   │   Usage: Step in the multi-step onboarding flow. 
+│   │   │   - Exports `EmailCampaign` interface (id, name, description).
+│   │   │   - Exports `EmailCategory` interface (id, name, campaigns array).
+│   │   │   - Exports `EMAIL_CAMPAIGN_CATEGORIES`: An array of `EmailCategory` objects, populated with predefined email campaigns grouped into categories like "Welcome & Onboarding", "E-commerce Triggers", "Engagement & Re-engagement", "Scheduled & Promotional", and "Informational & Updates".
+│   │   │   Usage: Imported by `SelectEmailsPage.tsx` to render the selection options.
 │   │   │
-│   │   ├── 📄 OptionalSignUpPage.tsx
-│   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
-│   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
-│   │   │   - Sign up form and "Continue as Guest" option.
-│   │   │   - "Previous" button now navigates to `/business-overview`.
-│   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
-│   │   │   Usage: Part of the multi-step onboarding flow.
-│   │   │
-│   │   ├── 📄 GoalsFormPage.tsx
-│   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
-│   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
-│   │   │   - Displays `pendingBusinessDescription` from `localStorage` (if guest) or fetched `business_description` (if user has one) for context.
-│   │   │   - Textarea for users to list goals (one per line).
-│   │   │   - **Load Existing Goals (`useEffect`):** Loads from `email_setups` (if signed in) or `localStorage` (if guest).
-│   │   │   - **Submit Goals Logic (`handleSubmitGoals`):**
-│   │   │     - Processes goals into an array.
-│   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
-│   │   │     - **Guest user:** Saves to `localStorage` (`pendingUserGoals`, `pendingUserGoalsRawText`).
-│   │   │     - Handles errors with toasts.
-│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
-│   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
-│   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
-│   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
-│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
-│   │   │
-│   │   ├── 📄 BusinessClarificationPage.tsx
-│   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Step in the multi-step onboarding flow.
-│   │   │
-│   │   ├── 📄 SelectEmailsPage.tsx
-│   │   │   Purpose: Page for users to select or be presented with types of emails to generate.
-│   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with image and card.
-│   │   │   - Placeholder for email selection checklist.
-│   │   │   - **Navigation**: Includes "Previous" and "Next" buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a subsequent step in the onboarding flow.
-│   │   │
-│   │   ├── 📄 WebsiteStatusPage.tsx
-│   │   │   Purpose: Placeholder page to display website status, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
-│   │   │
-│   │   ├── 📄 InfoClarificationPage.tsx
-│   │   │   Purpose: Placeholder page for further information clarification, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow.
-│   │   │
-│   │   ├── 📄 DnsConfirmationPage.tsx
-│   │   │   Purpose: Placeholder page for DNS confirmation, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as a step in the multi-step onboarding flow related to DNS.
-│   │   │
-│   │   ├── 📄 WebsiteTrackingPage.tsx
-│   │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" ("Finish & View Dashboard") navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as the final step in the multi-step onboarding flow.
-│   │   │
-│   │   └── 📄 EmailOnboardingPage.tsx
-│   │       Purpose: Main page for the email setup onboarding flow.
-│   │       Details:
-│   │       - Likely orchestrates different steps of the onboarding (e.g., form, DNS config).
-│   │       - Uses `EmailSetupContext` and relevant components.
-│   │       Usage: Entry point for users setting up their email.
-│   │
-│   ├── 📁 services/
-│   │   └── 📄 api.ts
-│   │       Purpose: Frontend API service layer to interact with Supabase functions.
-│   │       Details:
-│   │       - Contains functions to call `save-email-setup-form` and `initiate-email-setup`.
-│   │       - Handles Supabase client initialization, auth headers, error handling.
-│   │       Usage: Used by components and context to communicate with the backend.
+│   │   └── 📄 types.ts 
+│   │       Purpose: General type definitions for the application.
+│   │       Details: Contains `EmailSetupFormData`, `ProviderInfo`, `DnsRecord`, `InitiateEmailSetupRequest`, `InitiateEmailSetupResponse`, and other shared types.
+│   │       Usage: Imported by various components and functions across the project.
 │   │
 │   └── 📄 App.tsx 
 │       Purpose: Main application component.
-│       Details: Sets up routing, global providers (AuthContext, QueryClientProvider, TooltipProvider). Contains main AppRoutes component which handles conditional navigation based on auth state and form completion status.
+│       Details: Sets up routing, global providers. `AppRoutes` component handles conditional navigation.
 │         - `AppRoutes` component:
-│           - Initializes `useAuth` to get user and loading state.
-│           - `useEffect` hook manages redirection logic:
-│             - Uses a `useRef` (`isNavigatingFormFlow`) to track if the current render cycle is the result of a "Next"/"Previous" button click within the form flow.
-│             - If `location.state.fromFormFlow` is true (set by form page navigation):
-│               - Sets `isNavigatingFormFlow.current = true`.
-│               - Immediately navigates to the current path again, but *without* `fromFormFlow` in the state. This clears the flag so that subsequent direct loads or refreshes of the page will trigger the main redirection logic.
-│               - The effect then returns.
-│             - On the next run of the effect (due to the navigation above):
-│               - If `isNavigatingFormFlow.current` is true, it's reset to `false` and the effect returns, bypassing the main redirection logic for this specific render. This allows the user to stay on the page they navigated to.
-│             - **Authenticated User Logic (if not a form flow navigation and not loading):**
-│               - Fetches `email_setups` record. The `select()` statement now **only includes `form_complete`, `business_description`, and `goals_form_raw_text`**.
-│               - **If `emailSetup.form_complete` is `true`:** Redirects to `/dashboard` if user is on any form page (excluding `/` itself).
-│               - **If `emailSetup.form_complete` is `false`:**
-│                 - Determines the earliest incomplete step by checking for data presence in sequence: 
-│                   1. `business_description` (if missing, redirect to `/`)
-│                   2. `goals_form_raw_text` (if missing, redirect to `/goals-form`)
-│                   3. Otherwise (both present), redirect to `/select-emails` (as this is the next logical step in the currently implemented flow).
-│                 - (Checks for `selected_emails_data`, `website_status_data`, etc., are effectively removed for now by this simplified logic until their DB columns are added.)
-│                 - If an incomplete step is found and the user is not currently on that step's page, navigates them to that page.
-│               - **If no `emailSetup` record exists for an authenticated user:** Redirects to `/` if the user is on a form page other than the designated entry points.
-│             - **Unauthenticated User Logic:** Standard redirection from protected form pages.
-│           - Root route `/` renders `Index` component.
-│           - Other routes include `/login`, `/signup`, `/dashboard` (protected), and all form flow pages.
-│           - `FORM_FLOW_ORDER` is imported directly.
-│       Usage: Root of the React application, orchestrates page rendering and implements the primary form flow resumption logic.
-│
-├── 📁 shared/
-│   ├── 📁 types/
-│   │   ├── 📄 emailSetupTypes.ts 
-│   │   │   Purpose: Shared type definitions for data structures used by both frontend and backend for email setup.
-│   │   │   Details:
-│   │   │   - `EmailSetupFormData` (if an identical structure is used, or a base type)
-│   │   │   - `ProviderInfo`
-│   │   │   - `DnsRecord`
-│   │   │   - `InitiateEmailSetupRequest` (or its parts if constructed on frontend)
-│   │   │   - `InitiateEmailSetupResponse` (or its parts)
-│   │   │   Usage: Imported by frontend components/services and backend Supabase functions.
-│   │   │
-│   │   ├── 📄 pendingChangeTypes.ts
-│   │   │   Purpose: Defines types related to granular pending changes for V2 email templates.
-│   │   │   Details: Includes `GranularPendingChange`, `GranularPendingChangeInput`, `ChangeOperation`, `ChangeScope`, etc.
-│   │   │   Usage: Used by `generate-email-changes` and `manage-pending-changes` functions, and potentially by frontend components that display or interact with these changes.
-│   │   │
-│   │   └── 📄 templateV2Types.ts
-│   │       Purpose: Defines the core structure of V2 email templates.
-│   │       Details: Includes `EmailTemplateV2`, `SectionV2`, `ElementV2`, and related style/property types. Uses Zod for validation.
-│   │       Usage: Central type definition used by all services and functions that create, parse, modify, or render V2 email templates.
-│   │
-│   └── 📁 services/
-│       ├── 📄 differ.ts (Shared Core)
-│       │   Purpose: Core logic for diffing V2 email templates.
-│       │   Details: Provides `DifferV2Core` class with methods to compare two `EmailTemplateV2` objects and identify differences.
-│       │   Usage: Extended by backend-specific (`src/backend/functions/_shared/services/differ.ts`) and potentially frontend-specific adapters.
-│       │
-│       ├── 📄 htmlGenerator.ts (Shared Core)
-│       │   Purpose: Core logic for generating HTML from V2 email templates.
-│       │   Details: Provides `HtmlGeneratorCore` class with methods to convert an `EmailTemplateV2` object into an HTML string. Adds `data-section-id` attributes.
-│       │   Usage: Extended by backend-specific (`src/backend/functions/_shared/services/htmlGenerator.ts`) and potentially frontend-specific adapters.
-│       │
-│       └── 📄 semanticParser.ts (Shared Core)
-│           Purpose: Core logic for parsing HTML into a V2 email template structure.
-│           Details: Provides `SemanticParserCore` class, defining the interface and shared utilities for converting HTML into `EmailTemplateV2`.
-│           Usage: Extended by frontend-specific (`src/frontend/services/semanticParser.ts` - if it exists) and potentially backend adapters.
+│           - Manages redirection logic based on auth state and `email_setups` data.
+│           - **Authenticated User Resume Logic:**
+│             - If `form_complete` is true, directs to `/dashboard` (if on a form page).
+│             - If `form_complete` is false, determines earliest incomplete step:
+│               1. `business_description` -> `/`
+│               2. `goals_form_raw_text` -> `/goals-form`
+│               3. `selected_campaign_ids` -> `/select-emails`
+│               4. `website_provider` or `domain` missing -> `/website-status`
+│               5. If all above present, directs to step after `/auth-gate` (e.g., `/dns-confirmation`).
+│           - Includes routes for all pages, including form flow: `/`, `/business-overview`, `/optional-signup`, `/goals-form`, `/select-emails`, `/website-status`, `/info-clarification`, `/auth-gate`, `/dns-confirmation`, `/website-tracking`.
+│       Usage: Root of the React application.
 │
 └── 📄 .env.example
     Purpose: Example environment variables file.
@@ -645,7 +617,7 @@
 
 📄 dns-provider-instructions.ts
    Purpose: Stores structured DNS setup instructions for various common DNS providers.
-   Details:
+        Details:
      - Exports `DNS_PROVIDER_INSTRUCTIONS`: An array of `ProviderInstruction` objects.
      - Each `ProviderInstruction` contains:
        - `id`: Normalized string identifier (e.g., "cloudflare", "godaddy").
@@ -666,7 +638,7 @@ This section outlines the structure of key tables in the Supabase PostgreSQL dat
 
 ### ሠ Table: `email_setups`
 Purpose: Stores information related to a user's email domain setup process. This includes initial configuration, DNS settings, and verification status.
-Details:
+        Details:
   - `id`: `uuid` (Primary Key) - Unique identifier for the email setup record.
   - `user_id`: `uuid` (Foreign Key to `auth.users`) - The user who initiated this setup.
   - `domain`: `text` - The domain name the user is setting up (e.g., "example.com").
@@ -674,23 +646,18 @@ Details:
   - `business_subcategory`: `text` - User-provided business subcategory.
   - `goals`: `TEXT[]` (Array of text) - User-selected goals for using the email service.
   - `send_timeline`: `text` - User-indicated timeline for starting to send emails.
-  - `dns_provider_name`: `text` - Name of the DNS provider (e.g., "Cloudflare", "GoDaddy").
-  - `dns_setup_strategy`: `text` - The strategy for DNS setup (e.g., "manual", "automated"). Currently always "manual".
-  - `default_from_name`: `text` - Default "From" name for emails sent from this domain.
-  - `default_from_email`: `text` - Default "From" email address (e.g., "contact@example.com").
-  - `email_scenarios`: `TEXT[]` (Array of text) - User-selected email scenarios.
-  - `status`: `text` - General status of the email setup process (e.g., "pending_dns_config", "active", "error").
-  - `dns_records_to_set`: `jsonb` - JSON object containing the DNS records the user needs to set (e.g., MX, SPF, DKIM, DMARC with host, type, value).
-  - `provider_api_credentials_status`: `text` - Status related to DNS provider API credential validation (if applicable).
-  - `error_message`: `text` - Stores any error message related to the setup process.
-  - `created_at`: `timestamp with time zone` - Timestamp of creation.
-  - `updated_at`: `timestamp with time zone` - Timestamp of last update.
-  - **Existing DNS/DKIM Fields:**
-    - `dkim_selector`: `text` - The DKIM selector used (e.g., "default").
-    - `dkim_public_key`: `text` - The public part of the DKIM key (Base64 encoded).
-  - **New Fields for DNS Record Values & Verification (Phase 1 Plan):**
-    - `mx_record_value`: `TEXT` - Expected MX record value (e.g., "mx.yourmailserver.com").
-    - `spf_record_value`: `TEXT` - Expected SPF record value (e.g., "v=spf1 include:yourmailserver.com ~all").
-    - `dmarc_record_value`: `TEXT` - Expected DMARC record value (e.g., "v=DMARC1; p=none; rua=mailto:dmarc-reports@yourdomain.com").
-    - `mx_status`: `TEXT` - Verification status for MX record (e.g., 'pending', 'verified', 'failed'). Default: 'pending'.
-    - `
+  - `dns_provider_name`: `text` - Name of the DNS provider (e.g., "Cloudflare", "GoDaddy"), potentially auto-detected and set by `get-domain-provider` function.
+  - `dns_setup_strategy`: `text` - Strategy for DNS setup (e.g., "manual").
+  - `dns_records_to_set`: `TEXT[]` (Array of text) - DNS records to be set for the domain.
+  - `status`: `text` - Current status of the email setup process.
+  - `mx_record_value`: `text` - Value of the MX record for the domain.
+  - `spf_record_value`: `text` - Value of the SPF record for the domain.
+  - `dmarc_record_value`: `text` - Value of the DMARC record for the domain.
+  - `mx_status`: `text` - Status of the MX record.
+  - `spf_status`: `text` - Status of the SPF record.
+  - `dkim_status`: `text` - Status of the DKIM record.
+  - `dmarc_status`: `text` - Status of the DMARC record.
+  - `overall_dns_status`: `text` - Overall status of the DNS setup.
+  - `last_verification_attempt_at`: `timestamp` - Timestamp of the last DNS verification attempt.
+  - `verification_failure_reason`: `text` - Reason for DNS verification failure.
+  Usage: Used to store and manage information related to a user's email domain setup process, including DNS configuration, verification status, and other relevant details.
