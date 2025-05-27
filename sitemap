@@ -228,7 +228,7 @@
 │   │   │   Details: Provides main site navigation links. Styled with a dark green background, white text, and yellow accents. 
 │   │   │     - Imports `useAuth` to get `user` and `signOut` function.
 │   │   │     - Conditionally renders a "Sign Out" button if a user is logged in. Clicking it calls `signOut()` and navigates to the homepage.
-│   │   │     - If no user is logged in, it displays "Sign in" and "Sign up" links.
+│   │   │     - If no user is logged in, it displays only a "Sign in" link (Sign up button removed).
 │   │   │     - Includes responsive behavior for mobile (hamburger menu) and desktop.
 │   │   │   Usage: Used in `Index.tsx` and potentially other authenticated/unauthenticated pages where global navigation is needed.
 │   │   │
@@ -240,6 +240,30 @@
 │   │   │   - Styled with a dark background and reduced vertical padding.
 │   │   │   Usage: Used in `Index.tsx`.
 │   │   │
+│   │   ├── 📄 Login.tsx
+│   │   │   Purpose: Authentication page for users to sign in.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
+│   │   │   Usage: Path `/login`.
+│   │   │
+│   │   ├── 📄 Signup.tsx
+│   │   │   Purpose: User registration page.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   Usage: Path `/signup`.
+│   │   │
+│   │   ├── 📄 BusinessOverviewPage.tsx
+│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
+│   │   │   Details:
+│   │   │   - Jungle theme, similar layout to the original Index page (textarea and monkey image).
+│   │   │   - Loads `pendingBusinessDescription` from `localStorage` into the textarea on mount.
+│   │   │   - **No "Previous" button.** Users can only confirm/edit and continue.
+│   │   │   - **"Confirm Business Overview & Continue" button (`handleConfirmAndContinue`):**
+│   │   │     - Saves `businessDescription` to `localStorage`.
+│   │   │     - **Authenticated User:** Navigates directly to `/goals-form` (skipping `/optional-signup`).
+│   │   │     - **Guest User:** Navigates to `/optional-signup`.
+│   │   │   - Uses `useAuth` to determine if a user is authenticated.
+│   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
+│   │   │   Usage: Step in the multi-step onboarding flow. 
+│   │   │
 │   │   ├── 📄 OptionalSignUpPage.tsx
 │   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
 │   │   │   Details:
@@ -249,7 +273,7 @@
 │   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
 │   │   │   Usage: Part of the multi-step onboarding flow.
 │   │   │
-│   │   ├── �� GoalsFormPage.tsx
+│   │   ├── 📄 GoalsFormPage.tsx
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
 │   │   │   - Jungle theme, full-screen layout.
@@ -261,8 +285,11 @@
 │   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
 │   │   │     - **Guest user:** Saves to `localStorage` (`pendingUserGoals`, `pendingUserGoalsRawText`).
 │   │   │     - Handles errors with toasts.
-│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER` from `src/core/constants.ts` to determine navigation paths. Saves data on "Continue".
-│   │   │   Usage: Second step in the multi-step onboarding flow, after `OptionalSignUpPage`.
+│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
+│   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
+│   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
+│   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
 │   │   │
 │   │   ├── 📄 BusinessClarificationPage.tsx
 │   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
@@ -318,21 +345,36 @@
 │   │   │   Details:
 │   │   │   - Serves as the entry point for users visiting the root URL.
 │   │   │   - Displays a jungle-themed layout (green background) with a themed main navigation bar.
-│   │   │   - Content area features a large `<textarea>` for business description input and a monkey image.
+│   │   │   - Content area (Navbar + main section with textarea/image) is set to `min-h-screen`.
+│   │   │   - The `Footer` component is rendered separately, after the main content, making it appear below the initial viewport fold.
 │   │   │   - Button "make me an email marketing machine!" initiates the flow.
 │   │   │   - **Navigation**: The main button now navigates directly to `/optional-signup`.
 │   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
 │   │   │   Usage: Rendered at the root path ('/') for unauthenticated users.
 │   │   │
+│   │   ├── 📄 Login.tsx
+│   │   │   Purpose: Authentication page for users to sign in.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
+│   │   │   Usage: Path `/login`.
+│   │   │
+│   │   ├── 📄 Signup.tsx
+│   │   │   Purpose: User registration page.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   Usage: Path `/signup`.
+│   │   │
 │   │   ├── 📄 BusinessOverviewPage.tsx
-│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page.
+│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
 │   │   │   Details:
 │   │   │   - Jungle theme, similar layout to the original Index page (textarea and monkey image).
 │   │   │   - Loads `pendingBusinessDescription` from `localStorage` into the textarea on mount.
-│   │   │   - "Previous" button navigates to `/` (Index page).
-│   │   │   - "Confirm Business Overview & Continue" button saves the `businessDescription` to `localStorage` and navigates to `/optional-signup` (using `FORM_FLOW_ORDER`).
+│   │   │   - **No "Previous" button.** Users can only confirm/edit and continue.
+│   │   │   - **"Confirm Business Overview & Continue" button (`handleConfirmAndContinue`):**
+│   │   │     - Saves `businessDescription` to `localStorage`.
+│   │   │     - **Authenticated User:** Navigates directly to `/goals-form` (skipping `/optional-signup`).
+│   │   │     - **Guest User:** Navigates to `/optional-signup`.
+│   │   │   - Uses `useAuth` to determine if a user is authenticated.
 │   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   │   Usage: Step in the multi-step onboarding flow, between `/` and `/optional-signup` if user navigates backwards from `/optional-signup`.
+│   │   │   Usage: Step in the multi-step onboarding flow. 
 │   │   │
 │   │   ├── 📄 OptionalSignUpPage.tsx
 │   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
@@ -343,7 +385,7 @@
 │   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
 │   │   │   Usage: Part of the multi-step onboarding flow.
 │   │   │
-│   │   ├── �� GoalsFormPage.tsx
+│   │   ├── 📄 GoalsFormPage.tsx
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
 │   │   │   - Jungle theme, full-screen layout.
@@ -355,8 +397,11 @@
 │   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
 │   │   │     - **Guest user:** Saves to `localStorage` (`pendingUserGoals`, `pendingUserGoalsRawText`).
 │   │   │     - Handles errors with toasts.
-│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER` from `src/core/constants.ts` to determine navigation paths. Saves data on "Continue".
-│   │   │   Usage: Second step in the multi-step onboarding flow, after `OptionalSignUpPage`.
+│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
+│   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
+│   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
+│   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
 │   │   │
 │   │   ├── 📄 BusinessClarificationPage.tsx
 │   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
@@ -412,21 +457,36 @@
 │   │   │   Details:
 │   │   │   - Serves as the entry point for users visiting the root URL.
 │   │   │   - Displays a jungle-themed layout (green background) with a themed main navigation bar.
-│   │   │   - Content area features a large `<textarea>` for business description input and a monkey image.
+│   │   │   - Content area (Navbar + main section with textarea/image) is set to `min-h-screen`.
+│   │   │   - The `Footer` component is rendered separately, after the main content, making it appear below the initial viewport fold.
 │   │   │   - Button "make me an email marketing machine!" initiates the flow.
 │   │   │   - **Navigation**: The main button now navigates directly to `/optional-signup`.
 │   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
 │   │   │   Usage: Rendered at the root path ('/') for unauthenticated users.
 │   │   │
+│   │   ├── 📄 Login.tsx
+│   │   │   Purpose: Authentication page for users to sign in.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
+│   │   │   Usage: Path `/login`.
+│   │   │
+│   │   ├── 📄 Signup.tsx
+│   │   │   Purpose: User registration page.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   Usage: Path `/signup`.
+│   │   │
 │   │   ├── 📄 BusinessOverviewPage.tsx
-│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page.
+│   │   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
 │   │   │   Details:
 │   │   │   - Jungle theme, similar layout to the original Index page (textarea and monkey image).
 │   │   │   - Loads `pendingBusinessDescription` from `localStorage` into the textarea on mount.
-│   │   │   - "Previous" button navigates to `/` (Index page).
-│   │   │   - "Confirm Business Overview & Continue" button saves the `businessDescription` to `localStorage` and navigates to `/optional-signup` (using `FORM_FLOW_ORDER`).
+│   │   │   - **No "Previous" button.** Users can only confirm/edit and continue.
+│   │   │   - **"Confirm Business Overview & Continue" button (`handleConfirmAndContinue`):**
+│   │   │     - Saves `businessDescription` to `localStorage`.
+│   │   │     - **Authenticated User:** Navigates directly to `/goals-form` (skipping `/optional-signup`).
+│   │   │     - **Guest User:** Navigates to `/optional-signup`.
+│   │   │   - Uses `useAuth` to determine if a user is authenticated.
 │   │   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   │   Usage: Step in the multi-step onboarding flow, between `/` and `/optional-signup` if user navigates backwards from `/optional-signup`.
+│   │   │   Usage: Step in the multi-step onboarding flow. 
 │   │   │
 │   │   ├── 📄 OptionalSignUpPage.tsx
 │   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
@@ -437,7 +497,7 @@
 │   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
 │   │   │   Usage: Part of the multi-step onboarding flow.
 │   │   │
-│   │   ├── �� GoalsFormPage.tsx
+│   │   ├── 📄 GoalsFormPage.tsx
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
 │   │   │   - Jungle theme, full-screen layout.
@@ -449,8 +509,11 @@
 │   │   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
 │   │   │     - **Guest user:** Saves to `localStorage` (`pendingUserGoals`, `pendingUserGoalsRawText`).
 │   │   │     - Handles errors with toasts.
-│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER` from `src/core/constants.ts` to determine navigation paths. Saves data on "Continue".
-│   │   │   Usage: Second step in the multi-step onboarding flow, after `OptionalSignUpPage`.
+│   │   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
+│   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
+│   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
+│   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
 │   │   │
 │   │   ├── 📄 BusinessClarificationPage.tsx
 │   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
@@ -506,20 +569,29 @@
 │         - `AppRoutes` component:
 │           - Initializes `useAuth` to get user and loading state.
 │           - `useEffect` hook manages redirection logic:
-│             - If `location.state.fromFormFlow` is true, bypasses general redirection for that render cycle, allowing direct inter-page navigation within the form flow.
-│             - **Authenticated User Logic (if not `fromFormFlow`):**
-│               - Uses a `useRef` flag (`initialRedirectDone`) to ensure the "earliest incomplete step" check runs only once per user session (after login or on initial authenticated load).
-│               - Fetches `email_setups` record. The `select()` statement now includes `form_complete`, `business_description`, `goals_form_raw_text`, `selected_emails_data`, `clarification_data`, `website_status_data`, `dns_confirmation_data`, `website_tracking_data`. It's understood that this will cause runtime database errors if these columns do not exist in the `email_setups` table, but the select includes them to align with the full intended form flow data requirements.
-│               - **If `emailSetup.form_complete` is `true`:** Redirects to `/dashboard` if user is on any form page *other than* `/`, `/business-overview`, or `/optional-signup`.
-│               - **If `emailSetup.form_complete` is `false` (and `initialRedirectDone` is false):**
-│                 - Determines the earliest incomplete step by checking for data presence in sequence based on `FORM_FLOW_ORDER`: `business_description` (checked effectively by presence on `/` or `/business-overview`), then `goals_form_raw_text`, then `selected_emails_data`, `website_status_data`, `clarification_data`, `dns_confirmation_data`, `website_tracking_data`.
-│                 - If an incomplete step is found and the user is not currently on that step's page, navigates them to that page and sets `initialRedirectDone` to `true`.
-│                 - If user is already on the target page, or if all checks pass, sets `initialRedirectDone` to `true`.
-│               - **If no `emailSetup` record exists for an authenticated user (and `initialRedirectDone` is false):** Redirects to `/` (unless already on `/`, `/business-overview`, or `/optional-signup`) and sets `initialRedirectDone` to `true`.
-│             - **Unauthenticated User Logic:** Redirects from most form pages to `/` or `/login`. `/`, `/business-overview`, and `/optional-signup` remain accessible. Resets `initialRedirectDone` to `false`.
+│             - Uses a `useRef` (`isNavigatingFormFlow`) to track if the current render cycle is the result of a "Next"/"Previous" button click within the form flow.
+│             - If `location.state.fromFormFlow` is true (set by form page navigation):
+│               - Sets `isNavigatingFormFlow.current = true`.
+│               - Immediately navigates to the current path again, but *without* `fromFormFlow` in the state. This clears the flag so that subsequent direct loads or refreshes of the page will trigger the main redirection logic.
+│               - The effect then returns.
+│             - On the next run of the effect (due to the navigation above):
+│               - If `isNavigatingFormFlow.current` is true, it's reset to `false` and the effect returns, bypassing the main redirection logic for this specific render. This allows the user to stay on the page they navigated to.
+│             - **Authenticated User Logic (if not a form flow navigation and not loading):**
+│               - Fetches `email_setups` record. The `select()` statement now **only includes `form_complete`, `business_description`, and `goals_form_raw_text`**.
+│               - **If `emailSetup.form_complete` is `true`:** Redirects to `/dashboard` if user is on any form page (excluding `/` itself).
+│               - **If `emailSetup.form_complete` is `false`:**
+│                 - Determines the earliest incomplete step by checking for data presence in sequence: 
+│                   1. `business_description` (if missing, redirect to `/`)
+│                   2. `goals_form_raw_text` (if missing, redirect to `/goals-form`)
+│                   3. Otherwise (both present), redirect to `/select-emails` (as this is the next logical step in the currently implemented flow).
+│                 - (Checks for `selected_emails_data`, `website_status_data`, etc., are effectively removed for now by this simplified logic until their DB columns are added.)
+│                 - If an incomplete step is found and the user is not currently on that step's page, navigates them to that page.
+│               - **If no `emailSetup` record exists for an authenticated user:** Redirects to `/` if the user is on a form page other than the designated entry points.
+│             - **Unauthenticated User Logic:** Standard redirection from protected form pages.
 │           - Root route `/` renders `Index` component.
-│           - Other routes include `/login`, `/signup`, `/dashboard` (protected), and all form flow pages including the new `/business-overview`.
-│       Usage: Root of the React application, orchestrates page rendering and implements the primary form flow resumption logic, focusing initial redirection on login/session start.
+│           - Other routes include `/login`, `/signup`, `/dashboard` (protected), and all form flow pages.
+│           - `FORM_FLOW_ORDER` is imported directly.
+│       Usage: Root of the React application, orchestrates page rendering and implements the primary form flow resumption logic.
 │
 ├── 📁 shared/
 │   ├── 📁 types/
@@ -621,15 +693,4 @@ Details:
     - `spf_record_value`: `TEXT` - Expected SPF record value (e.g., "v=spf1 include:yourmailserver.com ~all").
     - `dmarc_record_value`: `TEXT` - Expected DMARC record value (e.g., "v=DMARC1; p=none; rua=mailto:dmarc-reports@yourdomain.com").
     - `mx_status`: `TEXT` - Verification status for MX record (e.g., 'pending', 'verified', 'failed'). Default: 'pending'.
-    - `spf_status`: `TEXT` - Verification status for SPF record. Default: 'pending'.
-    - `dkim_status`: `TEXT` - Verification status for DKIM record. Default: 'pending'.
-    - `dmarc_status`: `TEXT` - Verification status for DMARC record. Default: 'pending'.
-    - `overall_dns_status`: `TEXT` - Overall DNS verification status (e.g., 'pending', 'partially_verified', 'verified', 'failed_to_verify'). Default: 'pending'.
-    - `last_verification_attempt_at`: `TIMESTAMPTZ` - Timestamp of the last DNS verification attempt.
-    - `verification_failure_reason`: `TEXT` - Stores any error message if the overall verification process fails.
-Usage:
-  - Read and written by `save-email-setup-form` to store initial data.
-  - Read and updated by `initiate-email-setup` to store generated DNS records, DKIM key, and initialize verification statuses.
-  - Will be read and updated by the new `verify-dns-records` function to check and store DNS verification statuses.
-  - Read by frontend components to display setup progress and DNS instructions.
-## PROJECT STRUCTURE MAP
+    - `

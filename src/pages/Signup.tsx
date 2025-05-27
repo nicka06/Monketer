@@ -63,31 +63,32 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-sm w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-green-700 text-white">
+      <div className="bg-green-800 bg-opacity-80 p-8 rounded-lg shadow-xl w-full max-w-md">
         <div className="flex flex-col items-center space-y-2 mb-8">
-          <Mail className="h-8 w-8 text-monketer-purple" />
-          <h1 className="text-2xl font-semibold">Create an account</h1>
-          <p className="text-gray-500">Sign up to start creating emails</p>
+          <Mail className="h-10 w-10 text-yellow-400" />
+          <h1 className="text-3xl font-bold text-yellow-400">Create Your Monketer Account</h1>
+          <p className="text-gray-300">Unleash the email beast!</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+            <label htmlFor="email" className="block text-sm font-medium text-gray-200 mb-1">
+              Email Address
             </label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-monketer-purple focus:border-transparent"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent placeholder-gray-400 text-white"
               required
+              placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-200 mb-1">
               Password
             </label>
             <input
@@ -95,8 +96,9 @@ const Signup = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-monketer-purple focus:border-transparent"
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent placeholder-gray-400 text-white"
               required
+              placeholder="••••••••"
             />
           </div>
 
@@ -104,16 +106,16 @@ const Signup = () => {
             <input
               id="terms"
               type="checkbox"
-              className="h-4 w-4 text-monketer-purple focus:ring-monketer-purple border-gray-300 rounded"
+              className="h-4 w-4 text-yellow-400 focus:ring-yellow-500 border-gray-500 rounded bg-gray-700"
               required
             />
-            <label htmlFor="terms" className="ml-2 block text-sm text-gray-600">
+            <label htmlFor="terms" className="ml-2 block text-sm text-gray-300">
               I agree to the{" "}
-              <Link to="#" className="text-monketer-purple hover:text-monketer-purple-dark">
-                Terms
+              <Link to="/terms-of-service" className="text-yellow-400 hover:text-yellow-300 underline">
+                Terms of Service
               </Link>{" "}
               and{" "}
-              <Link to="#" className="text-monketer-purple hover:text-monketer-purple-dark">
+              <Link to="/privacy-policy" className="text-yellow-400 hover:text-yellow-300 underline">
                 Privacy Policy
               </Link>
             </label>
@@ -121,17 +123,17 @@ const Signup = () => {
 
           <Button
             type="submit"
-            className="w-full bg-monketer-purple hover:bg-monketer-purple-dark"
+            className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
             disabled={loading}
           >
-            {loading ? "Creating account..." : "Sign up"}
+            {loading ? "Creating Account..." : "Sign Up & Enter the Jungle"}
           </Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
+        <p className="mt-6 text-center text-sm text-gray-300">
           Already have an account?{" "}
-          <Link to="/login" className="text-monketer-purple hover:text-monketer-purple-dark">
-            Sign in
+          <Link to="/login" className="text-yellow-400 hover:text-yellow-300 font-semibold underline">
+            Sign In
           </Link>
         </p>
       </div>

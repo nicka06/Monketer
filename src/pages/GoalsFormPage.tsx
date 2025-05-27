@@ -68,16 +68,30 @@ const GoalsFormPage: React.FC = () => {
       if (currentIndex < FORM_FLOW_ORDER.length - 1) {
         targetPath = FORM_FLOW_ORDER[currentIndex + 1];
       } else {
-        // Handle case where it's the last step (e.g., navigate to dashboard or summary)
-        // For now, let's assume it navigates to /select-emails as per original logic
-        targetPath = '/select-emails'; // Or determine dynamically if it's truly the end
+        targetPath = '/select-emails';
       }
     } else { // direction === 'previous'
+      if (!user) {
+        if (goals.trim() !== '') {
+          localStorage.setItem('pendingUserGoalsRawText', goals);
+          const goalsArray = goals.split('\n').map(g => g.trim()).filter(g => g !== '');
+          localStorage.setItem('pendingUserGoals', JSON.stringify(goalsArray));
+          console.log("GoalsFormPage (Guest): Saved current goals to localStorage on 'Previous' navigation.");
+        } else {
+          localStorage.removeItem('pendingUserGoalsRawText');
+          localStorage.removeItem('pendingUserGoals');
+        }
+      }
+
+      let previousPathFromOrder = '/optional-signup';
       if (currentIndex > 0) {
-        targetPath = FORM_FLOW_ORDER[currentIndex - 1];
+        previousPathFromOrder = FORM_FLOW_ORDER[currentIndex - 1];
+      }
+
+      if (user && previousPathFromOrder === '/optional-signup') {
+        targetPath = '/business-overview';
       } else {
-        // Handle case where it's the first step (e.g., do nothing or specific back action)
-        targetPath = '/optional-signup'; // Navigate to Optional Sign Up if this is the effective first data entry page
+        targetPath = previousPathFromOrder;
       }
     }
 
