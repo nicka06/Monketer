@@ -6,9 +6,10 @@ export const FORM_FLOW_ORDER = [
   '/select-emails',                // SelectEmailsPage.tsx
   '/website-status',               // WebsiteStatusPage.tsx
   '/info-clarification',           // InfoClarificationPage.tsx
-  '/auth-gate',                    // AuthGatePage.tsx (NEW)
+  '/auth-gate',                    // AuthGatePage.tsx 
   '/dns-confirmation',             // DnsConfirmationPage.tsx
-  '/website-tracking'              // WebsiteTrackingPage.tsx
+  '/website-tracking',              // WebsiteTrackingPage.tsx
+  '/subscription-plan'             // PlanSelectionPage.tsx 
 ];
 
 export const DNS_PROVIDER_DISPLAY_OPTIONS = [

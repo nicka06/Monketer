@@ -1,23 +1,59 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
 import { useAuth } from "@/features/auth/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const BusinessOverviewPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [businessDescription, setBusinessDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadBusinessDescription = useCallback(async () => {
+    setIsLoading(true);
+    let desc = '';
+    if (user && user.id) {
+      try {
+        const { data, error } = await supabase
+          .from('email_setups')
+          .select('business_description')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        if (data?.business_description) {
+          desc = data.business_description;
+        } else {
+          const savedDesc = localStorage.getItem('pendingBusinessDescription');
+          if (savedDesc) {
+            desc = savedDesc;
+          }
+        }
+      } catch (error: any) {
+        console.error("BusinessOverviewPage: Error loading data for authenticated user:", error);
+        toast({ title: "Error Loading Data", description: "Could not load your business description.", variant: "destructive" });
+      }
+    } else {
+      const savedDesc = localStorage.getItem('pendingBusinessDescription');
+      if (savedDesc) {
+        desc = savedDesc;
+      }
+    }
+    setBusinessDescription(desc);
+    setIsLoading(false);
+  }, [user, toast]);
 
   useEffect(() => {
-    // Load existing description from localStorage if available
-    const savedDesc = localStorage.getItem('pendingBusinessDescription');
-    if (savedDesc) {
-      setBusinessDescription(savedDesc);
-    }
-  }, []);
+    loadBusinessDescription();
+  }, [loadBusinessDescription]);
 
   // Simplified navigation: this page only goes 'next'
   const handleNavigateNext = () => {
@@ -68,14 +104,20 @@ const BusinessOverviewPage = () => {
         <div className="flex flex-col md:flex-row items-stretch gap-8 w-full max-w-6xl">
           <div className="md:w-1/2 bg-black bg-opacity-50 p-6 rounded-lg flex flex-col space-y-4">
             <h2 className="text-2xl font-bold text-yellow-400 mb-4 text-center">Describe Your Business</h2>
-            <textarea 
-              id="businessDescription"
-              placeholder="Explain your business. ex: An ecommerce store selling candles and soaps"
-              className="flex-grow p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-              rows={8}
-              value={businessDescription}
-              onChange={(e) => setBusinessDescription(e.target.value)}
-            />
+            {isLoading ? (
+              <div className="flex-grow flex items-center justify-center">
+                <p className="text-lg">Loading description...</p>
+              </div>
+            ) : (
+              <textarea 
+                id="businessDescription"
+                placeholder="Explain your business. ex: An ecommerce store selling candles and soaps"
+                className="flex-grow p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                rows={8}
+                value={businessDescription}
+                onChange={(e) => setBusinessDescription(e.target.value)}
+              />
+            )}
             <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:justify-end">
               <button 
                 type="button"

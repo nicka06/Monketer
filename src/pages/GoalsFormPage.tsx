@@ -6,7 +6,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import { FORM_FLOW_ORDER } from '@/core/constants'; // Import the constant
-// import Navbar from '@/components/Navbar'; // No Navbar for this form page for now
+import Navbar from '@/components/Navbar'; // Added Navbar import
 // import Footer from '@/components/Footer'; // No Footer for this form page for now
 
 const GoalsFormPage: React.FC = () => {
@@ -158,50 +158,53 @@ const GoalsFormPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8">
-      <div className="w-full max-w-2xl space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">What Are Your Goals?</h1>
-          <p className="text-lg text-gray-200">
-            Help us understand what you want to achieve with your email marketing.
-          </p>
+    <>
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8 pt-20 md:pt-24">
+        <div className="w-full max-w-2xl space-y-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">What Are Your Goals?</h1>
+            <p className="text-lg text-gray-200">
+              Help us understand what you want to achieve with your email marketing.
+            </p>
+          </div>
+
+          <form onSubmit={(e) => handleSubmitGoals(e, true)} className="space-y-6 bg-green-700 bg-opacity-50 p-6 md:p-8 rounded-xl shadow-xl">
+            <div>
+              <Textarea
+                id="goals-input"
+                value={goals}
+                onChange={(e) => setGoals(e.target.value)}
+                placeholder="I run an online store that sells handmade artisan soaps and candles. My main goal right now is to significantly boost sales. I want to see at least a 30% increase in revenue over the next quarter. I'm also looking to grow my customer base, so acquiring new subscribers for my email list is important, maybe aiming for 500 new opt-ins. Ultimately, I want to build a loyal community around my brand and increase repeat purchases through engaging email campaigns."
+                className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent min-h-[150px]"
+                rows={5}
+                required
+                disabled={isLoading} // Disable textarea while loading saved goals
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleNavigate('previous')}
+                className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                disabled={isLoading}
+              >
+                Previous
+              </Button>
+              <Button
+                type="submit"
+                className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving Goals...' : 'Save Goals & Continue'}
+              </Button>
+            </div>
+          </form>
         </div>
-
-        <form onSubmit={(e) => handleSubmitGoals(e, true)} className="space-y-6 bg-green-700 bg-opacity-50 p-6 md:p-8 rounded-xl shadow-xl">
-          <div>
-            <Textarea
-              id="goals-input"
-              value={goals}
-              onChange={(e) => setGoals(e.target.value)}
-              placeholder="I run an online store that sells handmade artisan soaps and candles. My main goal right now is to significantly boost sales. I want to see at least a 30% increase in revenue over the next quarter. I'm also looking to grow my customer base, so acquiring new subscribers for my email list is important, maybe aiming for 500 new opt-ins. Ultimately, I want to build a loyal community around my brand and increase repeat purchases through engaging email campaigns."
-              className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent min-h-[150px]"
-              rows={5}
-              required
-              disabled={isLoading} // Disable textarea while loading saved goals
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleNavigate('previous')}
-              className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-              disabled={isLoading}
-            >
-              Previous
-            </Button>
-            <Button
-              type="submit"
-              className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Saving Goals...' : 'Save Goals & Continue'}
-            </Button>
-          </div>
-        </form>
       </div>
-    </div>
+    </>
   );
 };
 

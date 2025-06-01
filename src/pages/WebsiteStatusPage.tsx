@@ -7,6 +7,7 @@ import { FORM_FLOW_ORDER } from '@/core/constants';
 import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
+import Navbar from '@/components/Navbar';
 
 const PROVIDER_OPTIONS = [
   { id: 'shopify', name: 'Shopify' },
@@ -162,83 +163,86 @@ const WebsiteStatusPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8">
-      <div className="bg-green-700 bg-opacity-75 p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg space-y-8">
-        {currentSubStep === 1 && (
-          <div className="text-center space-y-6">
-            <h2 className="text-3xl font-bold text-yellow-400">Do you have a website?</h2>
-            <p className="text-gray-200">This helps us tailor our services for you.</p>
-            <div className="flex justify-center gap-4">
-              <Button onClick={() => handleHasWebsiteResponse(true)} size="lg" className="bg-yellow-400 hover:bg-yellow-500 text-green-900">Yes, I do!</Button>
-              <Button onClick={() => handleHasWebsiteResponse(false)} variant="outline" size="lg" className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900">No, not yet</Button>
+    <>
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8 pt-20 md:pt-24">
+        <div className="bg-green-700 bg-opacity-75 p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg space-y-8">
+          {currentSubStep === 1 && (
+            <div className="text-center space-y-6">
+              <h2 className="text-3xl font-bold text-yellow-400">Do you have a website?</h2>
+              <p className="text-gray-200">This helps us tailor our services for you.</p>
+              <div className="flex justify-center gap-4">
+                <Button onClick={() => handleHasWebsiteResponse(true)} size="lg" className="bg-yellow-400 hover:bg-yellow-500 text-green-900">Yes, I do!</Button>
+                <Button onClick={() => handleHasWebsiteResponse(false)} variant="outline" size="lg" className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900">No, not yet</Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {currentSubStep === 2 && (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-yellow-400 text-center">Who hosts your website?</h2>
-            <p className="text-gray-200 text-center">Knowing your provider helps us with setup guidance later.</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {PROVIDER_OPTIONS.map(provider => (
-                <Button key={provider.id} variant={selectedProvider === provider.id ? "default" : "outline"} onClick={() => handleProviderSelect(provider.id)} className={`py-4 h-auto text-center ${selectedProvider === provider.id ? 'bg-yellow-400 text-green-900' : 'text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900'}`}>
-                  {provider.name}
+          {currentSubStep === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-3xl font-bold text-yellow-400 text-center">Who hosts your website?</h2>
+              <p className="text-gray-200 text-center">Knowing your provider helps us with setup guidance later.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {PROVIDER_OPTIONS.map(provider => (
+                  <Button key={provider.id} variant={selectedProvider === provider.id ? "default" : "outline"} onClick={() => handleProviderSelect(provider.id)} className={`py-4 h-auto text-center ${selectedProvider === provider.id ? 'bg-yellow-400 text-green-900' : 'text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900'}`}>
+                    {provider.name}
+                  </Button>
+                ))}
+              </div>
+               <Button variant="link" onClick={() => setCurrentSubStep(1)} className="text-sm text-yellow-200 hover:text-yellow-100">Back</Button>
+            </div>
+          )}
+
+          {currentSubStep === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-3xl font-bold text-yellow-400 text-center">What's your domain name?</h2>
+              <p className="text-gray-200 text-center">Please enter your primary website domain (e.g., example.com).</p>
+              <Input 
+                type="text" 
+                placeholder="yourwebsite.com"
+                value={domainName}
+                onChange={(e) => setDomainName(e.target.value.toLowerCase())}
+                className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent text-lg"
+              />
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button type="button" variant="outline" onClick={() => setCurrentSubStep(2)} className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg">Back</Button>
+                <Button type="button" onClick={() => handleSaveAndNavigate('next')} disabled={isSaving} className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg">
+                  {isSaving ? 'Saving...' : 'Save & Continue'}
                 </Button>
-              ))}
+              </div>
             </div>
-             <Button variant="link" onClick={() => setCurrentSubStep(1)} className="text-sm text-yellow-200 hover:text-yellow-100">Back</Button>
-          </div>
-        )}
-
-        {currentSubStep === 3 && (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-yellow-400 text-center">What's your domain name?</h2>
-            <p className="text-gray-200 text-center">Please enter your primary website domain (e.g., example.com).</p>
-            <Input 
-              type="text" 
-              placeholder="yourwebsite.com"
-              value={domainName}
-              onChange={(e) => setDomainName(e.target.value.toLowerCase())}
-              className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent text-lg"
-            />
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button type="button" variant="outline" onClick={() => setCurrentSubStep(2)} className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg">Back</Button>
-              <Button type="button" onClick={() => handleSaveAndNavigate('next')} disabled={isSaving} className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg">
-                {isSaving ? 'Saving...' : 'Save & Continue'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {currentSubStep !== 3 && (
-        <div className="mt-8 w-full max-w-lg flex justify-start">
-            <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleSaveAndNavigate('previous')}
-                className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-                disabled={isSaving || isLoading || currentSubStep === 1} // Can't go previous from step 1 of this page.
-            >
-                Previous Page
-            </Button>
+          )}
         </div>
-      )}
 
-      <Dialog open={showNoWebsiteModal} onOpenChange={setShowNoWebsiteModal}>
-        <DialogContent className="bg-green-700 text-white border-yellow-400">
-          <DialogHeader>
-            <DialogTitle className="text-yellow-400">Website Required</DialogTitle>
-            <DialogDescription className="text-gray-200">
-              To effectively use our email marketing tools and features like DNS setup for your domain, a website is required. Please create a website and then return to this step.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setShowNoWebsiteModal(false)} className="bg-yellow-400 hover:bg-yellow-500 text-green-900">OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {currentSubStep !== 3 && (
+          <div className="mt-8 w-full max-w-lg flex justify-start">
+              <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleSaveAndNavigate('previous')}
+                  className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                  disabled={isSaving || isLoading}
+              >
+                  Previous Page
+              </Button>
+          </div>
+        )}
+
+        <Dialog open={showNoWebsiteModal} onOpenChange={setShowNoWebsiteModal}>
+          <DialogContent className="bg-green-700 text-white border-yellow-400">
+            <DialogHeader>
+              <DialogTitle className="text-yellow-400">Website Required</DialogTitle>
+              <DialogDescription className="text-gray-200">
+                To effectively use our email marketing tools and features like DNS setup for your domain, a website is required. Please create a website and then return to this step.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={() => setShowNoWebsiteModal(false)} className="bg-yellow-400 hover:bg-yellow-500 text-green-900">OK</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 };
 

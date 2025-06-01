@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom'; 
 import { FORM_FLOW_ORDER } from '@/core/constants';
+import Navbar from '@/components/Navbar';
 
 const AuthGatePage: React.FC = () => {
   const navigate = useNavigate();
@@ -126,81 +127,84 @@ const AuthGatePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-green-700 flex flex-col items-center justify-center p-4 relative">
-        <img src="/images/homepage_monkey_swinging.png" alt="Jungle Monkey" className="absolute top-10 left-10 w-32 h-auto hidden md:block opacity-80" />
-        <img src="/images/leaf_pattern_bottom_right.png" alt="Leaf Pattern" className="absolute bottom-0 right-0 w-64 h-auto hidden md:block opacity-70" />
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-green-700 flex flex-col items-center justify-center p-4 relative pt-20">
+        <img src="/images/homepage_monkey_swinging.png" alt="Jungle Monkey" className="absolute top-20 left-10 w-32 h-auto hidden md:block opacity-80 z-0" />
+        <img src="/images/leaf_pattern_bottom_right.png" alt="Leaf Pattern" className="absolute bottom-0 right-0 w-64 h-auto hidden md:block opacity-70 z-0" />
 
-      <div className="w-full max-w-md bg-green-800 bg-opacity-80 p-8 rounded-xl shadow-2xl space-y-6 z-10">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-yellow-400 mb-2">Almost There!</h1>
-          <p className="text-gray-200">
-            {isSignUp ? 'Create an account to save your progress and continue.' : 'Sign in to save your progress and continue.'}
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-yellow-300">
-              Email Address
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full bg-gray-800 border-gray-700 text-white rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3"
-              placeholder="you@example.com"
-            />
+        <div className="w-full max-w-md bg-green-800 bg-opacity-80 p-8 rounded-xl shadow-2xl space-y-6 z-10">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-yellow-400 mb-2">Almost There!</h1>
+            <p className="text-gray-200">
+              {isSignUp ? 'Create an account to save your progress and continue.' : 'Sign in to save your progress and continue.'}
+            </p>
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-yellow-300">
-              Password
-            </label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full bg-gray-800 border-gray-700 text-white rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3"
-              placeholder="••••••••"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-yellow-300">
+                Email Address
+              </label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full bg-gray-800 border-gray-700 text-white rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3"
+                placeholder="you@example.com"
+              />
+            </div>
 
-          <div>
-            <Button 
-              type="submit" 
-              disabled={loading} 
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-green-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out"
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-yellow-300">
+                Password
+              </label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete={isSignUp ? "new-password" : "current-password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full bg-gray-800 border-gray-700 text-white rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm p-3"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div>
+              <Button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-green-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition duration-150 ease-in-out"
+              >
+                {loading ? 'Processing...' : (isSignUp ? 'Sign Up & Save Progress' : 'Sign In & Save Progress')}
+              </Button>
+            </div>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-300">
+            {isSignUp ? 'Already have an account?' : 'Don\'t have an account?'}{' '}
+            <button 
+              onClick={() => setIsSignUp(!isSignUp)} 
+              className="font-medium text-yellow-400 hover:text-yellow-300 focus:outline-none focus:underline transition ease-in-out duration-150"
             >
-              {loading ? 'Processing...' : (isSignUp ? 'Sign Up & Save Progress' : 'Sign In & Save Progress')}
-            </Button>
+              {isSignUp ? 'Sign In' : 'Sign Up'}
+            </button>
+          </p>
+          
+          <div className="text-center mt-4">
+              <Link to="/" className="text-xs text-yellow-200 hover:text-yellow-100 underline">
+                  Or, start over from homepage?
+              </Link>
           </div>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-300">
-          {isSignUp ? 'Already have an account?' : 'Don\'t have an account?'}{' '}
-          <button 
-            onClick={() => setIsSignUp(!isSignUp)} 
-            className="font-medium text-yellow-400 hover:text-yellow-300 focus:outline-none focus:underline transition ease-in-out duration-150"
-          >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
-          </button>
-        </p>
-        
-        <div className="text-center mt-4">
-            <Link to="/" className="text-xs text-yellow-200 hover:text-yellow-100 underline">
-                Or, start over from homepage?
-            </Link>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

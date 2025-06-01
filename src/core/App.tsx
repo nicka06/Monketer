@@ -91,46 +91,86 @@ const AppRoutes = () => {
     if (user && user.id) {
       console.log('App.tsx useEffect: User is authenticated. Current path before fetchAndRedirect:', location.pathname);
       const fetchAndRedirect = async () => {
-        // Log current session details from useAuth()
-        if (session) {
-          const accessTokenShort = session.access_token.substring(0, 10) + "..." + session.access_token.substring(session.access_token.length - 10);
-          console.log('App.tsx fetchAndRedirect: Current session state:', {
-            userId: session.user?.id,
-            accessToken: accessTokenShort,
-            expiresAt: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'N/A',
-            expiresIn: session.expires_in,
-            tokenType: session.token_type,
-          });
-        } else {
-          console.log('App.tsx fetchAndRedirect: No active session object from useAuth.');
-        }
+        if (!user || !user.id) return;
 
-        console.log('App.tsx fetchAndRedirect: Fetching email_setups for user:', user.id);
-        const { data: emailSetup, error } = await supabase
-          .from('email_setups')
-          .select('business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        console.log('App.tsx fetchAndRedirect: Fetching data for user:', user.id);
 
-        if (error) {
-          console.error("App.tsx: Error fetching email_setups:", error);
-          toast({ title: "Error Loading Setup", description: "Could not retrieve your setup information. Please try again.", variant: "destructive" });
+        // Fetch both email_setups and user_info concurrently
+        const [emailSetupResult, userInfoResult] = await Promise.all([
+          supabase
+            .from('email_setups')
+            .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('user_info')
+            .select('subscription_status')
+            .eq('auth_user_uuid', user.id)
+            .maybeSingle()
+        ]);
+
+        let { data: emailSetup, error: emailSetupError } = emailSetupResult;
+        const { data: userInfo, error: userInfoError } = userInfoResult;
+
+        if (emailSetupError) {
+          console.error("App.tsx: Error fetching email_setups:", emailSetupError);
+          toast({ title: "Error Loading Setup", description: "Could not retrieve your setup information.", variant: "destructive" });
           return;
         }
+        if (userInfoError) {
+          console.error("App.tsx: Error fetching user_info:", userInfoError);
+          // Non-critical for resume logic if emailSetup exists, but log it.
+          toast({ title: "Error Loading User Profile", description: "Could not retrieve your user profile information.", variant: "default" });
+        }
 
-        console.log('App.tsx fetchAndRedirect: Fetched emailSetup (with reduced columns):', emailSetup);
+        console.log('App.tsx fetchAndRedirect: Fetched emailSetup:', emailSetup);
+        console.log('App.tsx fetchAndRedirect: Fetched userInfo:', userInfo);
 
+        if (userInfo?.subscription_status === 'active' && emailSetup) {
+          const allFieldsFilled =
+            emailSetup.business_description &&
+            emailSetup.goals_form_raw_text &&
+            emailSetup.selected_campaign_ids && emailSetup.selected_campaign_ids.length > 0 &&
+            emailSetup.website_provider &&
+            emailSetup.domain;
+
+          if (allFieldsFilled && emailSetup.form_complete === false) {
+            console.log('App.tsx fetchAndRedirect: Active subscription and all email_setups fields filled. Updating form_complete to true.');
+            const { data: updatedEmailSetup, error: updateError } = await supabase
+              .from('email_setups')
+              .update({ form_complete: true })
+              .eq('id', emailSetup.id)
+              .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain')
+              .single(); // Use single and expect a row back
+
+            if (updateError) {
+              console.error("App.tsx: Error updating email_setups.form_complete:", updateError);
+              toast({ title: "Error Saving Progress", description: "Could not update your completion status.", variant: "destructive" });
+              // Proceed with potentially stale emailSetup data, or decide to return
+            } else if (updatedEmailSetup) {
+              console.log('App.tsx fetchAndRedirect: email_setups.form_complete updated successfully.');
+              emailSetup = updatedEmailSetup; // Use the updated record for subsequent logic
+            }
+          }
+        }
+
+        // Existing logic for redirection based on emailSetup (which may have just been updated)
         if (emailSetup) {
           if (emailSetup.form_complete === true) {
-            const relevantFormPages = FORM_FLOW_ORDER.filter(p => p !== '/');
-            if (relevantFormPages.includes(location.pathname)) {
-              console.log("App.tsx: Form complete, on a form page (not /), redirecting to /dashboard");
-              navigate('/dashboard', { replace: true });
-              return; 
+            // User is fully onboarded and form is complete
+            const nonDashboardFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/dashboard');
+            if (nonDashboardFormPages.includes(location.pathname) || location.pathname === '/') {
+                 // If they are on any form page (including index if it's considered part of the flow for resume)
+                 // OR if they are on index and form_complete is true.
+                console.log("App.tsx: Form complete. Navigating to /dashboard from:", location.pathname);
+                navigate('/dashboard', { replace: true, state: { fromApp: true } });
+                return; 
             }
+            // If already on /dashboard or some other non-form page, do nothing.
             return; 
           }
 
+          // Determine targetResumePath based on incomplete fields in emailSetup
           let targetResumePath = null;
           if (!emailSetup.business_description) {
             targetResumePath = '/';
@@ -143,27 +183,40 @@ const AppRoutes = () => {
           } else if (!emailSetup.domain) {
             targetResumePath = '/website-status';
           } else {
-            const authGateIndex = FORM_FLOW_ORDER.indexOf('/auth-gate');
-            if (authGateIndex !== -1 && authGateIndex < FORM_FLOW_ORDER.length - 1) {
-              targetResumePath = FORM_FLOW_ORDER[authGateIndex + 1];
+            // All primary email_setup fields are filled, but form_complete is still false.
+            // This implies they might be at DNS or subscription step if those are after domain.
+            // Let's find the next step in FORM_FLOW_ORDER after domain input (/website-status)
+            const websiteStatusIndex = FORM_FLOW_ORDER.indexOf('/website-status');
+            let nextLogicalStepIndex = websiteStatusIndex + 1;
+            
+            // Skip auth-gate if already authenticated (which they are at this point in fetchAndRedirect)
+            while(FORM_FLOW_ORDER[nextLogicalStepIndex] === '/auth-gate' && nextLogicalStepIndex < FORM_FLOW_ORDER.length -1) {
+                nextLogicalStepIndex++;
+            }
+
+            if (nextLogicalStepIndex < FORM_FLOW_ORDER.length) {
+                targetResumePath = FORM_FLOW_ORDER[nextLogicalStepIndex];
             } else {
-              targetResumePath = '/dashboard'; 
+                // Should have been caught by form_complete: true, but as a fallback:
+                targetResumePath = '/dashboard'; 
             }
           }
           
-          console.log('App.tsx fetchAndRedirect: Determined targetResumePath (with reduced columns logic):', targetResumePath);
+          console.log('App.tsx fetchAndRedirect: Determined targetResumePath (email_setups logic):', targetResumePath);
 
           if (targetResumePath && location.pathname !== targetResumePath) {
             console.log(`App.tsx fetchAndRedirect: Navigating from ${location.pathname} to targetResumePath: ${targetResumePath}`);
-            navigate(targetResumePath, { replace: true });
+            navigate(targetResumePath, { replace: true, state: { fromApp: true } });
             return; 
           } 
 
         } else { // No emailSetup record found for this authenticated user.
+            // This case should ideally not happen if sign-up/optional-sign-up creates a pending record.
+            // If it does, send them to the start of the flow.
             const nonEntryFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/optional-signup' && p !== '/business-overview');
-            if (nonEntryFormPages.includes(location.pathname)) {
+            if (nonEntryFormPages.includes(location.pathname) && location.pathname !== '/subscription-plan') { // Allow subscription plan page even without email_setup
               console.log("App.tsx fetchAndRedirect: Auth user, no email_setups. Navigating from non-entry page to /");
-              navigate('/', { replace: true });
+              navigate('/', { replace: true, state: { fromApp: true } });
               return; 
             }
         }
@@ -262,6 +315,10 @@ const AppRoutes = () => {
       <Route path="/auth-gate" element={<AuthGatePage />} />
       <Route path="/dns-confirmation" element={<DnsConfirmationPage />} />
       <Route path="/website-tracking" element={<WebsiteTrackingPage />} />
+      <Route 
+        path="/subscription-plan" 
+        element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>}
+      />
       <Route path="/business-overview" element={<BusinessOverviewPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

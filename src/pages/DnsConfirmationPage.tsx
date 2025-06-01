@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { AlertTriangle, CheckCircle, Copy, ExternalLink, Info, Loader2 } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
+import Navbar from '@/components/Navbar';
 
 
 interface DnsRecord {
@@ -373,234 +374,229 @@ const DnsConfirmationPage: React.FC = () => {
 
   if (isLoadingPage || authLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-8">
-        <Loader2 className="h-16 w-16 text-yellow-400 animate-spin mb-4" />
-        <p className="text-xl">Loading your DNS jungle map...</p>
-      </div>
+      <>
+        <Navbar />
+        <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-8 pt-20">
+          <Loader2 className="h-16 w-16 text-yellow-400 animate-spin mb-4" />
+          <p className="text-xl">Loading your DNS jungle map...</p>
+        </div>
+      </>
     );
   }
-  
+
   if (pageError && !emailSetupData) { 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-red-800 text-white p-8 text-center">
-         <AlertTriangle className="h-16 w-16 text-yellow-300 mb-4" />
-        <h1 className="text-3xl font-bold mb-2">Loading Error</h1>
-        <p className="text-lg mb-4">{pageError}</p>
-        <Button onClick={() => window.location.reload()} className="bg-yellow-400 text-red-900 hover:bg-yellow-500">
-          Try Again
-        </Button>
-      </div>
+      <>
+        <Navbar />
+        <div className="min-h-screen flex flex-col items-center justify-center bg-red-800 text-white p-8 text-center pt-20">
+           <AlertTriangle className="h-16 w-16 text-yellow-300 mb-4" />
+          <h1 className="text-3xl font-bold mb-2">Loading Error</h1>
+          <p className="text-lg mb-4">{pageError}</p>
+          <Button onClick={() => window.location.reload()} className="bg-yellow-400 text-red-900 hover:bg-yellow-500">
+            Try Again
+          </Button>
+        </div>
+      </>
     );
   }
-
-  if (!emailSetupData || !emailSetupData.domain) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-8">
-        <AlertTriangle className="h-16 w-16 text-yellow-400 mb-4" />
-        <p className="text-xl">Your email adventure map is missing! Please complete previous steps.</p>
-        <Button onClick={() => navigate(FORM_FLOW_ORDER[0], { replace: true })} className="mt-4 bg-yellow-400 text-green-900 hover:bg-yellow-500">
-          Go to Start
-        </Button>
-      </div>
-    );
-  }
-  
-  const currentOverallStatus = emailSetupData.overall_dns_status || 'pending';
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-green-700 text-white p-4 md:p-8 pt-16 md:pt-24">
-      <img src="/images/monkey_dns.png" alt="DNS Guide Monkey" className="w-40 md:w-48 h-auto mb-6" />
-      <h1 className="text-3xl md:text-5xl font-bold text-yellow-400 mb-3 text-center">Tune Your Domain's Vines (DNS)</h1>
-      <p className="text-md md:text-lg text-gray-200 mb-2 text-center max-w-2xl">
-        To send emails from <strong className="text-yellow-300">{emailSetupData.domain}</strong>, add these records with your domain provider.
-      </p>
-      {emailSetupData.last_verification_attempt_at && (
-        <p className="text-xs text-gray-400 mb-1">Last check: {new Date(emailSetupData.last_verification_attempt_at).toLocaleString()}</p>
-      )}
-      {isDetectingProvider && <p className="text-sm text-yellow-300 italic my-2"><Loader2 size={16} className="inline mr-1 animate-spin"/>Sniffing out your provider...</p>}
-      {detectedProviderDisplayName && !userSetProviderId && (
-        <p className="text-sm text-green-200 my-2">Our monkeys think your provider is <strong className="text-yellow-300">{detectedProviderDisplayName}</strong>.</p>
-      )}
-       {pageError && <p className="text-red-300 bg-red-700 bg-opacity-60 p-3 rounded-md my-3 text-sm max-w-xl text-center">Error: {pageError}</p>}
+    <>
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center bg-green-700 text-white p-4 md:p-8 pt-20 md:pt-24">
+        <img src="/images/monkey_dns.png" alt="DNS Guide Monkey" className="w-40 md:w-48 h-auto mb-6" />
+        <h1 className="text-3xl md:text-5xl font-bold text-yellow-400 mb-3 text-center">Tune Your Domain's Vines (DNS)</h1>
+        <p className="text-md md:text-lg text-gray-200 mb-2 text-center max-w-2xl">
+          To send emails from <strong className="text-yellow-300">{emailSetupData.domain}</strong>, add these records with your domain provider.
+        </p>
+        {emailSetupData.last_verification_attempt_at && (
+          <p className="text-xs text-gray-400 mb-1">Last check: {new Date(emailSetupData.last_verification_attempt_at).toLocaleString()}</p>
+        )}
+        {isDetectingProvider && <p className="text-sm text-yellow-300 italic my-2"><Loader2 size={16} className="inline mr-1 animate-spin"/>Sniffing out your provider...</p>}
+        {detectedProviderDisplayName && !userSetProviderId && (
+          <p className="text-sm text-green-200 my-2">Our monkeys think your provider is <strong className="text-yellow-300">{detectedProviderDisplayName}</strong>.</p>
+        )}
+         {pageError && <p className="text-red-300 bg-red-700 bg-opacity-60 p-3 rounded-md my-3 text-sm max-w-xl text-center">Error: {pageError}</p>}
 
-      <Card className="w-full max-w-3xl bg-green-800 bg-opacity-90 border-yellow-500 shadow-xl mb-8">
-        <CardHeader>
-          <CardTitle className="text-xl md:text-2xl text-yellow-400 flex items-center justify-between">
-            Required DNS Records
-            <div className="flex items-center">
-              {getStatusIcon(currentOverallStatus)}
-              <span className={`ml-2 text-xs md:text-sm font-semibold ${
-                currentOverallStatus === 'verified' ? 'text-green-400' :
-                currentOverallStatus === 'failed_to_verify' ? 'text-red-400' :
-                currentOverallStatus === 'partially_verified' ? 'text-yellow-400' : 'text-gray-400'
-              }`}>
-                {currentOverallStatus.replace('_', ' ').toUpperCase()}
-              </span>
-            </div>
-          </CardTitle>
-          {emailSetupData.verification_failure_reason && (currentOverallStatus === 'failed_to_verify' || currentOverallStatus === 'partially_verified') && (
-             <p className="text-xs text-red-300 mt-1">Reason: {emailSetupData.verification_failure_reason}</p>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-3 md:space-y-4">
-          {displayedDnsRecords.length > 0 ? displayedDnsRecords.map((record) => (
-            <div key={record.id} className="p-3 bg-green-900 rounded-md shadow-md">
-              <div className="flex justify-between items-start mb-1.5">
-                <h3 className="text-md md:text-lg font-semibold text-yellow-300">{record.type} Record 
-                  <span className="text-xs text-gray-400 ml-2 hidden sm:inline">({record.purpose})</span>
-                </h3>
-                 <div className="flex items-center text-xs">
-                    {getStatusIcon(record.status)}
-                    <span className={`ml-1 capitalize ${record.status === 'verified' ? 'text-green-400' : record.status === 'failed' || record.status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
-                      {record.status || 'pending'}
-                    </span>
-                 </div>
+        <Card className="w-full max-w-3xl bg-green-800 bg-opacity-90 border-yellow-500 shadow-xl mb-8">
+          <CardHeader>
+            <CardTitle className="text-xl md:text-2xl text-yellow-400 flex items-center justify-between">
+              Required DNS Records
+              <div className="flex items-center">
+                {getStatusIcon(emailSetupData?.overall_dns_status || 'pending')}
+                <span className={`ml-2 text-xs md:text-sm font-semibold ${
+                  emailSetupData?.overall_dns_status === 'verified' ? 'text-green-400' :
+                  emailSetupData?.overall_dns_status === 'failed_to_verify' ? 'text-red-400' :
+                  emailSetupData?.overall_dns_status === 'partially_verified' ? 'text-yellow-400' : 'text-gray-400'
+                }`}>
+                  {emailSetupData?.overall_dns_status?.replace('_', ' ').toUpperCase() || 'Pending'}
+                </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-1 text-xs md:text-sm mb-1">
-                <div className="truncate">
-                  <label className="block text-xs text-gray-400">Name/Host:</label>
-                  <div className="flex items-center">
-                    <span className="text-green-200 break-all" title={record.name}>{record.name}</span>
-                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.name, 'Name/Host')} className="ml-1 p-1 h-auto text-gray-400 hover:text-yellow-300">
-                      <Copy size={12} />
-                    </Button>
-                  </div>
-                </div>
-                <div className="md:col-span-2 truncate">
-                  <label className="block text-xs text-gray-400">Value/Target:</label>
-                   <div className="flex items-center">
-                    <span className="text-green-200 break-all" title={record.value}>{record.value}</span>
-                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.value, 'Value/Target')} className="ml-1 p-1 h-auto text-gray-400 hover:text-yellow-300">
-                      <Copy size={12} />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              {record.priority !== undefined && (
-                <div>
-                  <label className="block text-xs text-gray-400">Priority:</label>
-                  <span className="text-green-200 text-xs md:text-sm">{record.priority}</span>
-                </div>
-              )}
-               <p className="text-xs text-gray-500 sm:hidden">({record.purpose})</p> {/* Purpose visible on small screens here*/}
-              {record.verificationMessage && (record.status === 'failed' || record.status === 'error') && (
-                <p className="text-xs text-red-300 mt-1">Note: {record.verificationMessage}</p>
-              )}
-            </div>
-          )) : (
-            <p className="text-gray-300 text-center py-4">DNS records are brewing... Hang tight!</p>
-          )}
-        </CardContent>
-      </Card>
-      
-       <h2 className="text-xl md:text-2xl font-semibold text-yellow-400 mb-4 text-center">Need a Map? Select Your DNS Provider</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-4xl mb-8">
-        {DNS_PROVIDER_DISPLAY_OPTIONS.map((provider) => (
-          <Card
-            key={provider.id}
-            onClick={() => handleProviderCardClick(provider)}
-            className={`bg-green-800 hover:bg-green-900 border-2 transition-all cursor-pointer shadow-lg hover:shadow-2xl 
-                        ${(userSetProviderId === provider.id ) ? 'border-yellow-500 ring-2 ring-yellow-400 scale-105' : 
-                          (detectedProviderId === provider.id && !userSetProviderId) ? 'border-yellow-400 scale-105' : 'border-green-600 hover:border-yellow-300'}`}
-          >
-            <CardContent className="flex flex-col items-center justify-center p-3 md:p-4 text-center h-full">
-              <img src={provider.logo} alt={`${provider.name} logo`} className="h-10 md:h-12 w-auto mb-2 object-contain" />
-              <p className="text-xs md:text-sm font-medium text-gray-200">{provider.name}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md mb-6">
-        <Button
-          variant="outline"
-          onClick={() => handleNavigate('previous')}
-          className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg"
-          disabled={isVerifyingDns || isLoadingPage}
-        >
-          Previous
-        </Button>
-        <Button
-          onClick={handleVerifyDns}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg shadow-md hover:shadow-lg"
-          disabled={isVerifyingDns || isLoadingPage || displayedDnsRecords.length === 0}
-        >
-          {isVerifyingDns ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle size={20} className="mr-2"/>}
-          {isVerifyingDns ? "Checking Vines..." : "Verify DNS Records"}
-        </Button>
-      </div>
-      <Button
-          onClick={() => handleNavigate('next')}
-          className="w-full max-w-md bg-green-500 hover:bg-green-400 text-white font-bold py-3 px-6 text-lg shadow-md hover:shadow-lg"
-          disabled={isVerifyingDns || isLoadingPage }
-        >
-          Next Step
-        </Button>
-
-
-      {selectedProviderForModal && emailSetupData && (
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="bg-green-800 text-white border-yellow-500 max-w-lg shadow-2xl">
-            <DialogHeader className="pb-3 border-b border-green-700">
-              <DialogTitle className="text-yellow-400 text-xl md:text-2xl flex items-center">
-                <img src={selectedProviderForModal.logo} alt="" className="h-7 w-auto mr-2 md:mr-3 object-contain"/>
-                {selectedProviderForModal.name} DNS Guide
-              </DialogTitle>
-              <DialogDescription className="text-gray-300 text-xs md:text-sm pt-1">
-                Add these records for <strong className="text-yellow-300">{emailSetupData.domain}</strong>.
-                {selectedProviderForModal.instructionsUrl && emailSetupData.domain && (
-                    <a 
-                        href={selectedProviderForModal.instructionsUrl.replace('{domain}', emailSetupData.domain).replace(':account/:zone', '')} // Basic placeholder replace
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 underline ml-1 inline-flex items-center text-xs md:text-sm"
-                    >
-                         Go to {selectedProviderForModal.name} <ExternalLink size={12} className="ml-1"/>
-                    </a>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-2 md:space-y-3 max-h-[50vh] overflow-y-auto p-1 pr-2 md:pr-3 mt-3 text-sm">
-              {displayedDnsRecords.map(record => (
-                <div key={record.id + '-modal'} className="p-2 md:p-3 bg-green-900 rounded-md shadow">
-                  <h4 className="text-sm md:text-md font-semibold text-yellow-300 mb-1">{record.type} Record 
-                    <span className="text-xs text-gray-400 ml-1.5">({record.purpose})</span>
-                  </h4>
-                   <div className="text-xs space-y-1">
-                      <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Type:</strong> {record.type}</div>
-                      <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Name/Host:</strong> 
-                        <span className="text-green-200 break-all flex-grow mr-1">{record.name}</span>
-                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.name, 'Name/Host')} className="ml-auto p-0.5 h-auto text-gray-400 hover:text-yellow-300 shrink-0">
-                            <Copy size={11} />
-                        </Button>
-                      </div>
-                      <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Value:</strong> 
-                        <span className="text-green-200 break-all flex-grow mr-1">{record.value}</span>
-                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.value, 'Value/Target')} className="ml-auto p-0.5 h-auto text-gray-400 hover:text-yellow-300 shrink-0">
-                            <Copy size={11} />
-                        </Button>
-                      </div>
-                      {record.priority !== undefined && <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Priority:</strong> {record.priority}</div>}
+            </CardTitle>
+            {emailSetupData?.verification_failure_reason && (emailSetupData.overall_dns_status === 'failed_to_verify' || emailSetupData.overall_dns_status === 'partially_verified') && (
+               <p className="text-xs text-red-300 mt-1">Reason: {emailSetupData.verification_failure_reason}</p>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-3 md:space-y-4">
+            {displayedDnsRecords.length > 0 ? displayedDnsRecords.map((record) => (
+              <div key={record.id} className="p-3 bg-green-900 rounded-md shadow-md">
+                <div className="flex justify-between items-start mb-1.5">
+                  <h3 className="text-md md:text-lg font-semibold text-yellow-300">{record.type} Record 
+                    <span className="text-xs text-gray-400 ml-2 hidden sm:inline">({record.purpose})</span>
+                  </h3>
+                   <div className="flex items-center text-xs">
+                      {getStatusIcon(record.status)}
+                      <span className={`ml-1 capitalize ${record.status === 'verified' ? 'text-green-400' : record.status === 'failed' || record.status === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
+                        {record.status || 'pending'}
+                      </span>
                    </div>
                 </div>
-              ))}
-               {displayedDnsRecords.length === 0 && (
-                <p className="text-center text-gray-400 py-4">DNS records are still swinging through the vines... almost here!</p>
-               )}
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-1 text-xs md:text-sm mb-1">
+                  <div className="truncate">
+                    <label className="block text-xs text-gray-400">Name/Host:</label>
+                    <div className="flex items-center">
+                      <span className="text-green-200 break-all" title={record.name}>{record.name}</span>
+                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.name, 'Name/Host')} className="ml-1 p-1 h-auto text-gray-400 hover:text-yellow-300">
+                        <Copy size={12} />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 truncate">
+                    <label className="block text-xs text-gray-400">Value/Target:</label>
+                     <div className="flex items-center">
+                      <span className="text-green-200 break-all" title={record.value}>{record.value}</span>
+                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.value, 'Value/Target')} className="ml-1 p-1 h-auto text-gray-400 hover:text-yellow-300">
+                        <Copy size={12} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                {record.priority !== undefined && (
+                  <div>
+                    <label className="block text-xs text-gray-400">Priority:</label>
+                    <span className="text-green-200 text-xs md:text-sm">{record.priority}</span>
+                  </div>
+                )}
+                 <p className="text-xs text-gray-500 sm:hidden">({record.purpose})</p> {/* Purpose visible on small screens here*/}
+                {record.verificationMessage && (record.status === 'failed' || record.status === 'error') && (
+                  <p className="text-xs text-red-300 mt-1">Note: {record.verificationMessage}</p>
+                )}
+              </div>
+            )) : (
+              <p className="text-gray-300 text-center py-4">DNS records are brewing... Hang tight!</p>
+            )}
+          </CardContent>
+        </Card>
+        
+         <h2 className="text-xl md:text-2xl font-semibold text-yellow-400 mb-4 text-center">Need a Map? Select Your DNS Provider</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-4xl mb-8">
+          {DNS_PROVIDER_DISPLAY_OPTIONS.map((provider) => (
+            <Card
+              key={provider.id}
+              onClick={() => handleProviderCardClick(provider)}
+              className={`bg-green-800 hover:bg-green-900 border-2 transition-all cursor-pointer shadow-lg hover:shadow-2xl 
+                          ${(userSetProviderId === provider.id ) ? 'border-yellow-500 ring-2 ring-yellow-400 scale-105' : 
+                            (detectedProviderId === provider.id && !userSetProviderId) ? 'border-yellow-400 scale-105' : 'border-green-600 hover:border-yellow-300'}`}
+            >
+              <CardContent className="flex flex-col items-center justify-center p-3 md:p-4 text-center h-full">
+                <img src={provider.logo} alt={`${provider.name} logo`} className="h-10 md:h-12 w-auto mb-2 object-contain" />
+                <p className="text-xs md:text-sm font-medium text-gray-200">{provider.name}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-            <DialogFooter className="mt-4 pt-3 border-t border-green-700">
-              <DialogClose asChild>
-                <Button type="button" variant="outline" className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 w-full">
-                  Got it, Close
-                </Button>
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md mb-6">
+          <Button
+            variant="outline"
+            onClick={() => handleNavigate('previous')}
+            className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg"
+            disabled={isVerifyingDns || isLoadingPage}
+          >
+            Previous
+          </Button>
+          <Button
+            onClick={handleVerifyDns}
+            className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg shadow-md hover:shadow-lg"
+            disabled={isVerifyingDns || isLoadingPage || displayedDnsRecords.length === 0}
+          >
+            {isVerifyingDns ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle size={20} className="mr-2"/>}
+            {isVerifyingDns ? "Checking Vines..." : "Verify DNS Records"}
+          </Button>
+        </div>
+        <Button
+            onClick={() => handleNavigate('next')}
+            className="w-full max-w-md bg-green-500 hover:bg-green-400 text-white font-bold py-3 px-6 text-lg shadow-md hover:shadow-lg"
+            disabled={isVerifyingDns || isLoadingPage }
+          >
+            Next Step
+          </Button>
+
+
+        {selectedProviderForModal && emailSetupData && (
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="bg-green-800 text-white border-yellow-500 max-w-lg shadow-2xl">
+              <DialogHeader className="pb-3 border-b border-green-700">
+                <DialogTitle className="text-yellow-400 text-xl md:text-2xl flex items-center">
+                  <img src={selectedProviderForModal.logo} alt="" className="h-7 w-auto mr-2 md:mr-3 object-contain"/>
+                  {selectedProviderForModal.name} DNS Guide
+                </DialogTitle>
+                <DialogDescription className="text-gray-300 text-xs md:text-sm pt-1">
+                  Add these records for <strong className="text-yellow-300">{emailSetupData.domain}</strong>.
+                  {selectedProviderForModal.instructionsUrl && emailSetupData.domain && (
+                      <a 
+                          href={selectedProviderForModal.instructionsUrl.replace('{domain}', emailSetupData.domain).replace(':account/:zone', '')} // Basic placeholder replace
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 underline ml-1 inline-flex items-center text-xs md:text-sm"
+                      >
+                           Go to {selectedProviderForModal.name} <ExternalLink size={12} className="ml-1"/>
+                      </a>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-2 md:space-y-3 max-h-[50vh] overflow-y-auto p-1 pr-2 md:pr-3 mt-3 text-sm">
+                {displayedDnsRecords.map(record => (
+                  <div key={record.id + '-modal'} className="p-2 md:p-3 bg-green-900 rounded-md shadow">
+                    <h4 className="text-sm md:text-md font-semibold text-yellow-300 mb-1">{record.type} Record 
+                      <span className="text-xs text-gray-400 ml-1.5">({record.purpose})</span>
+                    </h4>
+                     <div className="text-xs space-y-1">
+                        <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Type:</strong> {record.type}</div>
+                        <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Name/Host:</strong> 
+                          <span className="text-green-200 break-all flex-grow mr-1">{record.name}</span>
+                          <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.name, 'Name/Host')} className="ml-auto p-0.5 h-auto text-gray-400 hover:text-yellow-300 shrink-0">
+                              <Copy size={11} />
+                          </Button>
+                        </div>
+                        <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Value:</strong> 
+                          <span className="text-green-200 break-all flex-grow mr-1">{record.value}</span>
+                          <Button variant="ghost" size="sm" onClick={() => copyToClipboard(record.value, 'Value/Target')} className="ml-auto p-0.5 h-auto text-gray-400 hover:text-yellow-300 shrink-0">
+                              <Copy size={11} />
+                          </Button>
+                        </div>
+                        {record.priority !== undefined && <div className="flex items-start"><strong className="text-gray-400 w-16 shrink-0">Priority:</strong> {record.priority}</div>}
+                     </div>
+                  </div>
+                ))}
+                 {displayedDnsRecords.length === 0 && (
+                  <p className="text-center text-gray-400 py-4">DNS records are still swinging through the vines... almost here!</p>
+                 )}
+              </div>
+
+              <DialogFooter className="mt-4 pt-3 border-t border-green-700">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 w-full">
+                    Got it, Close
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </>
   );
 };
 

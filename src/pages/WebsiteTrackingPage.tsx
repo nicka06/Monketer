@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FORM_FLOW_ORDER } from '@/core/constants';
+import Navbar from '@/components/Navbar';
 
 const WebsiteTrackingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -36,35 +37,38 @@ const WebsiteTrackingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8">
-      <div className="text-center space-y-4 mb-8">
-        <img src="/images/homepage_monkey_swinging.png" alt="Jungle Monkey" className="mx-auto w-64 h-auto mb-8"/>
-        <h1 className="text-4xl md:text-5xl font-bold text-yellow-400">Website Tracking</h1>
-        <p className="text-lg text-gray-200">
-          This page will display website tracking information.
-        </p>
-        <p className="text-md text-gray-300 italic">(Under Construction)</p>
+    <>
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8 pt-20 md:pt-24">
+        <div className="text-center space-y-4 mb-8">
+          <img src="/images/homepage_monkey_swinging.png" alt="Jungle Monkey" className="mx-auto w-64 h-auto mb-8"/>
+          <h1 className="text-4xl md:text-5xl font-bold text-yellow-400">Website Tracking</h1>
+          <p className="text-lg text-gray-200">
+            This page will display website tracking information.
+          </p>
+          <p className="text-md text-gray-300 italic">(Under Construction)</p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-sm mt-8">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleNavigate('previous')}
+            className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+            disabled={isLoading}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            onClick={() => handleNavigate('next')}
+            className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+            disabled={isLoading}
+          >
+            Continue to Plan Selection
+          </Button>
+        </div>
       </div>
-      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-sm mt-8">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => handleNavigate('previous')}
-          className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-          disabled={isLoading}
-        >
-          Previous
-        </Button>
-        <Button
-          type="button"
-          onClick={() => handleNavigate('next')}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-          disabled={isLoading}
-        >
-          Finish & View Dashboard 
-        </Button>
-      </div>
-    </div>
+    </>
   );
 };
 
