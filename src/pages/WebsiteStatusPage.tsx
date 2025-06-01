@@ -105,7 +105,33 @@ const WebsiteStatusPage: React.FC = () => {
         }
       } catch (error: any) {
         console.error("WebsiteStatusPage: Error saving data:", error);
-        toast({ title: "Error Saving Data", description: "Could not save your website details. Please try again.", variant: "destructive" });
+        // Check for Supabase unique constraint violation (PostgreSQL error code 23505)
+        // The actual error structure might vary, check Supabase client library specifics if needed.
+        // Often the code is on error.code or error.details.code or similar.
+        // For PostgREST, a 409 conflict often includes a code in the message or details.
+        // Example: error.message might contain "duplicate key value violates unique constraint"
+        // and error.code might be 'PGRST116' (if no rows found for update, not our case)
+        // or a more specific PostgreSQL code passed through.
+        // A direct 409 from the fetch response usually means a constraint.
+        if (error && error.message && error.message.includes('23505')) { // More robust check based on actual Supabase error object might be needed
+            toast({ 
+                title: "Domain Already In Use", 
+                description: "This domain name is already registered. Please try a different one.", 
+                variant: "destructive" 
+            });
+        } else if (error && error.code === 'PGRST301' && error.details && error.details.includes('unique constraint')) { // Another possible way Supabase signals unique constraint
+            toast({
+                title: "Domain Already In Use",
+                description: "This domain name is already registered. Please use a different one.",
+                variant: "destructive"
+            });
+        } else {
+            toast({ 
+                title: "Error Saving Data", 
+                description: "Could not save your website details. Please try again.", 
+                variant: "destructive" 
+            });
+        }
         setIsSaving(false);
         return; 
       }

@@ -32,7 +32,7 @@ interface InitiateEmailSetupResponse {
 // Updated to reflect the Express API response structure
 interface MailServerDkimResponse {
   success?: boolean; // Assuming the script implies success if it returns a record
-  dnsTxtRecord?: string; // e.g., "default._domainkey.example.com IN TXT \"v=DKIM1; k=rsa; p=...\""
+  dkimTxtRecord?: string; // e.g., "default._domainkey.example.com IN TXT \"v=DKIM1; k=rsa; p=...\""
   error?: string; // For explicit errors from the Express wrapper
   // selector is not explicitly returned as a separate field by the sample Express app
   message?: string; // Optional message from mail server API
@@ -64,7 +64,7 @@ serve(async (req) => {
     // @ts-ignore
     const defaultDmarcValue = Deno.env.get("DEFAULT_DMARC_VALUE");
 
-    const missingEnvVars: string[] = [];
+    const missingEnvVars: string[] = []; 
     if (!supabaseUrl) missingEnvVars.push("SUPABASE_URL");
     if (!supabaseServiceKey) missingEnvVars.push("SUPABASE_SERVICE_ROLE_KEY");
     if (!mailServerDkimEndpoint) missingEnvVars.push("MAIL_SERVER_DKIM_ENDPOINT");
@@ -184,26 +184,97 @@ serve(async (req) => {
                 body: JSON.stringify({ domain: domain }) 
             });
 
+            // ---- ADD THIS DEBUG LOGGING ----
+            console.log("Supabase: mailServerResponse.ok:", mailServerResponse.ok);
+            console.log("Supabase: mailServerResponse.status:", mailServerResponse.status);
+            console.log("Supabase: mailServerResponse.statusText:", mailServerResponse.statusText);
+            // Log all response headers received from your EC2 API
+            const responseHeaders = {};
+            for (const [key, value] of mailServerResponse.headers.entries()) {
+                responseHeaders[key] = value;
+            }
+            console.log("Supabase: mailServerResponse.headers:", JSON.stringify(responseHeaders));
+
+            let responseBodyAsText = "Could not read body as text";
+            try {
+                // IMPORTANT: Cloning the response because .text() consumes the body.
+                // If .json() is called later, it needs the body again.
+                const clonedResponseForText = mailServerResponse.clone(); 
+                responseBodyAsText = await clonedResponseForText.text();
+                console.log("Supabase: mailServerResponse body as text: >>", responseBodyAsText, "<<");
+            } catch (textError) {
+                console.error("Supabase: Error reading mailServerResponse body as text:", textError.message);
+            }
+            // ---- END OF DEBUG LOGGING ----
+
             const mailServerResult: MailServerDkimResponse = await mailServerResponse.json();
 
-            if (mailServerResponse.ok && mailServerResult.dnsTxtRecord) {
-                const dkimMatch = mailServerResult.dnsTxtRecord.match(/IN TXT\s+"(?:v=DKIM1;\s*k=rsa;\s*p=)([^\"]+)"/i);
+            // ---- EXISTING DEBUG LOGGING ----
+            console.log("Supabase: mailServerResponse.ok:", mailServerResponse.ok);
+            console.log("Supabase: mailServerResult raw:", JSON.stringify(mailServerResult)); // See the whole object
+            if (mailServerResult) { // Check if mailServerResult itself is not null/undefined
+                console.log("Supabase: mailServerResult.dnsTxtRecord received:", mailServerResult.dkimTxtRecord);
+                console.log("Supabase: Type of mailServerResult.dnsTxtRecord:", typeof mailServerResult.dkimTxtRecord);
+                console.log("Supabase: Length of mailServerResult.dnsTxtRecord:", mailServerResult.dkimTxtRecord ? mailServerResult.dkimTxtRecord.length : "N/A");
+            } else {
+                console.error("Supabase: mailServerResult itself is null or undefined!");
+            }
+            // ---- END OF DEBUG LOGGING ----
+
+            if (mailServerResponse.ok && mailServerResult && mailServerResult.dkimTxtRecord) { // Added check for mailServerResult itself
+                const dkimMatch = mailServerResult.dkimTxtRecord.match(/IN TXT\s+\"(?:v=DKIM1;\s*k=rsa;\s*p=)([^\"]+)\"/i);
                 const extractedPk = dkimMatch && dkimMatch[1] ? dkimMatch[1].replace(/\s+/g, "") : null;
 
                 if (extractedPk && /^[A-Za-z0-9+/]+={0,2}$/.test(extractedPk)) {
                     publicKeyBase64 = extractedPk;
                     mailServerMessage = mailServerResult.message || "DKIM provisioned by mail server. DNS TXT record received.";
                     dkimProvisioningSuccessful = true;
-                } else {
-                    publicKeyBase64 = null; // Explicitly set to null on failure to extract/validate
-                    mailServerMessage = `Mail server returned invalid DKIM TXT record format or key. Raw: ${mailServerResult.dnsTxtRecord}`;
-                    console.error("initiate-email-setup: " + mailServerMessage);
-                    dkimProvisioningSuccessful = false;
+                } else { 
+                    // THIS 'else' BLOCK IS ENTERED.
+                    console.log("Supabase: Initial regex failed or no valid PK, trying direct p= extraction from value:", mailServerResult.dkimTxtRecord); // Value from Deno API
+                    
+                    const directPValueMatch = mailServerResult.dkimTxtRecord.match(/p=([A-Za-z0-9+/=]+)/i);
+                    console.log("Supabase: directPValueMatch object:", JSON.stringify(directPValueMatch)); // What did p= regex find?
+
+                    const directExtractedPk = directPValueMatch && directPValueMatch[1] ? directPValueMatch[1].replace(/\s+/g, "") : null;
+                    console.log("Supabase: directExtractedPk (candidate for p= value):", directExtractedPk);
+
+                    if (directExtractedPk) { // Check if we even got something
+                        const isBase64Valid = /^[A-Za-z0-9+/]+={0,2}$/.test(directExtractedPk);
+                        console.log("Supabase: Is directExtractedPk considered valid Base64 by regex? :", isBase64Valid);
+
+                        if (isBase64Valid) {
+                            publicKeyBase64 = directExtractedPk;
+                            mailServerMessage = mailServerResult.message || "DKIM provisioned by mail server (direct p= extraction). DNS TXT record value received.";
+                            dkimProvisioningSuccessful = true;
+                            console.log("Supabase: SUCCESS - Extracted DKIM p= value:", publicKeyBase64);
+                        } else {
+                            publicKeyBase64 = null; 
+                            mailServerMessage = `Mail server returned invalid DKIM TXT record format or key (Base64 validation failed for '${directExtractedPk}'). Raw: ${mailServerResult.dkimTxtRecord}`;
+                            console.error("initiate-email-setup (Base64 validation failed): " + mailServerMessage);
+                            dkimProvisioningSuccessful = false;
+                        }
+                    } else { // directPValueMatch failed to find p= or extract its value
+                         publicKeyBase64 = null; 
+                         mailServerMessage = `Mail server returned invalid DKIM TXT record format or key (p= pattern not found). Raw: ${mailServerResult.dkimTxtRecord}`;
+                         console.error("initiate-email-setup (p= pattern not found): " + mailServerMessage);
+                         dkimProvisioningSuccessful = false;
+                    }
                 }
-            } else {
+            } else { 
                 publicKeyBase64 = null;
-                mailServerMessage = `Mail server DKIM provisioning failed: ${mailServerResult.error || mailServerResponse.statusText || "Unknown error"}`;
-                console.error("initiate-email-setup:", mailServerMessage);
+                let failureReason = "Unknown error";
+                if (!mailServerResponse.ok) {
+                    failureReason = `HTTP Error: ${mailServerResponse.status} ${mailServerResponse.statusText}`;
+                } else if (!mailServerResult) {
+                    failureReason = "Parsed JSON result from mail server was null or undefined.";
+                } else if (!mailServerResult.dkimTxtRecord) {
+                    failureReason = "dnsTxtRecord field was missing or empty in mail server response.";
+                    console.log("Supabase: mailServerResult that led to empty dnsTxtRecord:", JSON.stringify(mailServerResult));
+                }
+                
+                mailServerMessage = `Mail server DKIM provisioning failed: ${mailServerResult && mailServerResult.error ? mailServerResult.error : failureReason}`;
+                console.error("initiate-email-setup (detailed failure):", mailServerMessage);
                 dkimProvisioningSuccessful = false;
             }
         } catch (e) {

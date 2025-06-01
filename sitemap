@@ -152,7 +152,7 @@
 │   │   │         - Authenticates the user and retrieves the `email_setups` record by ID (see "Database Schema" for table details).
 │   │   │         - **Idempotency Check:** If `dkim_public_key` column in `email_setups` table contains a valid Base64 key, it is reused.
 │   │   │         - **Calls External Mail Server API:**
-│   │   │           - Makes a POST request to `MAIL_SERVER_DKIM_ENDPOINT` (env var) with `{ domain }`. Expects `MAIL_SERVER_API_SECRET` (env var) for Bearer token authentication.
+│   │   │           - Makes a POST request to `MAIL_SERVER_DKIM_ENDPOINT` (env var) with `{ domain }`. Expects `MAIL_SERVER_SHARED_SECRET` (env var) for Bearer token authentication.
 │   │   │           - Expects the mail server to return a JSON response like `{ dnsTxtRecord: "selector._domainkey.domain IN TXT \"v=DKIM1; k=rsa; p=PUBLIC_KEY_BASE64\"" }`.
 │   │   │         - **DKIM Public Key Parsing & Validation:**
 │   │   │           - Parses the received `dnsTxtRecord` string (using regex) to extract the Base64 public key part (`p=...`).
@@ -172,9 +172,9 @@
 │   │   │           - `status` (always "awaiting_manual_dns_config").
 │   │   │           - `mx_record_value`, `spf_record_value`, `dmarc_record_value` are populated with the actual values used.
 │   │   │           - `mx_status`, `spf_status`, `dkim_status`, `dmarc_status`, `overall_dns_status` are initialized to 'pending'.
-│   │   │       Input: `{ emailSetupId: string, providerInfo: { name: string, nameservers: string[] } }`
+│   │   │       Input: `{ emailSetupId: string, providerInfo: { name: string, nameservers: string[] } }`  // Note: nameservers currently not used by function, can be omitted in call
 │   │   │       Output: `{ dnsSetupStrategy: "manual", dkimSelector: string, requiredDnsRecords: DnsRecord[], message: string }`
-│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_API_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`, `DEFAULT_DMARC_VALUE`.
+│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_SHARED_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`, `DEFAULT_DMARC_VALUE`, `SUPABASE_ANON_KEY`.
 │   │   │
 │   │   ├── 📁 verify-dns-records/
 │   │   │   └── 📄 index.ts
@@ -574,7 +574,7 @@
 │   │   │   - `PROVIDER_MAP_TO_DISPLAY_OPTION_ID`: A mapping object that translates provider names (as returned by the `get-domain-provider` function or stored as `website_provider` / `dns_provider_name` in `email_setups`) to the `id` used in `DNS_PROVIDER_DISPLAY_OPTIONS`.
 │   │   │   Usage: Imported by various components and pages, especially form pages for navigation and `DnsConfirmationPage.tsx` for provider display and linking.
 │   │   │
-│   │   ├── �� emailCampaigns.ts
+│   │   ├── 📄 emailCampaigns.ts
 │   │   │   Purpose: Defines the structure and content for selectable email campaigns in the onboarding flow.
 │   │   │   Details:
 │   │   │   - Exports `EmailCampaign` interface (id, name, description).

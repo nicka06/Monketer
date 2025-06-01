@@ -65,7 +65,7 @@ const Index = () => {
                 onClick={handleGenerateClick}
                 className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
               >
-                make me an email marketing machine!
+                Make Me An Email Marketing Machine!
               </button>
             </div>
 

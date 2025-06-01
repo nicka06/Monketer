@@ -91,8 +91,8 @@ const Navbar = () => {
           <div className="hidden md:flex md:items-center md:space-x-4 absolute right-6 sm:right-8">
             {user ? (
               <Button 
-                variant="ghost" 
-                className="text-white hover:bg-green-700 hover:text-yellow-300"
+                variant="default" 
+                className="bg-yellow-400 text-black border-2 border-black hover:bg-yellow-500"
                 onClick={handleSignOut}
               >
                 Sign Out
@@ -114,8 +114,8 @@ const Navbar = () => {
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-green-800 shadow-lg">
             {user ? (
               <Button 
-                variant="ghost" 
-                className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300"
+                variant="default" 
+                className="w-full justify-center bg-yellow-400 text-white border-2 border-black hover:bg-yellow-500"
                 onClick={handleSignOut}
               >
                 Sign Out
