@@ -9,7 +9,6 @@ import { EMAIL_CAMPAIGN_CATEGORIES, EmailCampaign } from '@/core/emailCampaigns'
 import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
@@ -217,57 +216,55 @@ const InfoClarificationPage: React.FC = () => {
     <>
       <Navbar />
       <div className="min-h-screen bg-green-800 text-white py-8 px-4 pt-24">
-        <ScrollArea className="h-[calc(100vh-88px)] md:h-[calc(100vh-96px)]">
-          <div className="container mx-auto max-w-3xl space-y-8 pb-8">
-            <div className="text-center">
-              <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">Confirm Your Information</h1>
-              <p className="text-lg text-gray-200">
-                Please review all the details you've provided. If anything needs changing, just click "Edit".
-              </p>
-            </div>
+        <div className="container mx-auto max-w-3xl space-y-8 pb-8">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">Confirm Your Information</h1>
+            <p className="text-lg text-gray-200">
+              Please review all the details you've provided. If anything needs changing, just click "Edit".
+            </p>
+          </div>
 
-            <SectionCard title="Your Business Focus" editPath="/business-overview">
-              {businessDescription ? <p className="whitespace-pre-wrap">{businessDescription}</p> : <p className="italic">No business description provided.</p>}
-            </SectionCard>
+          <SectionCard title="Your Business Focus" editPath="/business-overview">
+            {businessDescription ? <p className="whitespace-pre-wrap">{businessDescription}</p> : <p className="italic">No business description provided.</p>}
+          </SectionCard>
 
-            <SectionCard title="Your Main Goals" editPath="/goals-form">
-              {goalsRawText ? <p className="whitespace-pre-wrap">{goalsRawText}</p> : <p className="italic">No goals provided.</p>}
-            </SectionCard>
+          <SectionCard title="Your Main Goals" editPath="/goals-form">
+            {goalsRawText ? <p className="whitespace-pre-wrap">{goalsRawText}</p> : <p className="italic">No goals provided.</p>}
+          </SectionCard>
 
-            <SectionCard title="Selected Email Campaigns" editPath="/select-emails">
-              {selectedCampaignsDetails.length > 0 ? (
-                <ul className="list-disc pl-5 space-y-1">
-                  {selectedCampaignsDetails.map(campaign => (
-                    <li key={campaign.id}>
-                      <strong>{campaign.categoryName}:</strong> {campaign.name}
-                      {campaign.description && <p className="text-sm text-gray-300 italic ml-2">- {campaign.description}</p>}
-                    </li>
-                  ))}
-                </ul>
-              ) : <p className="italic">No email campaigns selected.</p>}
-            </SectionCard>
+          <SectionCard title="Selected Email Campaigns" editPath="/select-emails">
+            {selectedCampaignsDetails.length > 0 ? (
+              <ul className="list-disc pl-5 space-y-1">
+                {selectedCampaignsDetails.map(campaign => (
+                  <li key={campaign.id}>
+                    <strong>{campaign.categoryName}:</strong> {campaign.name}
+                    {campaign.description && <p className="text-sm text-gray-300 italic ml-2">- {campaign.description}</p>}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="italic">No email campaigns selected.</p>}
+          </SectionCard>
 
-            <SectionCard title="Your Website Details" editPath="/website-status">
-              <p><strong>Provider:</strong> {websiteProviderDisplay}</p>
-              <p><strong>Domain:</strong> {domainName || <span className="italic">No domain provided.</span>}</p>
-            </SectionCard>
+          <SectionCard title="Your Website Details" editPath="/website-status">
+            <p><strong>Provider:</strong> {websiteProviderDisplay}</p>
+            <p><strong>Domain:</strong> {domainName || <span className="italic">No domain provided.</span>}</p>
+          </SectionCard>
 
-            <div className="bg-green-700 bg-opacity-60 border-green-600 p-6 rounded-lg shadow-lg space-y-4">
-              <h2 className="text-2xl font-semibold text-yellow-400 text-center">Ready to Proceed?</h2>
-              <div className="flex items-center space-x-2 justify-center">
-                <Checkbox 
-                  id="confirmation-checkbox" 
-                  checked={isConfirmedAccurate} 
-                  onCheckedChange={(checked) => setIsConfirmedAccurate(checked as boolean)}
-                  className="border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-green-900"
-                />
-                <Label htmlFor="confirmation-checkbox" className="text-lg text-gray-100 cursor-pointer">
-                  Yes, all information is accurate and I'm ready to proceed.
-                </Label>
-              </div>
+          <div className="bg-green-700 bg-opacity-60 border-green-600 p-6 rounded-lg shadow-lg space-y-4">
+            <h2 className="text-2xl font-semibold text-yellow-400 text-center">Ready to Proceed?</h2>
+            <div className="flex items-center space-x-2 justify-center">
+              <Checkbox 
+                id="confirmation-checkbox" 
+                checked={isConfirmedAccurate} 
+                onCheckedChange={(checked) => setIsConfirmedAccurate(checked as boolean)}
+                className="border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-green-900"
+              />
+              <Label htmlFor="confirmation-checkbox" className="text-lg text-gray-100 cursor-pointer">
+                Yes, all information is accurate and I'm ready to proceed.
+              </Label>
             </div>
           </div>
-        </ScrollArea>
+        </div>
         
         <div className="container mx-auto max-w-3xl mt-8 flex flex-col sm:flex-row justify-between gap-4">
           <Button
