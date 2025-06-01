@@ -31,6 +31,8 @@ import DnsConfirmationPage from "../pages/DnsConfirmationPage";
 import WebsiteTrackingPage from "../pages/WebsiteTrackingPage";
 import BusinessOverviewPage from "../pages/BusinessOverviewPage";
 import { toast } from "@/components/ui/use-toast";
+import { DnsStatusProvider, useDnsStatus } from "@/contexts/DnsStatusContext";
+import GlobalDnsNotificationBar from "@/components/GlobalDnsNotificationBar";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +56,7 @@ const AppRoutes = () => {
   const isNavigatingFormFlow = useRef(false);
   const previousUserRef = useRef(user);
   const previousLoadingRef = useRef(loading);
+  const { setOverallDnsStatus, setDnsContextLoaded } = useDnsStatus();
 
   useEffect(() => {
     console.log(`App.tsx useEffect (NEW LOG): Path: ${location.pathname}. Auth User ID: ${user?.id || 'NONE'}. Auth Loading: ${loading}.`);
@@ -91,7 +94,10 @@ const AppRoutes = () => {
     if (user && user.id) {
       console.log('App.tsx useEffect: User is authenticated. Current path before fetchAndRedirect:', location.pathname);
       const fetchAndRedirect = async () => {
-        if (!user || !user.id) return;
+        if (!user || !user.id) {
+          setDnsContextLoaded(true);
+          return;
+        }
 
         console.log('App.tsx fetchAndRedirect: Fetching data for user:', user.id);
 
@@ -99,7 +105,7 @@ const AppRoutes = () => {
         const [emailSetupResult, userInfoResult] = await Promise.all([
           supabase
             .from('email_setups')
-            .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain')
+            .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain, overall_dns_status')
             .eq('user_id', user.id)
             .maybeSingle(),
           supabase
@@ -125,6 +131,14 @@ const AppRoutes = () => {
 
         console.log('App.tsx fetchAndRedirect: Fetched emailSetup:', emailSetup);
         console.log('App.tsx fetchAndRedirect: Fetched userInfo:', userInfo);
+
+        // Set DNS status from context
+        if (emailSetup) {
+          setOverallDnsStatus(emailSetup.overall_dns_status as any || null);
+        } else {
+          setOverallDnsStatus(null);
+        }
+        setDnsContextLoaded(true);
 
         if (userInfo?.subscription_status === 'active' && emailSetup) {
           const allFieldsFilled =
@@ -257,9 +271,11 @@ const AppRoutes = () => {
         } else {
           console.log(`App.tsx useEffect: Unauthenticated. Path ${location.pathname} does not require redirect.`);
         }
+        setOverallDnsStatus(null);
+        setDnsContextLoaded(true);
     }
     console.log('App.tsx useEffect: End', { path: location.pathname });
-  }, [user, loading, navigate, location, toast]);
+  }, [user, loading, navigate, location, toast, setOverallDnsStatus, setDnsContextLoaded]);
   
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   
@@ -327,16 +343,21 @@ const AppRoutes = () => {
 
 const App = () => {
   return (
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <AppRoutes />
-            <Toaster />
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <DnsStatusProvider>
+              <GlobalDnsNotificationBar />
+              <div className="app-container flex flex-col min-h-screen">
+                <AppRoutes />
+              </div>
+              <Toaster />
+            </DnsStatusProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 };
 
