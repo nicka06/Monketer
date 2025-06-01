@@ -200,7 +200,7 @@
 │   │       Details: (Content would depend on the specific example)
 │   │       Usage: Reference for admin-level operations or a specific utility.
 │   │
-│   └── 📄 import_map.json 
+│   └── 📄 import_map.json
 │       Purpose: Deno import map for backend functions if shared across all, or general backend utilities.
 │       Details: Maps module specifiers to URLs for Deno.
 │       Usage: Used by Deno runtime to resolve imports for functions not having their own `import_map.json` or for shared backend code.
@@ -242,13 +242,13 @@
 │   │   │
 │   │   ├── 📄 Login.tsx
 │   │   │   Purpose: Authentication page for users to sign in.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Uses the shared `@/components/Navbar` for consistent navigation. The previous custom header section has been removed.
 │   │   │   Usage: Path `/login`.
 │   │   │
 │   │   ├── 📄 Signup.tsx
 │   │   │   Purpose: User registration page.
 │   │   │   Details: 
-│   │   │   - Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   - Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated. Uses the shared `@/components/Navbar`; custom header removed.
 │   │   │   - **On submit (`handleSubmit`):**
 │   │   │     - Calls `useAuth().signUp()`.
 │   │   │     - Calls `supabase.auth.getUser()` to retrieve the new user details.
@@ -275,16 +275,16 @@
 │   │   ├── 📄 OptionalSignUpPage.tsx
 │   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
 │   │   │   - Sign up form and "Continue as Guest" option.
 │   │   │   - "Previous" button now navigates to `/business-overview`.
 │   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
-│   │   │   Usage: Part of the multi-step onboarding flow.
+│   │   │   Usage: Step in the multi-step onboarding flow. 
 │   │   │
 │   │   ├── 📄 GoalsFormPage.tsx
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
 │   │   │   - The business description display card has been removed.
 │   │   │   - Textarea for users to input their goals as a paragraph (placeholder updated to reflect this, label removed).
 │   │   │   - **Load Existing Goals (`useEffect`):** Loads `goals_form_raw_text` from `email_setups` (if signed in) or `pendingUserGoalsRawText` from `localStorage` (if guest). Also loads `business_description` for context (though not displayed anymore, it's fetched).
@@ -297,17 +297,17 @@
 │   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
 │   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
 │   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
-│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
+│   │   │   Usage: Part of the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 BusinessClarificationPage.tsx
 │   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
+│   │   │   Details: Displays a jungle-themed "Under Construction" message. Uses the shared `@/components/Navbar`. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
 │   │   │   Usage: Step in the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 SelectEmailsPage.tsx
 │   │   │   Purpose: Allows users to select specific email campaigns they want to set up from a categorized list.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right.
+│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right. Uses the shared `@/components/Navbar`.
 │   │   │   - Imports `EMAIL_CAMPAIGN_CATEGORIES` from `src/core/emailCampaigns.ts`.
 │   │   │   - Displays campaigns grouped by category, each with a checkbox, name, and description.
 │   │   │   - Uses `useState` for `selectedCampaigns` (string array of campaign IDs) and `isLoading`/`isSaving`.
@@ -326,24 +326,16 @@
 │   │   ├── 📄 WebsiteStatusPage.tsx
 │   │   │   Purpose: Collects website status information from the user (has website, provider, domain name) as part of the multi-step onboarding flow.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
-│   │   │   - **Internal Sub-steps:**
-│   │   │     1.  **"Do you have a website?"**: Yes/No buttons. "No" shows a modal requiring a website to proceed.
-│   │   │     2.  **"Who hosts your website?"**: Buttons for common providers (Shopify, Wix, etc.).
-│   │   │     3.  **"What's your domain name?"**: Text input for the domain.
-│   │   │   - **State Management**: `currentSubStep`, `selectedProvider`, `domainName`, `showNoWebsiteModal`, `isLoading`, `isSaving`.
-│   │   │   - **Data Handling (`loadData`, `handleSaveAndNavigate`):**
-│   │   │     - Authenticated users: Loads `website_provider` and `domain` from `email_setups`; saves updates to these fields, setting `form_complete: false`.
-│   │   │     - Guest users: Loads from `localStorage` (`pendingWebsiteProvider`, `pendingDomainName`); saves to `localStorage`.
-│   │   │   - **Navigation**: Uses `FORM_FLOW_ORDER`. "Save & Continue" appears at Sub-step 3. "Previous Page" button available on Sub-steps 2 and 3 (not on first question).
-│   │   │   - `PROVIDER_OPTIONS` constant defines website provider choices.
-│   │   │   - Includes error handling with toasts and a loading state.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
+│   │   │   - Internal Sub-steps for questions. Includes "Back" buttons for internal navigation between sub-steps.
+│   │   │   - The main "Previous Page" button (navigating to the previous route in `FORM_FLOW_ORDER`) is now enabled even on the first sub-step, allowing users to go back to `/select-emails` immediately.
+│   │   │   - Data saving for authenticated users (to `email_setups`) and guest users (to `localStorage`).
 │   │   │   Usage: Step in the multi-step onboarding flow, after `SelectEmailsPage`.
 │   │   │
 │   │   ├── 📄 InfoClarificationPage.tsx
 │   │   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with scrollable content area.
+│   │   │   - Jungle theme, full-screen layout with scrollable content area. Uses the shared `@/components/Navbar`.
 │   │   │   - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name.
 │   │   │   - Each section is a `Card` component with an "Edit" button that navigates to the respective form page.
 │   │   │   - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
@@ -358,7 +350,7 @@
 │   │   ├── 📄 AuthGatePage.tsx
 │   │   │   Purpose: Mandatory authentication (Sign Up or Sign In) page for guest users after they confirm their information on the InfoClarificationPage.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms.
+│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms. Uses the shared `@/components/Navbar`.
 │   │   │   - No "Continue as Guest" or "Previous" option (only a "Start Over?" link to `/`).
 │   │   │   - **On successful Sign Up/Sign In (`handleSubmit`):**
 │   │   │     - Retrieves all `pending...` data from `localStorage` (business description, goals, campaigns, website provider, domain).
@@ -371,6 +363,7 @@
 │   │   ├── 📄 DnsConfirmationPage.tsx
 │   │   │   Purpose: Guides the user through adding DNS records to their domain provider and verifying them.
 │   │   │   Details:
+│   │   │     - Uses the shared `@/components/Navbar`.
 │   │   │     - Fetches comprehensive `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, current verification statuses) for the authenticated user.
 │   │   │     - Calls the `get-domain-provider` Supabase edge function (passing `emailSetupId`), which attempts auto-detection of the DNS provider based on NS records and updates `email_setups.dns_provider_name`.
 │   │   │     - Displays the required DNS records (MX, SPF, DKIM, DMARC) using `constructDnsRecords`. Shows name, type, value (with copy buttons), purpose, and current verification status for each, fetched from `email_setups`.
@@ -382,19 +375,17 @@
 │   │   │     - "Next Step" button navigates to `/website-tracking`. Advises user to verify DNS first if not all records are 'verified' or 'partially_verified'.
 │   │   │     - Handles loading states (page, provider detection, verification) and errors with toasts and messages.
 │   │   │     - Uses `lucide-react` icons. Jungle-themed styling.
-│   │   │   Usage: Key step in the onboarding flow for users to configure their email sending domain. Path `/dns-confirmation`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 WebsiteTrackingPage.tsx
 │   │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" ("Finish & View Dashboard") navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as the final step in the multi-step onboarding flow.
+│   │   │   Details: Displays a jungle-themed "Under Construction" message. Uses the shared `@/components/Navbar`. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER`. The "Next" button now reads "Continue to Plan Selection" and navigates to `/subscription-plan`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/dns-confirmation` and before `/subscription-plan`.
 │   │   │
-│   │   └── 📄 EmailOnboardingPage.tsx
-│   │       Purpose: Main page for the email setup onboarding flow.
-│   │       Details:
-│   │       - Likely orchestrates different steps of the onboarding (e.g., form, DNS config).
-│   │       - Uses `EmailSetupContext` and relevant components.
-│   │       Usage: Entry point for users setting up their email.
+│   │   └── 📄 SubscriptionPlanPage.tsx
+│   │       Purpose: Wrapper page in the main `/pages` directory for the subscription plan selection component.
+│   │       Details: This page will primarily render the `PlanSelectionPage` component located at `src/components/subscription/PlanSelectionPage.tsx`. It ensures the plan selection is part of the main page structure and routing. Navigation from this page (e.g., after plan selection) will be handled by `PlanSelectionPage.tsx` itself, likely to `/dashboard` or a payment confirmation step if Stripe is integrated.
+│   │       Usage: New step in the multi-step onboarding flow, accessed via the route `/subscription-plan`, after `/website-tracking`.
 │   │
 │   ├── 📁 contexts/
 │   │   └── 📄 EmailSetupContext.tsx
@@ -419,12 +410,12 @@
 │   │   │
 │   │   ├── 📄 Login.tsx
 │   │   │   Purpose: Authentication page for users to sign in.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Uses the shared `@/components/Navbar` for consistent navigation. The previous custom header section has been removed.
 │   │   │   Usage: Path `/login`.
 │   │   │
 │   │   ├── 📄 Signup.tsx
 │   │   │   Purpose: User registration page.
-│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated.
+│   │   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated. Uses the shared `@/components/Navbar`; custom header removed.
 │   │   │   Usage: Path `/signup`.
 │   │   │
 │   │   ├── 📄 BusinessOverviewPage.tsx
@@ -444,16 +435,16 @@
 │   │   ├── 📄 OptionalSignUpPage.tsx
 │   │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
 │   │   │   - Sign up form and "Continue as Guest" option.
 │   │   │   - "Previous" button now navigates to `/business-overview`.
 │   │   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
-│   │   │   Usage: Part of the multi-step onboarding flow.
+│   │   │   Usage: Step in the multi-step onboarding flow. 
 │   │   │
 │   │   ├── 📄 GoalsFormPage.tsx
 │   │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
 │   │   │   - The business description display card has been removed.
 │   │   │   - Textarea for users to input their goals as a paragraph (placeholder updated to reflect this, label removed).
 │   │   │   - **Load Existing Goals (`useEffect`):** Loads `goals_form_raw_text` from `email_setups` (if signed in) or `pendingUserGoalsRawText` from `localStorage` (if guest). Also loads `business_description` for context (though not displayed anymore, it's fetched).
@@ -466,17 +457,17 @@
 │   │   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
 │   │   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
 │   │   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
-│   │   │   Usage: Step in the multi-step onboarding flow, after `OptionalSignUpPage` (or `BusinessOverviewPage` for authenticated users going back).
+│   │   │   Usage: Part of the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 BusinessClarificationPage.tsx
 │   │   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
+│   │   │   Details: Displays a jungle-themed "Under Construction" message. Uses the shared `@/components/Navbar`. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
 │   │   │   Usage: Step in the multi-step onboarding flow.
 │   │   │
 │   │   ├── 📄 SelectEmailsPage.tsx
 │   │   │   Purpose: Allows users to select specific email campaigns they want to set up from a categorized list.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right.
+│   │   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right. Uses the shared `@/components/Navbar`.
 │   │   │   - Imports `EMAIL_CAMPAIGN_CATEGORIES` from `src/core/emailCampaigns.ts`.
 │   │   │   - Displays campaigns grouped by category, each with a checkbox, name, and description.
 │   │   │   - Uses `useState` for `selectedCampaigns` (string array of campaign IDs) and `isLoading`/`isSaving`.
@@ -495,24 +486,16 @@
 │   │   ├── 📄 WebsiteStatusPage.tsx
 │   │   │   Purpose: Collects website status information from the user (has website, provider, domain name) as part of the multi-step onboarding flow.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout.
-│   │   │   - **Internal Sub-steps:**
-│   │   │     1.  **"Do you have a website?"**: Yes/No buttons. "No" shows a modal requiring a website to proceed.
-│   │   │     2.  **"Who hosts your website?"**: Buttons for common providers (Shopify, Wix, etc.).
-│   │   │     3.  **"What's your domain name?"**: Text input for the domain.
-│   │   │   - **State Management**: `currentSubStep`, `selectedProvider`, `domainName`, `showNoWebsiteModal`, `isLoading`, `isSaving`.
-│   │   │   - **Data Handling (`loadData`, `handleSaveAndNavigate`):**
-│   │   │     - Authenticated users: Loads `website_provider` and `domain` from `email_setups`; saves updates to these fields, setting `form_complete: false`.
-│   │   │     - Guest users: Loads from `localStorage` (`pendingWebsiteProvider`, `pendingDomainName`); saves to `localStorage`.
-│   │   │   - **Navigation**: Uses `FORM_FLOW_ORDER`. "Save & Continue" appears at Sub-step 3. "Previous Page" button available on Sub-steps 2 and 3 (not on first question).
-│   │   │   - `PROVIDER_OPTIONS` constant defines website provider choices.
-│   │   │   - Includes error handling with toasts and a loading state.
+│   │   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
+│   │   │   - Internal Sub-steps for questions. Includes "Back" buttons for internal navigation between sub-steps.
+│   │   │   - The main "Previous Page" button (navigating to the previous route in `FORM_FLOW_ORDER`) is now enabled even on the first sub-step, allowing users to go back to `/select-emails` immediately.
+│   │   │   - Data saving for authenticated users (to `email_setups`) and guest users (to `localStorage`).
 │   │   │   Usage: Step in the multi-step onboarding flow, after `SelectEmailsPage`.
 │   │   │
 │   │   ├── 📄 InfoClarificationPage.tsx
 │   │   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with scrollable content area.
+│   │   │   - Jungle theme, full-screen layout with scrollable content area. Uses the shared `@/components/Navbar`.
 │   │   │   - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name.
 │   │   │   - Each section is a `Card` component with an "Edit" button that navigates to the respective form page.
 │   │   │   - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
@@ -527,7 +510,7 @@
 │   │   ├── 📄 AuthGatePage.tsx
 │   │   │   Purpose: Mandatory authentication (Sign Up or Sign In) page for guest users after they confirm their information on the InfoClarificationPage.
 │   │   │   Details:
-│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms.
+│   │   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms. Uses the shared `@/components/Navbar`.
 │   │   │   - No "Continue as Guest" or "Previous" option (only a "Start Over?" link to `/`).
 │   │   │   - **On successful Sign Up/Sign In (`handleSubmit`):**
 │   │   │     - Retrieves all `pending...` data from `localStorage` (business description, goals, campaigns, website provider, domain).
@@ -540,6 +523,7 @@
 │   │   ├── 📄 DnsConfirmationPage.tsx
 │   │   │   Purpose: Guides the user through adding DNS records to their domain provider and verifying them.
 │   │   │   Details:
+│   │   │     - Uses the shared `@/components/Navbar`.
 │   │   │     - Fetches comprehensive `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, current verification statuses) for the authenticated user.
 │   │   │     - Calls the `get-domain-provider` Supabase edge function (passing `emailSetupId`), which attempts auto-detection of the DNS provider based on NS records and updates `email_setups.dns_provider_name`.
 │   │   │     - Displays the required DNS records (MX, SPF, DKIM, DMARC) using `constructDnsRecords`. Shows name, type, value (with copy buttons), purpose, and current verification status for each, fetched from `email_setups`.
@@ -551,25 +535,23 @@
 │   │   │     - "Next Step" button navigates to `/website-tracking`. Advises user to verify DNS first if not all records are 'verified' or 'partially_verified'.
 │   │   │     - Handles loading states (page, provider detection, verification) and errors with toasts and messages.
 │   │   │     - Uses `lucide-react` icons. Jungle-themed styling.
-│   │   │   Usage: Key step in the onboarding flow for users to configure their email sending domain. Path `/dns-confirmation`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
 │   │   │
 │   │   ├── 📄 WebsiteTrackingPage.tsx
 │   │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
-│   │   │   Details: Displays a jungle-themed "Under Construction" message. Includes "Previous" and "Next" ("Finish & View Dashboard") navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   │   Usage: Intended as the final step in the multi-step onboarding flow.
+│   │   │   Details: Displays a jungle-themed "Under Construction" message. Uses the shared `@/components/Navbar`. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER`. The "Next" button now reads "Continue to Plan Selection" and navigates to `/subscription-plan`.
+│   │   │   Usage: Step in the multi-step onboarding flow, after `/dns-confirmation` and before `/subscription-plan`.
 │   │   │
-│   │   └── 📄 EmailOnboardingPage.tsx
-│   │       Purpose: Main page for the email setup onboarding flow.
-│   │       Details:
-│   │       - Likely orchestrates different steps of the onboarding (e.g., form, DNS config).
-│   │       - Uses `EmailSetupContext` and relevant components.
-│   │       Usage: Entry point for users setting up their email.
+│   │   └── 📄 SubscriptionPlanPage.tsx
+│   │       Purpose: Wrapper page in the main `/pages` directory for the subscription plan selection component.
+│   │       Details: This page will primarily render the `PlanSelectionPage` component located at `src/components/subscription/PlanSelectionPage.tsx`. It ensures the plan selection is part of the main page structure and routing. Navigation from this page (e.g., after plan selection) will be handled by `PlanSelectionPage.tsx` itself, likely to `/dashboard` or a payment confirmation step if Stripe is integrated.
+│   │       Usage: New step in the multi-step onboarding flow, accessed via the route `/subscription-plan`, after `/website-tracking`.
 │   │
 │   ├── 📁 core/
 │   │   ├── 📄 constants.ts
 │   │   │   Purpose: Centralized location for application-wide constants.
 │   │   │   Details:
-│   │   │   - `FORM_FLOW_ORDER`: An array of strings defining the sequence of pages in the multi-step onboarding form.
+│   │   │   - `FORM_FLOW_ORDER`: An array of strings defining the sequence of pages in the multi-step onboarding form. Now includes `/subscription-plan` after `/website-tracking`.
 │   │   │   - `DNS_PROVIDER_DISPLAY_OPTIONS`: An array of objects, each representing a DNS provider with properties like `id`, `name`, `logo` (path to image), and `instructionsUrl` (a template URL to the provider's DNS settings page). Used by `DnsConfirmationPage.tsx` to render provider selection cards and instruction modals.
 │   │   │   - `PROVIDER_MAP_TO_DISPLAY_OPTION_ID`: A mapping object that translates provider names (as returned by the `get-domain-provider` function or stored as `website_provider` / `dns_provider_name` in `email_setups`) to the `id` used in `DNS_PROVIDER_DISPLAY_OPTIONS`.
 │   │   │   Usage: Imported by various components and pages, especially form pages for navigation and `DnsConfirmationPage.tsx` for provider display and linking.
@@ -600,7 +582,7 @@
 │               3. `selected_campaign_ids` -> `/select-emails`
 │               4. `website_provider` or `domain` missing -> `/website-status`
 │               5. If all above present, directs to step after `/auth-gate` (e.g., `/dns-confirmation`).
-│           - Includes routes for all pages, including form flow: `/`, `/business-overview`, `/optional-signup`, `/goals-form`, `/select-emails`, `/website-status`, `/info-clarification`, `/auth-gate`, `/dns-confirmation`, `/website-tracking`.
+│           - Includes routes for all pages, including form flow. Now includes a protected route for `/subscription-plan` which renders `PlanSelectionPage` from `src/components/subscription/PlanSelectionPage.tsx`.
 │       Usage: Root of the React application.
 │
 └── 📄 .env.example

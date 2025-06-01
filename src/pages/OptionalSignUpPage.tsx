@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-[{"column_name":"id","data_type":"uuid"},{"column_name":"user_id","data_type":"uuid"},{"column_name":"domain","data_type":"text"},{"column_name":"business_area","data_type":"text"},{"column_name":"business_subcategory","data_type":"text"},{"column_name":"goals","data_type":"ARRAY"},{"column_name":"send_timeline","data_type":"text"},{"column_name":"dns_provider_name","data_type":"text"},{"column_name":"dns_setup_strategy","data_type":"text"},{"column_name":"dkim_selector","data_type":"text"},{"column_name":"dkim_public_key","data_type":"text"},{"column_name":"status","data_type":"text"},{"column_name":"dns_records_to_set","data_type":"jsonb"},{"column_name":"provider_api_credentials_status","data_type":"text"},{"column_name":"error_message","data_type":"text"},{"column_name":"created_at","data_type":"timestamp with time zone"},{"column_name":"updated_at","data_type":"timestamp with time zone"},{"column_name":"default_from_name","data_type":"text"},{"column_name":"default_from_email","data_type":"text"},{"column_name":"email_scenarios","data_type":"ARRAY"},{"column_name":"mx_record_value","data_type":"text"},{"column_name":"spf_record_value","data_type":"text"},{"column_name":"dmarc_record_value","data_type":"text"},{"column_name":"mx_status","data_type":"text"},{"column_name":"spf_status","data_type":"text"},{"column_name":"dkim_status","data_type":"text"},{"column_name":"dmarc_status","data_type":"text"},{"column_name":"overall_dns_status","data_type":"text"},{"column_name":"last_verification_attempt_at","data_type":"timestamp with time zone"},{"column_name":"verification_failure_reason","data_type":"text"}]// import Navbar from '@/components/Navbar'; // Removed Navbar
+import Navbar from '@/components/Navbar'; // Added Navbar import
 // import Footer from '@/components/Footer'; // Removed Footer
 import { Button } from '@/components/ui/button'; // Assuming Button component is available
 import { useAuth } from "@/features/auth/useAuth"; // Added useAuth import
@@ -184,94 +184,96 @@ const OptionalSignUpPage: React.FC = () => {
   };
 
   return (
-    // Outer div centers content and ensures full height with bg-green-800
-    <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white">
-      {/* Inner div now takes full width and has adjusted padding for full-screen feel */}
-      <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
-        <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center w-full">
-          {/* Left Column: Monkey Image */}
-          <div className="md:w-1/2 flex justify-center items-center">
-            <img
-              src="/public/images/homepage_monkey_swinging.png"
-              alt="Monkey suggesting to sign up"
-              className="max-w-xs md:max-w-sm h-auto object-contain"
-            />
-          </div>
+    <>
+      <Navbar />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white pt-16"> {/* Added pt-16 for spacing below navbar */}
+        {/* Inner div now takes full width and has adjusted padding for full-screen feel */}
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center w-full">
+            {/* Left Column: Monkey Image */}
+            <div className="md:w-1/2 flex justify-center items-center">
+              <img
+                src="/public/images/homepage_monkey_swinging.png"
+                alt="Monkey suggesting to sign up"
+                className="max-w-xs md:max-w-sm h-auto object-contain"
+              />
+            </div>
 
-          {/* Right Column: Sign Up Form */}
-          <div className="md:w-1/2 flex flex-col space-y-6 w-full">
-            <h1 className="text-3xl md:text-4xl font-bold text-yellow-400 text-center">Save Your Progress?</h1>
-            <p className="text-center text-gray-200">
-              Create an account to save your business ideas and pick up where you left off anytime.
-              Or, continue as a guest and we'll remember you for this session.
-            </p>
+            {/* Right Column: Sign Up Form */}
+            <div className="md:w-1/2 flex flex-col space-y-6 w-full">
+              <h1 className="text-3xl md:text-4xl font-bold text-yellow-400 text-center">Save Your Progress?</h1>
+              <p className="text-center text-gray-200">
+                Create an account to save your business ideas and pick up where you left off anytime.
+                Or, continue as a guest and we'll remember you for this session.
+              </p>
 
-            <Button 
-                type="button"
-                onClick={handlePrevious}
-                variant="outline"
-                className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base mb-4"
-                disabled={isLoading}
-            >
-                Previous
-            </Button>
+              <Button 
+                  type="button"
+                  onClick={handlePrevious}
+                  variant="outline"
+                  className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base mb-4"
+                  disabled={isLoading}
+              >
+                  Previous
+              </Button>
 
-            <form onSubmit={handleSignUpWrapper} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  placeholder="you@example.com"
-                />
-              </div>
+              <form onSubmit={handleSignUpWrapper} className="space-y-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    placeholder="you@example.com"
+                  />
+                </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  placeholder="••••••••"
-                />
-              </div>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 text-base"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Creating Account...' : 'Sign Up & Save Progress'}
+                </Button>
+              </form>
 
               <Button
-                type="submit"
-                className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 text-base"
+                variant="outline"
+                onClick={handleContinueAsGuestWrapper}
+                className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base"
                 disabled={isLoading}
               >
-                {isLoading ? 'Creating Account...' : 'Sign Up & Save Progress'}
+                Continue as Guest
               </Button>
-            </form>
-
-            <Button
-              variant="outline"
-              onClick={handleContinueAsGuestWrapper}
-              className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base"
-              disabled={isLoading}
-            >
-              Continue as Guest
-            </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
