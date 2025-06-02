@@ -1,0 +1,153 @@
+## Website Tracking Feature Implementation Map
+
+**Overall Goal:** To allow Emailore users to install a tracking pixel (JavaScript snippet) on their websites. This pixel will send page view data and custom events to Emailore's backend, enabling future features like event-triggered email automations.
+
+--- 
+
+### Phase 1: Core Tracking Implementation (for Developer-Owned Custom Websites)
+
+This phase focuses on providing a developer with a unique tracking script, instructions for manual installation on a custom website, a way to test the installation, and the backend infrastructure to receive and store basic tracking data.
+
+**1. Frontend - `src/pages/WebsiteTrackingPage.tsx`**
+
+   *   **Purpose:** Guide the user through obtaining their tracking script, understanding how to install it, and testing its functionality.
+   *   **Details:**
+       *   **A. Fetch User/Setup Specific Identifier:**
+           *   Retrieve `email_setup_id` for the authenticated user (from `useAuth` and then fetching `email_setups`). This ID is crucial for associating tracked events with the correct user account.
+       *   **B. Generate Unique Tracking Script:**
+           *   Create a template for the JavaScript tracking snippet.
+           *   Dynamically insert the user's `email_setup_id` into this script template.
+           *   Define the backend `endpoint` URL for the `ingest-tracking-event` function within the script.
+           *   **Script Functionality (Initial Version):**
+               *   Immediately send a `page_view` event upon script load.
+               *   Include basic information like `url: window.location.href`, `title: document.title`.
+               *   Use `navigator.sendBeacon` if available for reliable data transmission, with a `fetch` fallback.
+               *   Expose a global function `window.emailore.track(eventName, eventData)` for later custom event tracking.
+       *   **C. Display Tracking Script to User:**
+           *   Present the generated script within a read-only `<textarea>` or a styled code block component.
+           *   Include a "Copy Script to Clipboard" button.
+       *   **D. Installation Instructions (Generic for Developers):**
+           *   Provide clear text instructions: "For custom-built websites, paste this script into the `<head>` section of your website's HTML. Ensure it is included on all pages where you want to track activity. This is typically done by adding it to a global header include file or the main layout template."
+       *   **E. Pixel Installation Testing Mechanism:**
+           *   **UI Elements:**
+               *   "Test My Pixel Installation" button.
+               *   A status display area (e.g., "Status: Not yet tested", "Status: Waiting for data...", "Status: Success! Last event received: Page View on [URL] at [Time]").
+           *   **Logic (`handleTestPixel` function):**
+               *   When the button is clicked, call a new Supabase Edge Function (`test-pixel-status`) via an authenticated request, passing the `email_setup_id`.
+               *   Update the status display based on the function's response.
+               *   Provide guidance if no data is received (e.g., "No data received. Please ensure the script is correctly installed on your live website, visit a page, and try testing again in a few moments.").
+       *   **F. Navigation:**
+           *   "Previous Step" button (to `/dns-confirmation` or relevant previous step).
+           *   "Next Step" / "Continue" button (e.g., to `/subscription-plan` or dashboard if this is the last onboarding step). This button should likely be enabled even if the pixel test hasn't been successful, perhaps with a note.
+
+**2. Backend - Supabase Edge Functions**
+
+   *   **A. `ingest-tracking-event` Function:**
+       *   **Location:** `supabase/functions/ingest-tracking-event/index.ts`
+       *   **Purpose:** Receive tracking data sent by the user's website pixel.
+       *   **Trigger:** HTTP POST request.
+       *   **CORS:** Must be configured to accept requests from `*` (any origin) or allow users to specify their domain for security. Handle OPTIONS preflight requests.
+       *   **Input (Request Body):** JSON object:
+           ```json
+           {
+             "setupId": "USER_UNIQUE_EMAIL_SETUP_ID",
+             "eventName": "page_view", // or custom event name
+             "data": { "title": "Page Title", /* other custom data */ },
+             "url": "https://users-website.com/product-page",
+             "timestamp": "YYYY-MM-DDTHH:mm:ss.sssZ" // Client-generated timestamp
+           }
+           ```
+       *   **Logic:**
+           1.  Parse the JSON payload.
+           2.  Validate the `setupId` (e.g., check if it exists in `email_setups`). If invalid, return an error (e.g., 400 or 401).
+           3.  Extract other relevant information from request headers if desired (e.g., `User-Agent`, `CF-Connecting-IP` if behind Cloudflare - be mindful of privacy implications and GDPR if collecting IP).
+           4.  Insert the event data into the `tracked_events` database table.
+           5.  Return a lightweight success response (e.g., `204 No Content` or `200 OK` with a minimal body).
+   *   **B. `test-pixel-status` Function:**
+       *   **Location:** `supabase/functions/test-pixel-status/index.ts`
+       *   **Purpose:** Check if any tracking data has been recently received for a given user, to help them verify pixel installation.
+       *   **Trigger:** HTTP POST (or GET) request from Emailore frontend (authenticated).
+       *   **CORS:** Standard CORS for Emailore frontend.
+       *   **Authentication:** Requires authenticated user context (to ensure a user can only test their own setup).
+       *   **Input (Request Body/Query Params):** `{ "emailSetupId": "USER_UNIQUE_EMAIL_SETUP_ID" }`
+       *   **Logic:**
+           1.  Verify that the authenticated user owns the provided `emailSetupId`.
+           2.  Query the `tracked_events` table for records matching `email_setup_id`.
+           3.  Filter for events received within a recent timeframe (e.g., last 10-15 minutes).
+           4.  Order by `received_at` descending and take the latest event.
+       *   **Output (Response Body):** JSON object:
+           *   If recent event found: `{ "status": "success", "lastEventTimestamp": "timestamp", "lastEventName": "event_name", "lastEventUrl": "url" }`
+           *   If no recent event: `{ "status": "pending", "message": "No recent tracking data found." }`
+           *   If error: `{ "status": "error", "message": "Error checking pixel status." }`
+
+**3. Database - Supabase Table**
+
+   *   **Table Name:** `tracked_events`
+   *   **Purpose:** Store all incoming page view and custom event data from user websites.
+   *   **Columns:**
+       *   `id`: `uuid` (Primary Key, default `gen_random_uuid()`)
+       *   `email_setup_id`: `uuid` (Foreign Key referencing `email_setups.id`, indexed)
+       *   `event_name`: `text` (e.g., "page_view", "add_to_cart", "form_submission_contact")
+       *   `event_data`: `jsonb` (Flexible field for any custom properties associated with the event, e.g., `{"product_id": "123", "category": "shoes"}`)
+       *   `page_url`: `text` (The URL where the event occurred)
+       *   `client_timestamp`: `timestamp with time zone` (Timestamp generated by the client-side script)
+       *   `received_at`: `timestamp with time zone` (Server-side timestamp, default `now()`, indexed)
+       *   `user_agent`: `text` (Optional, from request headers)
+       *   `ip_address`: `inet` (Optional, from request headers - consider privacy implications carefully)
+   *   **RLS Policies:**
+       *   `ingest-tracking-event` function will use `service_role_key` to write to this table.
+       *   Users should only be able to read events related to their `email_setup_id` (via the `test-pixel-status` function, which queries as admin, or if direct user queries are ever allowed).
+
+--- 
+
+### Phase 2: Advanced Event Tracking (Developer Focused)
+
+This phase builds on the core tracking by enabling developers to send more specific, custom events.
+
+**1. Custom Event Tracking via `window.emailore.track()`**
+
+   *   **Frontend - `src/pages/WebsiteTrackingPage.tsx` (Documentation Aspect):**
+       *   Add a section explaining how developers can send custom events using the globally available `window.emailore.track(eventName, eventData)` function from their website's JavaScript.
+       *   **Example Usage:**
+           ```javascript
+           // Track when a user signs up for a newsletter
+           window.emailore.track('newsletter_signup', { form_location: 'footer' });
+
+           // Track when a video is played
+           myVideoPlayer.on('play', function() {
+             window.emailore.track('video_play', { video_title: 'My Awesome Product Demo', video_duration: 120 });
+           });
+           ```
+       *   Emphasize that `eventName` should be a descriptive string, and `eventData` is an optional JavaScript object for additional properties.
+
+**2. Declarative Event Tracking with Data Attributes**
+
+   *   **Frontend - `src/pages/WebsiteTrackingPage.tsx` (Documentation Aspect):**
+       *   Introduce a convention for developers to add `data-emailore-*` attributes to HTML elements to automatically track clicks with specific event names and data.
+       *   **Example HTML:**
+           ```html
+           <button data-emailore-event="add_to_cart" data-emailore-item-id="prod456" data-emailore-category="apparel">Add to Cart</button>
+           <a href="/contact" data-emailore-event="contact_us_click">Contact Us</a>
+           ```
+       *   **Tracking Script Enhancement (already part of Phase 1 script design but document here):**
+           *   The tracking script should include a global click listener.
+           *   This listener checks if the clicked element (or its near parents) has a `data-emailore-event` attribute.
+           *   If found, it automatically calls `sendTrackData` with the specified `eventName` and collects any other `data-emailore-*` attributes into the `eventData` object.
+
+--- 
+
+### Phase 3: Connecting Events to Email Automations (Future Outlook)
+
+*   **Brief Mention:** This map primarily focuses on the tracking setup. The next major step, after data collection is robust, will be to design and implement a system within Emailore that allows users to:
+    1.  Define triggers based on `tracked_events` (e.g., `eventName IS 'add_to_cart' AND page_url CONTAINS '/checkout'`).
+    2.  Specify actions, such as sending a particular email campaign after a certain delay.
+*   This will involve new UI in the Emailore dashboard, new database tables for automation rules (`automation_rules`, `pending_automation_emails`), and backend logic (likely Supabase Scheduled Functions) to process events against these rules.
+
+--- 
+
+**Sitemap Considerations for this document itself:**
+
+- Path: `/websitetrackingmap`
+- Purpose: Technical design and implementation plan for the website tracking pixel feature.
+- Details: Outlines frontend components, backend functions, database schema, and phased rollout for tracking user website interactions. Focuses initially on developer-owned custom websites, with notes for platform-specific instructions later.
+- Usage: Internal development guide for building the website tracking feature.

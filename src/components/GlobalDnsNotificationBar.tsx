@@ -1,13 +1,37 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useDnsStatus } from '@/contexts/DnsStatusContext';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, Info, X } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
+import { FORM_FLOW_ORDER } from '@/core/constants';
 
 const GlobalDnsNotificationBar: React.FC = () => {
-  const { overallDnsStatus, showDnsModal, dnsContextLoaded } = useDnsStatus();
+  const { overallDnsStatus, showDnsModal, dnsContextLoaded, isDnsModalOpenGlobally } = useDnsStatus();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Don't show the bar if context isn't loaded yet or if DNS is verified
-  if (!dnsContextLoaded || overallDnsStatus === 'verified' || overallDnsStatus === null) {
+  const dnsConfirmationPath = '/dns-confirmation';
+  
+  // Determine if the current page is eligible for showing the bar
+  const locationPath = location.pathname;
+  const dnsConfirmationIndex = FORM_FLOW_ORDER.indexOf(dnsConfirmationPath);
+  const currentIndexInFlow = FORM_FLOW_ORDER.indexOf(locationPath);
+
+  // Page is eligible if:
+  // 1. It's not part of the defined flow (e.g., /dashboard, /editor) - currentIndexInFlow === -1
+  // OR
+  // 2. It is the dns-confirmation page or any page after it in the flow - currentIndexInFlow >= dnsConfirmationIndex
+  // We must ensure dnsConfirmationIndex is valid (i.e., dnsConfirmationPath is in FORM_FLOW_ORDER)
+  const shouldShowBasedOnPageEligibility = dnsConfirmationIndex !== -1 && 
+                                           (currentIndexInFlow === -1 || currentIndexInFlow >= dnsConfirmationIndex);
+
+  // Final conditions for showing the bar
+  if (
+    !dnsContextLoaded || 
+    overallDnsStatus === 'verified' || 
+    overallDnsStatus === null || 
+    !shouldShowBasedOnPageEligibility || 
+    isDnsModalOpenGlobally
+  ) {
     return null;
   }
 
@@ -25,20 +49,19 @@ const GlobalDnsNotificationBar: React.FC = () => {
     message = "Some DNS records are still pending. Click here to review and complete setup.";
   }
 
+  const handleBarClick = () => {
+    showDnsModal();
+  };
+
   return (
     <div 
-        className={`fixed top-0 left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-between shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
-        onClick={showDnsModal}
+        className={`fixed top-16 left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-between shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
+        onClick={handleBarClick}
     >
         <div className="flex items-center">
             {icon}
             <span>{message} <span className="font-semibold">This can take a few hours, but if you haven't added the records, please do so now.</span></span>
         </div>
-        {/* 
-          The hideDnsModal function is part of the context, but this bar itself doesn't have a close button.
-          It disappears if status becomes verified or if context is not loaded.
-          If a manual close for the bar itself is needed, we can add a state here and a button.
-        */}
     </div>
   );
 };

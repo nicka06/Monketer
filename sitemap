@@ -204,18 +204,20 @@
 │       Purpose: Deno import map for backend functions if shared across all, or general backend utilities.
 │       Details: Maps module specifiers to URLs for Deno.
 │       Usage: Used by Deno runtime to resolve imports for functions not having their own `import_map.json` or for shared backend code.
-│
+│   
 ├── 📁 components/
 │   ├── 📄 DnsConfigurationModal.tsx
 │   │   Purpose: React modal component to display DNS records for a selected provider and allow users to trigger verification.
 │   │   Details:
-│   │   - Receives props for visibility (isOpen), data (selectedProvider, emailSetupData, displayedDnsRecords), and handlers (onOpenChange, onVerifyDns, copyToClipboard, getStatusIcon).
-│   │   - Renders DNS records using a sub-component or integrated logic (DnsRecordsDisplay was internal to it).
-│   │   - Includes a "Verify My DNS Records" button and a "Close" button.
-│   │   - Displays provider-specific information and help links.
-│   │   Usage: Imported and used by `DnsConfirmationPage.tsx` to show detailed DNS setup instructions in a modal dialog.
+│   │     - Receives props for visibility (`isOpen`), data (`selectedProvider`, `emailSetupData`, `displayedDnsRecords`), and handlers (`onOpenChange`, `onVerifyDns`, `copyToClipboard`, `getStatusIcon`).
+│   │     - Renders DNS records, including their status, name, type, value (with copy-to-clipboard), and purpose. Uses `ScrollArea` for long lists.
+│   │     - Displays provider-specific information like name, logo, and a link to their DNS management page (from `instructionsUrl`).
+│   │     - Includes a "Verify My DNS Records" button (shows loading state) and a "Close" button.
+│   │     - Uses `Dialog` component from `@/components/ui/dialog`.
+│   │     - Defines interfaces `DnsRecordDisplayProps` (for internal helper) and `DnsConfigurationModalProps`.
+│   │   Usage: Rendered globally by `src/core/App.tsx` (specifically within `MainContentWithGlobalModal`). Its visibility and content are controlled by `DnsStatusContext`.
 │   │
-│   ├── �� EmailSetupForm.tsx
+│   ├── 📄 EmailSetupForm.tsx
 │   │   Purpose: React component for the email setup onboarding form.
 │   │   Details:
 │   │   - Collects user input for business area, goals, scenarios, default sender info, domain.
@@ -230,6 +232,18 @@
 │   │   - Includes the centered text "a westwood innovation" in a smaller font below the links.
 │   │   - Styled with a dark background and reduced vertical padding.
 │   │   Usage: Used in `Index.tsx` and various pages throughout the application.
+│   │
+│   ├── 📄 GlobalDnsNotificationBar.tsx
+│   │   Purpose: Displays a persistent notification bar at the top of the screen if DNS records are not fully verified.
+│   │   Details:
+│   │     - Consumes `DnsStatusContext` to get `overallDnsStatus`, `dnsContextLoaded`, and `isDnsModalOpenGlobally`.
+│   │     - Conditionally renders based on `overallDnsStatus` (not 'verified' or null) and `dnsContextLoaded`.
+│   │     - Hidden if `isDnsModalOpenGlobally` is true.
+│   │     - Color and message change based on status (pending/partial vs. failed). Yellow for pending/partially_verified, Red for failed_to_verify.
+│   │     - Determines its `top` position (`top-0` or `top-16`) based on whether the current page is in `PAGES_WITHOUT_NAVBAR` (e.g., `/dashboard`, `/editor`).
+│   │     - Visibility is further refined by `shouldShowBasedOnPageEligibility`: only shows on `/dns-confirmation`, pages after it in `FORM_FLOW_ORDER`, or pages not in `FORM_FLOW_ORDER` at all.
+│   │     - Clicking the bar calls `showDnsModal()` from the context to open the `DnsConfigurationModal`.
+│   │   Usage: Rendered globally by `src/core/App.tsx`.
 │   │
 │   ├── 📄 Navbar.tsx
 │   │   Purpose: Navigation bar for the application, themed for the jungle look. Handles user authentication status for displaying links.
@@ -248,14 +262,32 @@
 │         - May also store form data or a summary of it.
 │       Usage: Wrapped around the main application or form flow to manage navigation and state.
 │
+├── 📁 contexts/
+│   └── 📄 DnsStatusContext.tsx
+│       Purpose: Manages and provides global state related to DNS verification status and the DNS configuration modal.
+│       Details:
+│         - Exports `DnsStatusProvider` and `useDnsStatus` hook.
+│         - Manages state for:
+│           - `overallDnsStatus`: ('pending' | 'partially_verified' | 'verified' | 'failed_to_verify' | null) - Current overall DNS status.
+│           - `isDnsModalOpenGlobally`: (boolean) - Controls visibility of the global `DnsConfigurationModal`.
+│           - `selectedDnsProvider`: (object | null) - The DNS provider object selected by the user (from `DNS_PROVIDER_DISPLAY_OPTIONS`).
+│           - `dnsContextLoaded`: (boolean) - Indicates if the initial DNS status has been loaded.
+│         - Provides functions:
+│           - `setOverallDnsStatus`: Updates `overallDnsStatus`.
+│           - `showDnsModal(provider?)`: Sets `isDnsModalOpenGlobally` to true and updates `selectedDnsProvider`. If no provider is passed and none is already selected, defaults to "other".
+│           - `hideDnsModal()`: Sets `isDnsModalOpenGlobally` to false.
+│           - `setSelectedDnsProvider`: Updates `selectedDnsProvider`.
+│           - `setDnsContextLoaded`: Updates `dnsContextLoaded`.
+│       Usage: `DnsStatusProvider` wraps relevant parts of the application (likely in `App.tsx`). Components like `GlobalDnsNotificationBar`, `DnsConfirmationPage`, and `MainContentWithGlobalModal` (in `App.tsx`) use the `useDnsStatus` hook to access and modify this shared state.
+│
 ├── 📁 core/
 │   ├── 📄 constants.ts
 │   │   Purpose: Centralized location for application-wide constants.
 │   │   Details:
 │   │   - `FORM_FLOW_ORDER`: An array of strings defining the sequence of pages in the multi-step onboarding form. Now includes `/subscription-plan` after `/website-tracking`.
-│   │   - `DNS_PROVIDER_DISPLAY_OPTIONS`: An array of objects, each representing a DNS provider with properties like `id`, `name`, `logo` (path to image), and `instructionsUrl` (a template URL to the provider's DNS settings page). Used by `DnsConfirmationPage.tsx` to render provider selection cards and instruction modals.
+│   │   - `DNS_PROVIDER_DISPLAY_OPTIONS`: An array of objects, each representing a DNS provider with properties like `id`, `name`, `logo` (path to image), and `instructionsUrl` (a template URL to the provider's DNS settings page). Used by `DnsConfirmationPage.tsx` and `DnsConfigurationModal.tsx`.
 │   │   - `PROVIDER_MAP_TO_DISPLAY_OPTION_ID`: A mapping object that translates provider names (as returned by the `get-domain-provider` function or stored as `website_provider` / `dns_provider_name` in `email_setups`) to the `id` used in `DNS_PROVIDER_DISPLAY_OPTIONS`.
-│   │   Usage: Imported by various components and pages, especially form pages for navigation and `DnsConfirmationPage.tsx` for provider display and linking.
+│   │   Usage: Imported by various components and pages, especially form pages for navigation and DNS-related components.
 │   │
 │   ├── 📄 emailCampaigns.ts
 │   │   Purpose: Defines the structure and content for selectable email campaigns in the onboarding flow.
@@ -267,7 +299,7 @@
 │   │
 │   └── 📄 types.ts 
 │       Purpose: General type definitions for the application.
-│       Details: Contains `EmailSetupFormData`, `ProviderInfo`, `DnsRecord`, `InitiateEmailSetupRequest`, `InitiateEmailSetupResponse`, and other shared types.
+│       Details: Contains `EmailSetupFormData`, `ProviderInfo`, `DnsRecord`, `InitiateEmailSetupRequest`, `InitiateEmailSetupResponse`, and other shared types. Also defines `EmailSetupDataForModal` and `DnsRecord` (for the modal in App.tsx) though these might be better co-located or in a dedicated modal types file.
 │       Usage: Imported by various components and functions across the project.
 │
 ├── 📁 pages/
@@ -396,21 +428,21 @@
 │   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
 │   │
 │   ├── 📄 DnsConfirmationPage.tsx
-│   │   Purpose: Guides the user through adding DNS records to their domain provider and verifying them.
+│   │   Purpose: Guides the user through adding DNS records to their domain provider and allows interaction with a global DNS configuration modal.
 │   │   Details:
 │   │     - Uses the shared `@/components/Navbar`.
-│   │     - Fetches comprehensive `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, current verification statuses) for the authenticated user.
-│   │     - Calls the `get-domain-provider` Supabase edge function (passing `emailSetupId`), which attempts auto-detection of the DNS provider based on NS records and updates `email_setups.dns_provider_name`.
-│   │     - Displays the required DNS records (MX, SPF, DKIM, DMARC) using `constructDnsRecords`. Shows name, type, value (with copy buttons), purpose, and current verification status for each, fetched from `email_setups`.
-│   │     - Shows overall DNS verification status and last check time.
-│   │     - Renders a grid of clickable cards for common DNS providers (from `DNS_PROVIDER_DISPLAY_OPTIONS` in `constants.ts`). Highlights the provider from `email_setups.website_provider` (user-set) or `email_setups.dns_provider_name` (auto-detected).
-│   │     - Clicking a provider card opens a modal (`Dialog`) showing provider-specific instructions (linking to their DNS page) and re-lists the DNS records.
-│   │     - "Verify DNS Records" button: Calls the `verify-dns-records` Supabase edge function. On success, re-fetches `email_setups` to update statuses and provides toast notifications.
-│   │     - "Previous" button navigates to `/info-clarification` (skipping `/auth-gate`).
-│   │     - "Next Step" button navigates to `/website-tracking`. Advises user to verify DNS first if not all records are 'verified' or 'partially_verified'.
-│   │     - Handles loading states (page, provider detection, verification) and errors with toasts and messages.
+│   │     - Fetches `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, statuses) for the authenticated user.
+│   │     - Calls `get-domain-provider` Supabase edge function for auto-detection.
+│   │     - Displays a grid of clickable cards for DNS providers (from `DNS_PROVIDER_DISPLAY_OPTIONS`). Highlights provider based on `website_provider`, auto-detected `dns_provider_name`, or `selectedDnsProvider` from `DnsStatusContext`.
+│   │     - Clicking a provider card calls `showDnsModal(provider)` from `DnsStatusContext` to open the global `DnsConfigurationModal`.
+│   │     - **Auto-opens modal**: If `selectedDnsProvider` is set in context on page load (e.g., from notification bar click), the modal opens automatically for that provider.
+│   │     - **No longer displays overall DNS status directly** (handled by global notification bar).
+│   │     - **No longer renders its own modal instance.**
+│   │     - Retains local `handleVerifyDns` function, but this is for the page's own verification logic if any is reinstated; the global modal uses its own verification logic defined in `App.tsx`.
+│   │     - "Previous" button navigates to `/info-clarification`.
+│   │     - "Next Step" button navigates to `/website-tracking`. Button is enabled even if DNS is not fully verified, showing a toast warning instead.
 │   │     - Uses `lucide-react` icons. Jungle-themed styling.
-│   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
+│   │   Usage: Step in the multi-step onboarding flow. Interacts with `DnsStatusContext` and implicitly relies on `DnsConfigurationModal` being rendered globally by `App.tsx`.
 │   │
 │   ├── 📄 WebsiteTrackingPage.tsx
 │   │   Purpose: Placeholder page to display website tracking information, part of the multi-step onboarding flow.
@@ -438,19 +470,20 @@
 │       Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
 │
 ├── 📄 App.tsx 
-│   Purpose: Main application component.
-│   Details: Sets up routing, global providers. `AppRoutes` component handles conditional navigation.
+│   Purpose: Main application component, sets up routing, global providers, and manages the global DNS modal.
+│   Details:
+│     - Wraps routes with `DnsStatusProvider` for global DNS state.
+│     - Renders `GlobalDnsNotificationBar` and `MainContentWithGlobalModal`.
+│     - `MainContentWithGlobalModal` component:
+│       - Manages data fetching (`emailSetupDataForModal`, `displayedDnsRecordsForModal`) for the `DnsConfigurationModal` when `isDnsModalOpenGlobally` is true.
+│       - Provides handlers (`handleVerifyDnsInModal`, `copyToClipboardInModal`, `getStatusIconForModal`) to the modal.
+│       - Renders `DnsConfigurationModal`, passing global state and handlers. Modal's `isOpen` is tied to `isDnsModalOpenGlobally`.
+│       - Dynamically adjusts top padding of main content (`pt-16` or `pt-[108px]` or `pt-[44px]` or `pt-0`) based on `Navbar` presence and `GlobalDnsNotificationBar` visibility to prevent overlap.
 │     - `AppRoutes` component:
 │       - Manages redirection logic based on auth state and `email_setups` data.
-│       - **Authenticated User Resume Logic:**
-│         - If `form_complete` is true, directs to `/dashboard` (if on a form page).
-│         - If `form_complete` is false, determines earliest incomplete step:
-│           1. `business_description` -> `/`
-│           2. `goals_form_raw_text` -> `/goals-form`
-│           3. `selected_campaign_ids` -> `/select-emails`
-│           4. `website_provider` or `domain` missing -> `/website-status`
-│           5. If all above present, directs to step after `/auth-gate` (e.g., `/dns-confirmation`).
-│       - Includes routes for all pages, including form flow. Now includes a protected route for `/subscription-plan` which renders `PlanSelectionPage` from `src/components/subscription/PlanSelectionPage.tsx`.
+│       - Fetches `overall_dns_status` and updates `DnsStatusContext` via `setGlobalDnsStatusContext` and `setDnsContextLoaded`.
+│       - **Authenticated User Resume Logic:** (details as before)
+│       - Includes routes for all pages.
 │   Usage: Root of the React application.
 │
 └── 📄 .env.example
@@ -505,9 +538,4 @@ Purpose: Stores information related to a user's email domain setup process. This
   - `dmarc_record_value`: `text` - Value of the DMARC record for the domain.
   - `mx_status`: `text` - Status of the MX record.
   - `spf_status`: `text` - Status of the SPF record.
-  - `dkim_status`: `text` - Status of the DKIM record.
-  - `dmarc_status`: `text` - Status of the DMARC record.
-  - `overall_dns_status`: `text` - Overall status of the DNS setup.
-  - `last_verification_attempt_at`: `timestamp` - Timestamp of the last DNS verification attempt.
-  - `verification_failure_reason`: `text` - Reason for DNS verification failure.
-  Usage: Used to store and manage information related to a user's email domain setup process, including DNS configuration, verification status, and other relevant details.
+  - `dkim_status`: `text`

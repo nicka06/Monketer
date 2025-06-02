@@ -1,12 +1,17 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "../features/auth/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { DnsStatusProvider, useDnsStatus } from "@/contexts/DnsStatusContext";
+import DnsConfigurationModal from '@/components/DnsConfigurationModal';
+import { DNS_PROVIDER_DISPLAY_OPTIONS, FORM_FLOW_ORDER } from '@/core/constants';
+import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { AuthProvider } from "../features/auth/useAuth";
-import { useAuth } from "../features/auth/useAuth";
-import { useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { FORM_FLOW_ORDER } from '@/core/constants';
+import GlobalDnsNotificationBar from "@/components/GlobalDnsNotificationBar";
+import { AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
+
 import Index from "../pages/Index";
 import Login from "../pages/Login";
 import Signup from "../pages/Signup";
@@ -27,338 +32,415 @@ import SelectEmailsPage from "../pages/SelectEmailsPage";
 import WebsiteStatusPage from "../pages/WebsiteStatusPage";
 import InfoClarificationPage from "../pages/InfoClarificationPage";
 import AuthGatePage from "../pages/AuthGatePage";
-import DnsConfirmationPage from "../pages/DnsConfirmationPage";
+import DnsConfirmationPage from "../pages/DnsConfirmationPage"; // For types
 import WebsiteTrackingPage from "../pages/WebsiteTrackingPage";
 import BusinessOverviewPage from "../pages/BusinessOverviewPage";
-import { toast } from "@/components/ui/use-toast";
-import { DnsStatusProvider, useDnsStatus } from "@/contexts/DnsStatusContext";
-import GlobalDnsNotificationBar from "@/components/GlobalDnsNotificationBar";
+
+// Interfaces for Modal Data - these were originally in DnsConfirmationPage
+// It's better to have them in a shared types file, but for now, define here or import if App.tsx is the sole user of modal
+interface DnsRecord {
+    id: string;
+    type: 'MX' | 'TXT' | 'CNAME';
+    name: string;
+    value: string;
+    priority?: number;
+    purpose: string;
+    status?: 'verified' | 'failed' | 'pending' | 'error';
+    verificationMessage?: string;
+}
+
+interface EmailSetupDataForModal { // Renamed to avoid conflict if DnsConfirmationPage's type is also imported
+    id: string;
+    domain: string | null;
+    dkim_public_key: string | null;
+    // Fields from DnsConfirmationPage.EmailSetupData used by constructDnsRecords & modal
+    dkim_selector?: string | null;
+    spf_record_value?: string | null;
+    mx_record_value?: string | null;
+    dmarc_record_value?: string | null;
+    mx_status?: 'verified' | 'failed' | 'pending' | 'error';
+    spf_status?: 'verified' | 'failed' | 'pending' | 'error';
+    dkim_status?: 'verified' | 'failed' | 'pending' | 'error';
+    dmarc_status?: 'verified' | 'failed' | 'pending' | 'error';
+    overall_dns_status?: 'pending' | 'partially_verified' | 'verified' | 'failed_to_verify';
+}
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  const location = useLocation();
+    const { user, loading } = useAuth();
+    const location = useLocation();
 
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  
-  if (!user) {
-    console.log("No user found, redirecting to login from ProtectedRoute");
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  return <>{children}</>;
+    if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    
+    if (!user) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+    return <>{children}</>;
 };
 
+
 const AppRoutes = () => {
-  const { user, loading, session } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isNavigatingFormFlow = useRef(false);
-  const previousUserRef = useRef(user);
-  const previousLoadingRef = useRef(loading);
-  const { setOverallDnsStatus, setDnsContextLoaded } = useDnsStatus();
+    const { user, loading: authLoading, session } = useAuth(); // renamed loading to authLoading
+    const navigate = useNavigate();
+    const location = useLocation();
+    const isNavigatingFormFlow = useRef(false);
+    const previousUserRef = useRef(user);
+    const previousLoadingRef = useRef(authLoading);
+    const { setOverallDnsStatus: setGlobalDnsStatusContext, setDnsContextLoaded } = useDnsStatus(); // Renamed setOverallDnsStatus
 
-  useEffect(() => {
-    console.log(`App.tsx useEffect (NEW LOG): Path: ${location.pathname}. Auth User ID: ${user?.id || 'NONE'}. Auth Loading: ${loading}.`);
-    console.log('App.tsx useEffect: Start', { path: location.pathname, state: location.state });
+    useEffect(() => {
+        const authStateJustChanged = (previousLoadingRef.current && !authLoading) || (previousUserRef.current?.id !== user?.id);
+        previousUserRef.current = user;
+        previousLoadingRef.current = authLoading;
 
-    const authStateJustChanged = (previousLoadingRef.current && !loading) || (previousUserRef.current?.id !== user?.id);
+        if (authLoading) return;
 
-    // Update refs for the next render *before* any early returns
-    previousUserRef.current = user;
-    previousLoadingRef.current = loading;
-
-    if (loading) {
-      console.log('App.tsx useEffect: Still loading auth state, returning.');
-      return;
-    }
-
-    if (location.state?.fromFormFlow) {
-      console.log('App.tsx useEffect: fromFormFlow is true. Setting isNavigatingFormFlow.current = true and re-navigating to clear state.', { path: location.pathname });
-      isNavigatingFormFlow.current = true;
-      const { state, ...rest } = location;
-      const newLocationState = { ...state };
-      delete newLocationState.fromFormFlow;
-      navigate(location.pathname, { replace: true, state: Object.keys(newLocationState).length > 0 ? newLocationState : null });
-      return;
-    }
-
-    if (isNavigatingFormFlow.current) {
-      console.log('App.tsx useEffect: isNavigatingFormFlow.current is true. Resetting and returning.', { path: location.pathname });
-      isNavigatingFormFlow.current = false;
-      return;
-    }
-
-    console.log('App.tsx useEffect: Past fromFormFlow checks. Proceeding with main redirection logic.', { path: location.pathname, userId: user?.id });
-
-    if (user && user.id) {
-      console.log('App.tsx useEffect: User is authenticated. Current path before fetchAndRedirect:', location.pathname);
-      const fetchAndRedirect = async () => {
-        if (!user || !user.id) {
-          setDnsContextLoaded(true);
-          return;
+        if (location.state?.fromFormFlow) {
+            isNavigatingFormFlow.current = true;
+            const { state, ...rest } = location;
+            const newLocationState = { ...state };
+            delete newLocationState.fromFormFlow;
+            navigate(location.pathname, { replace: true, state: Object.keys(newLocationState).length > 0 ? newLocationState : null });
+            return;
+        }
+        if (isNavigatingFormFlow.current) {
+            isNavigatingFormFlow.current = false;
+            return;
         }
 
-        console.log('App.tsx fetchAndRedirect: Fetching data for user:', user.id);
+        if (user && user.id) {
+            const fetchAndRedirect = async () => {
+                if (!user || !user.id) {
+                    setDnsContextLoaded(true);
+                    setGlobalDnsStatusContext(null);
+                    return;
+                }
+                const [emailSetupResult, userInfoResult] = await Promise.all([
+                    supabase
+                        .from('email_setups')
+                        .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain, overall_dns_status')
+                        .eq('user_id', user.id)
+                        .maybeSingle(),
+                    supabase
+                        .from('user_info')
+                        .select('subscription_status')
+                        .eq('auth_user_uuid', user.id)
+                        .maybeSingle()
+                ]);
+                let { data: emailSetup, error: emailSetupError } = emailSetupResult;
+                const { data: userInfo, error: userInfoError } = userInfoResult;
 
-        // Fetch both email_setups and user_info concurrently
-        const [emailSetupResult, userInfoResult] = await Promise.all([
-          supabase
+                if (emailSetupError) {
+                    toast({ title: "Error Loading Setup", description: "Could not retrieve your setup information.", variant: "destructive" });
+                    setDnsContextLoaded(true); // Still mark as loaded to prevent indefinite loading states for DNS bar
+                    setGlobalDnsStatusContext(null);
+                    return;
+                }
+                if (userInfoError) {
+                    toast({ title: "Error Loading User Profile", description: "Could not retrieve user profile.", variant: "default" });
+                }
+
+                if (emailSetup) {
+                    setGlobalDnsStatusContext(emailSetup.overall_dns_status as any || null);
+                } else {
+                    setGlobalDnsStatusContext(null);
+                }
+                setDnsContextLoaded(true);
+
+                if (userInfo?.subscription_status === 'active' && emailSetup) {
+                    const allFieldsFilled =
+                        emailSetup.business_description &&
+                        emailSetup.goals_form_raw_text &&
+                        emailSetup.selected_campaign_ids && emailSetup.selected_campaign_ids.length > 0 &&
+                        emailSetup.website_provider &&
+                        emailSetup.domain;
+                    if (allFieldsFilled && emailSetup.form_complete === false) {
+                        const { data: updatedEmailSetup, error: updateError } = await supabase
+                            .from('email_setups')
+                            .update({ form_complete: true })
+                            .eq('id', emailSetup.id)
+                            .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain, overall_dns_status')
+                            .single();
+                        if (updateError) {
+                            toast({ title: "Error Saving Progress", description: "Could not update completion status.", variant: "destructive" });
+                        } else if (updatedEmailSetup) {
+                            emailSetup = updatedEmailSetup;
+                        }
+                    }
+                }
+
+                if (emailSetup) {
+                    if (emailSetup.form_complete === true) {
+                        const nonDashboardFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/dashboard');
+                        if (nonDashboardFormPages.includes(location.pathname) || location.pathname === '/') {
+                            navigate('/dashboard', { replace: true, state: { fromApp: true } });
+                            return;
+                        }
+                        return;
+                    }
+                    let targetResumePath = null;
+                    if (!emailSetup.business_description) targetResumePath = '/';
+                    else if (!emailSetup.goals_form_raw_text) targetResumePath = '/goals-form';
+                    else if (!(emailSetup.selected_campaign_ids && Array.isArray(emailSetup.selected_campaign_ids) && emailSetup.selected_campaign_ids.length > 0)) targetResumePath = '/select-emails';
+                    else if (!emailSetup.website_provider) targetResumePath = '/website-status';
+                    else if (!emailSetup.domain) targetResumePath = '/website-status';
+                    else {
+                        const websiteStatusIndex = FORM_FLOW_ORDER.indexOf('/website-status');
+                        let nextLogicalStepIndex = websiteStatusIndex + 1;
+                        while(FORM_FLOW_ORDER[nextLogicalStepIndex] === '/auth-gate' && nextLogicalStepIndex < FORM_FLOW_ORDER.length -1) {
+                            nextLogicalStepIndex++;
+                        }
+                        if (nextLogicalStepIndex < FORM_FLOW_ORDER.length) {
+                            targetResumePath = FORM_FLOW_ORDER[nextLogicalStepIndex];
+                        } else {
+                            targetResumePath = '/dashboard';
+                        }
+                    }
+                    if (targetResumePath && location.pathname !== targetResumePath) {
+                        navigate(targetResumePath, { replace: true, state: { fromApp: true } });
+                        return;
+                    }
+                } else {
+                    const nonEntryFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/optional-signup' && p !== '/business-overview');
+                    if (nonEntryFormPages.includes(location.pathname) && location.pathname !== '/subscription-plan') {
+                        navigate('/', { replace: true, state: { fromApp: true } });
+                        return;
+                    }
+                }
+            };
+            if (location.pathname !== '/login' && location.pathname !== '/signup' && location.pathname !== '/auth-gate') {
+                if (authStateJustChanged) {
+                    setTimeout(fetchAndRedirect, 100);
+                } else {
+                    fetchAndRedirect();
+                }
+            }
+        } else if (!authLoading && !user) {
+            const UNAUTH_REDIRECT_PAGES = ['/goals-form', '/select-emails', '/dashboard', '/website-status', '/dns-confirmation', '/website-tracking'];
+            if (UNAUTH_REDIRECT_PAGES.includes(location.pathname)) {
+                if (location.pathname === '/dashboard') navigate('/login', { replace: true, state: { from: location } });
+                else navigate('/', { replace: true });
+            }
+            setGlobalDnsStatusContext(null);
+            setDnsContextLoaded(true);
+        }
+    }, [user, authLoading, navigate, location, setGlobalDnsStatusContext, setDnsContextLoaded]);
+  
+    if (authLoading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    
+    return (
+        <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+            <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
+            <Route path="/subscription" element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/editor" element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>} />
+            <Route path="/editor/:projectId" element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>} />
+            <Route path="/editor/:username/:projectName" element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>} />
+            <Route path="/send-email" element={<ProtectedRoute><SendEmailPage /></ProtectedRoute>} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/blog" element={<BlogIndexPage />} />
+            <Route path="/blog/:slug" element={<BlogPostPage />} />
+            <Route path="/optional-signup" element={<OptionalSignUpPage />} />
+            <Route path="/goals-form" element={<GoalsFormPage />} />
+            <Route path="/business-clarification" element={<BusinessClarificationPage />} />
+            <Route path="/select-emails" element={<SelectEmailsPage />} />
+            <Route path="/website-status" element={<WebsiteStatusPage />} />
+            <Route path="/info-clarification" element={<InfoClarificationPage />} />
+            <Route path="/auth-gate" element={<AuthGatePage />} />
+            <Route path="/dns-confirmation" element={<DnsConfirmationPage />} />
+            <Route path="/website-tracking" element={<WebsiteTrackingPage />} />
+            <Route path="/subscription-plan" element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>} />
+            <Route path="/business-overview" element={<BusinessOverviewPage />} />
+            <Route path="*" element={<NotFound />} />
+        </Routes>
+    );
+};
+
+const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+    const { 
+        isDnsModalOpenGlobally,
+        hideDnsModal,
+        selectedDnsProvider,
+        setOverallDnsStatus: setGlobalDnsStatusContext, // Renamed for clarity
+        overallDnsStatus,
+        dnsContextLoaded // Added dnsContextLoaded here
+    } = useDnsStatus();
+    const location = useLocation();
+
+    const [emailSetupDataForModal, setEmailSetupDataForModal] = useState<EmailSetupDataForModal | null>(null);
+    const [displayedDnsRecordsForModal, setDisplayedDnsRecordsForModal] = useState<DnsRecord[]>([]);
+    const [isVerifyingDnsModal, setIsVerifyingDnsModal] = useState(false);
+    const [isLoadingModalData, setIsLoadingModalData] = useState(false);
+
+    const constructDnsRecordsForModal = useCallback((data: EmailSetupDataForModal | null): DnsRecord[] => {
+        if (!data || !data.domain) return [];
+        const records: DnsRecord[] = [];
+        if (data.mx_record_value) {
+            const parts = data.mx_record_value.split(' ');
+            const priority = parts.length > 1 ? parseInt(parts[0], 10) : 10;
+            const value = parts.length > 1 ? parts[1] : parts[0];
+            records.push({ id: 'mx', type: 'MX', name: data.domain, value: value, priority: priority, purpose: 'Routes incoming mail.', status: data.mx_status || 'pending' });
+        }
+        if (data.spf_record_value) {
+            records.push({ id: 'spf', type: 'TXT', name: data.domain, value: data.spf_record_value, purpose: 'Authorizes sending servers.', status: data.spf_status || 'pending' });
+        }
+        if (data.dkim_selector && data.dkim_public_key) {
+            records.push({ id: 'dkim', type: 'TXT', name: `${data.dkim_selector}._domainkey.${data.domain}`, value: `v=DKIM1; k=rsa; p=${data.dkim_public_key}`, purpose: 'Verifies email authenticity.', status: data.dkim_status || 'pending' });
+        }
+        if (data.dmarc_record_value) {
+            records.push({ id: 'dmarc', type: 'TXT', name: `_dmarc.${data.domain}`, value: data.dmarc_record_value, purpose: 'Handles unauthenticated mail.', status: data.dmarc_status || 'pending' });
+        }
+        return records;
+    }, []);
+
+    const fetchFullEmailSetupForModal = useCallback(async (userId: string): Promise<EmailSetupDataForModal | null> => {
+        const { data, error } = await supabase
             .from('email_setups')
-            .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain, overall_dns_status')
-            .eq('user_id', user.id)
-            .maybeSingle(),
-          supabase
-            .from('user_info')
-            .select('subscription_status')
-            .eq('auth_user_uuid', user.id)
-            .maybeSingle()
-        ]);
-
-        let { data: emailSetup, error: emailSetupError } = emailSetupResult;
-        const { data: userInfo, error: userInfoError } = userInfoResult;
-
-        if (emailSetupError) {
-          console.error("App.tsx: Error fetching email_setups:", emailSetupError);
-          toast({ title: "Error Loading Setup", description: "Could not retrieve your setup information.", variant: "destructive" });
-          return;
+            .select('id, domain, dkim_public_key, dkim_selector, spf_record_value, mx_record_value, dmarc_record_value, mx_status, spf_status, dkim_status, dmarc_status, overall_dns_status')
+            .eq('user_id', userId)
+            .maybeSingle();
+        if (error) {
+            toast({ title: "Modal Error", description: "Could not load DNS data for modal.", variant: "destructive" });
+            throw error;
         }
-        if (userInfoError) {
-          console.error("App.tsx: Error fetching user_info:", userInfoError);
-          // Non-critical for resume logic if emailSetup exists, but log it.
-          toast({ title: "Error Loading User Profile", description: "Could not retrieve your user profile information.", variant: "default" });
+        return data as EmailSetupDataForModal | null;
+    }, []);
+
+    useEffect(() => {
+        if (isDnsModalOpenGlobally && user?.id) {
+            setIsLoadingModalData(true);
+            fetchFullEmailSetupForModal(user.id)
+                .then(data => {
+                    setEmailSetupDataForModal(data);
+                    setDisplayedDnsRecordsForModal(constructDnsRecordsForModal(data));
+                })
+                .catch(err => console.error("Error fetching data for global modal:", err))
+                .finally(() => setIsLoadingModalData(false));
         }
+    }, [isDnsModalOpenGlobally, user?.id, fetchFullEmailSetupForModal, constructDnsRecordsForModal]);
 
-        console.log('App.tsx fetchAndRedirect: Fetched emailSetup:', emailSetup);
-        console.log('App.tsx fetchAndRedirect: Fetched userInfo:', userInfo);
-
-        // Set DNS status from context
-        if (emailSetup) {
-          setOverallDnsStatus(emailSetup.overall_dns_status as any || null);
-        } else {
-          setOverallDnsStatus(null);
+    const handleVerifyDnsInModal = async () => {
+        if (!emailSetupDataForModal?.id || !user?.id) {
+            toast({ title: "Verification Error", description: "Required data not found.", variant: "destructive" });
+            return;
         }
-        setDnsContextLoaded(true);
-
-        if (userInfo?.subscription_status === 'active' && emailSetup) {
-          const allFieldsFilled =
-            emailSetup.business_description &&
-            emailSetup.goals_form_raw_text &&
-            emailSetup.selected_campaign_ids && emailSetup.selected_campaign_ids.length > 0 &&
-            emailSetup.website_provider &&
-            emailSetup.domain;
-
-          if (allFieldsFilled && emailSetup.form_complete === false) {
-            console.log('App.tsx fetchAndRedirect: Active subscription and all email_setups fields filled. Updating form_complete to true.');
-            const { data: updatedEmailSetup, error: updateError } = await supabase
-              .from('email_setups')
-              .update({ form_complete: true })
-              .eq('id', emailSetup.id)
-              .select('id, business_description, goals_form_raw_text, form_complete, selected_campaign_ids, website_provider, domain')
-              .single(); // Use single and expect a row back
-
-            if (updateError) {
-              console.error("App.tsx: Error updating email_setups.form_complete:", updateError);
-              toast({ title: "Error Saving Progress", description: "Could not update your completion status.", variant: "destructive" });
-              // Proceed with potentially stale emailSetup data, or decide to return
-            } else if (updatedEmailSetup) {
-              console.log('App.tsx fetchAndRedirect: email_setups.form_complete updated successfully.');
-              emailSetup = updatedEmailSetup; // Use the updated record for subsequent logic
+        setIsVerifyingDnsModal(true);
+        try {
+            const { data: verificationResult, error } = await supabase.functions.invoke('verify-dns-records', {
+                body: { emailSetupId: emailSetupDataForModal.id },
+            });
+            if (error) throw error;
+            if (verificationResult) {
+                toast({ title: "DNS Verification Complete", description: `Overall status: ${verificationResult.overallDnsStatus}. Record statuses updated.`, duration: 5000 });
+                const updatedSetup = await fetchFullEmailSetupForModal(user.id);
+                setEmailSetupDataForModal(updatedSetup);
+                setDisplayedDnsRecordsForModal(constructDnsRecordsForModal(updatedSetup));
+                setGlobalDnsStatusContext(updatedSetup?.overall_dns_status as any || null);
             }
-          }
+        } catch (err: any) {
+            toast({ title: "DNS Verification Error", description: err.message || "Could not verify records.", variant: "destructive" });
+            const currentStatus = emailSetupDataForModal?.overall_dns_status;
+            setGlobalDnsStatusContext(currentStatus as any || 'failed_to_verify');
+        } finally {
+            setIsVerifyingDnsModal(false);
         }
+    };
 
-        // Existing logic for redirection based on emailSetup (which may have just been updated)
-        if (emailSetup) {
-          if (emailSetup.form_complete === true) {
-            // User is fully onboarded and form is complete
-            const nonDashboardFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/dashboard');
-            if (nonDashboardFormPages.includes(location.pathname) || location.pathname === '/') {
-                 // If they are on any form page (including index if it's considered part of the flow for resume)
-                 // OR if they are on index and form_complete is true.
-                console.log("App.tsx: Form complete. Navigating to /dashboard from:", location.pathname);
-                navigate('/dashboard', { replace: true, state: { fromApp: true } });
-                return; 
-            }
-            // If already on /dashboard or some other non-form page, do nothing.
-            return; 
-          }
+    const copyToClipboardInModal = (text: string, type: string) => {
+        navigator.clipboard.writeText(text).then(() => {
+            toast({ title: "Copied!", description: `${type} copied.`, duration: 2000 });
+        }).catch(err => {
+            toast({ title: "Copy Failed", description: `Could not copy.`, variant: "destructive" });
+        });
+    };
 
-          // Determine targetResumePath based on incomplete fields in emailSetup
-          let targetResumePath = null;
-          if (!emailSetup.business_description) {
-            targetResumePath = '/';
-          } else if (!emailSetup.goals_form_raw_text) {
-            targetResumePath = '/goals-form';
-          } else if (!(emailSetup.selected_campaign_ids && Array.isArray(emailSetup.selected_campaign_ids) && emailSetup.selected_campaign_ids.length > 0)) {
-            targetResumePath = '/select-emails';
-          } else if (!emailSetup.website_provider) {
-            targetResumePath = '/website-status';
-          } else if (!emailSetup.domain) {
-            targetResumePath = '/website-status';
-          } else {
-            // All primary email_setup fields are filled, but form_complete is still false.
-            // This implies they might be at DNS or subscription step if those are after domain.
-            // Let's find the next step in FORM_FLOW_ORDER after domain input (/website-status)
-            const websiteStatusIndex = FORM_FLOW_ORDER.indexOf('/website-status');
-            let nextLogicalStepIndex = websiteStatusIndex + 1;
-            
-            // Skip auth-gate if already authenticated (which they are at this point in fetchAndRedirect)
-            while(FORM_FLOW_ORDER[nextLogicalStepIndex] === '/auth-gate' && nextLogicalStepIndex < FORM_FLOW_ORDER.length -1) {
-                nextLogicalStepIndex++;
-            }
-
-            if (nextLogicalStepIndex < FORM_FLOW_ORDER.length) {
-                targetResumePath = FORM_FLOW_ORDER[nextLogicalStepIndex];
-            } else {
-                // Should have been caught by form_complete: true, but as a fallback:
-                targetResumePath = '/dashboard'; 
-            }
-          }
-          
-          console.log('App.tsx fetchAndRedirect: Determined targetResumePath (email_setups logic):', targetResumePath);
-
-          if (targetResumePath && location.pathname !== targetResumePath) {
-            console.log(`App.tsx fetchAndRedirect: Navigating from ${location.pathname} to targetResumePath: ${targetResumePath}`);
-            navigate(targetResumePath, { replace: true, state: { fromApp: true } });
-            return; 
-          } 
-
-        } else { // No emailSetup record found for this authenticated user.
-            // This case should ideally not happen if sign-up/optional-sign-up creates a pending record.
-            // If it does, send them to the start of the flow.
-            const nonEntryFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/optional-signup' && p !== '/business-overview');
-            if (nonEntryFormPages.includes(location.pathname) && location.pathname !== '/subscription-plan') { // Allow subscription plan page even without email_setup
-              console.log("App.tsx fetchAndRedirect: Auth user, no email_setups. Navigating from non-entry page to /");
-              navigate('/', { replace: true, state: { fromApp: true } });
-              return; 
-            }
+    const getStatusIconForModal = (status?: DnsRecord['status'] | EmailSetupDataForModal['overall_dns_status']) => {
+        switch (status) {
+            case 'verified': return <CheckCircle className="text-green-400 h-5 w-5" />;
+            case 'partially_verified': return <Info className="text-yellow-400 h-5 w-5" />;
+            case 'failed': case 'failed_to_verify': return <AlertTriangle className="text-red-400 h-5 w-5" />;
+            case 'error': return <AlertTriangle className="text-orange-400 h-5 w-5" />;
+            default: return <Loader2 className="text-gray-400 h-5 w-5 animate-spin" />;
         }
-      };
+    };
 
-      if (location.pathname !== '/login' && location.pathname !== '/signup' && location.pathname !== '/auth-gate') {
-         console.log("App.tsx useEffect: Calling fetchAndRedirect because user is authenticated and not on login/signup/auth-gate.");
-         if (authStateJustChanged) {
-          console.log("App.tsx useEffect: Auth state just changed. Delaying fetchAndRedirect by 100ms.");
-          setTimeout(fetchAndRedirect, 100); // Introduce a small delay
-         } else {
-          fetchAndRedirect();
-         }
-      } else {
-        console.log("App.tsx useEffect: User is authenticated but on login/signup/auth-gate. Skipping fetchAndRedirect.");
-      }
+    // Logic for main content padding
+    const PAGES_WITHOUT_NAVBAR = ['/dashboard', '/editor']; // Mirrored from GlobalDnsNotificationBar
+    const hasNavbar = !PAGES_WITHOUT_NAVBAR.some(path => location.pathname.startsWith(path));
 
-    } else if (!loading && !user) { // Not loading, no user (unauthenticated)
-        console.log('App.tsx useEffect: User is unauthenticated. Checking UNAUTH_REDIRECT_PAGES.', { path: location.pathname });
-        const UNAUTH_REDIRECT_PAGES = [
-          '/goals-form', 
-          '/select-emails', 
-          '/dashboard', 
-          '/website-status', 
-          '/dns-confirmation', 
-          '/website-tracking'
-        ];
-        
-        if (UNAUTH_REDIRECT_PAGES.includes(location.pathname)) {
-            console.log(`App.tsx useEffect: Unauthenticated on ${location.pathname}. Redirecting.`);
-            if (location.pathname === '/dashboard') {
-                console.log("App.tsx useEffect: Unauthenticated on /dashboard. Redirecting to /login.");
-                navigate('/login', { replace: true, state: { from: location } });
-            } else {
-                console.log(`App.tsx useEffect: Unauthenticated on ${location.pathname} (form page). Redirecting to /.`);
-                navigate('/', { replace: true }); // For other form pages, send to homepage.
-            }
-        } else {
-          console.log(`App.tsx useEffect: Unauthenticated. Path ${location.pathname} does not require redirect.`);
-        }
-        setOverallDnsStatus(null);
-        setDnsContextLoaded(true);
+    const dnsConfirmationPath = '/dns-confirmation';
+    const locationPath = location.pathname;
+    const dnsConfirmationIndex = FORM_FLOW_ORDER.indexOf(dnsConfirmationPath);
+    const currentIndexInFlow = FORM_FLOW_ORDER.indexOf(locationPath);
+    const shouldShowBasedOnPageEligibility = dnsConfirmationIndex !== -1 && (currentIndexInFlow === -1 || currentIndexInFlow >= dnsConfirmationIndex);
+    
+    const isNotificationBarActuallyVisible = 
+        dnsContextLoaded && // Use dnsContextLoaded from useDnsStatus
+        overallDnsStatus !== 'verified' && 
+        overallDnsStatus !== null && 
+        shouldShowBasedOnPageEligibility && 
+        !isDnsModalOpenGlobally;
+
+    let paddingTopClass = 'pt-0'; // Default to no padding if no navbar and no bar
+    if (hasNavbar) {
+        paddingTopClass = isNotificationBarActuallyVisible ? "pt-[108px]" : "pt-16";
+    } else {
+        paddingTopClass = isNotificationBarActuallyVisible ? "pt-[44px]" : "pt-0"; // Assuming bar height is approx 44px (p-3 = 12px*2 + text height)
+        // p-3 tailwind is 0.75rem = 12px. So padding is 24px. Let's say text is 20px. Total height ~44px. Or measure precisely if needed.
     }
-    console.log('App.tsx useEffect: End', { path: location.pathname });
-  }, [user, loading, navigate, location, toast, setOverallDnsStatus, setDnsContextLoaded]);
-  
-  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  
-  return (
-    <Routes>
-      <Route
-        path="/"
-        element={<Index /> // Always render Index initially. useEffect will redirect if needed.
-        }
-      />
-      <Route 
-        path="/login" 
-        element={user ? <Navigate to="/" /> : <Login />}
-      />
-      <Route 
-        path="/signup" 
-        element={user ? <Navigate to="/" /> : <Signup />}
-      />
-      <Route 
-        path="/subscription" 
-        element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>}
-      />
-      <Route 
-        path="/dashboard" 
-        element={<ProtectedRoute><Dashboard /></ProtectedRoute>} // ProtectedRoute handles no user
-      />
-      <Route 
-        path="/editor"
-        element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>}
-      />
-      <Route 
-        path="/editor/:projectId" 
-        element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>}
-      />
-      <Route 
-        path="/editor/:username/:projectName" 
-        element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>}
-      />
-      <Route
-        path="/send-email"
-        element={<ProtectedRoute><SendEmailPage /></ProtectedRoute>}
-      />
-      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-      <Route path="/terms-of-service" element={<TermsOfService />} />
-      <Route path="/blog" element={<BlogIndexPage />} />
-      <Route path="/blog/:slug" element={<BlogPostPage />} />
-      <Route path="/optional-signup" element={<OptionalSignUpPage />} />
-      <Route path="/goals-form" element={<GoalsFormPage />} />
-      <Route path="/business-clarification" element={<BusinessClarificationPage />} />
-      <Route path="/select-emails" element={<SelectEmailsPage />} />
-      <Route path="/website-status" element={<WebsiteStatusPage />} />
-      <Route path="/info-clarification" element={<InfoClarificationPage />} />
-      <Route path="/auth-gate" element={<AuthGatePage />} />
-      <Route path="/dns-confirmation" element={<DnsConfirmationPage />} />
-      <Route path="/website-tracking" element={<WebsiteTrackingPage />} />
-      <Route 
-        path="/subscription-plan" 
-        element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>}
-      />
-      <Route path="/business-overview" element={<BusinessOverviewPage />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
+
+    return (
+        <div className={`app-container flex flex-col min-h-screen ${paddingTopClass}`}>
+            {children}
+            {selectedDnsProvider && (
+                <DnsConfigurationModal
+                    isOpen={isDnsModalOpenGlobally}
+                    onOpenChange={(isOpen) => {
+                        if (!isOpen) {
+                            hideDnsModal();
+                            // If the modal is closed and DNS is not verified, the bar should reflect this.
+                            // The overallDnsStatus is already in context, so the bar will update.
+                            // We might also want to ensure the global state (`overallDnsStatus` in context)
+                            // is updated if a verification attempt inside the modal changed it and wasn't the last thing to set it.
+                            // For now, handleVerifyDnsInModal updates it.
+                        }
+                    }}
+                    selectedProvider={selectedDnsProvider}
+                    emailSetupData={isLoadingModalData ? { id: '', domain: 'Loading...', dkim_public_key: null } : emailSetupDataForModal}
+                    displayedDnsRecords={isLoadingModalData ? [] : displayedDnsRecordsForModal}
+                    onVerifyDns={handleVerifyDnsInModal}
+                    isVerifyingDns={isVerifyingDnsModal}
+                    copyToClipboard={copyToClipboardInModal}
+                    getStatusIcon={getStatusIconForModal}
+                />
+            )}
+        </div>
+    );
 };
 
 const App = () => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <DnsStatusProvider>
-              <GlobalDnsNotificationBar />
-              <div className="app-container flex flex-col min-h-screen">
-                <AppRoutes />
-              </div>
-              <Toaster />
-            </DnsStatusProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+    return (
+        <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+                <BrowserRouter>
+                    <AuthProvider>
+                        <DnsStatusProvider>
+                            <GlobalDnsNotificationBar />
+                            <MainContentWithGlobalModal>
+                                <AppRoutes />
+                            </MainContentWithGlobalModal>
+                            <Toaster />
+                        </DnsStatusProvider>
+                    </AuthProvider>
+                </BrowserRouter>
+            </TooltipProvider>
+        </QueryClientProvider>
+    );
 };
 
 export default App;
