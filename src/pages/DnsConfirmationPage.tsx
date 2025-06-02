@@ -8,7 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import Navbar from '@/components/Navbar';
-import DnsConfigurationModal from '@/components/DnsConfigurationModal';
+// import DnsConfigurationModal from '@/components/DnsConfigurationModal'; // Modal is now global
+import { useDnsStatus } from '@/contexts/DnsStatusContext';
 
 interface DnsRecord {
   id: string;
@@ -24,8 +25,8 @@ interface DnsRecord {
 interface EmailSetupData {
   id: string; 
   domain: string;
-  website_provider: string | null; // User-set in WebsiteStatusPage
-  dns_provider_name: string | null; // Detected by get-domain-provider function
+  website_provider: string | null; 
+  dns_provider_name: string | null; 
   dkim_selector: string | null;
   dkim_public_key: string | null;
   spf_record_value: string | null;
@@ -45,6 +46,14 @@ const DnsConfirmationPage: React.FC = () => {
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { 
+    // isDnsModalOpenGlobally, // No longer directly used to control local modal
+    // hideDnsModal, // Handled by global modal
+    setOverallDnsStatus: setGlobalDnsStatus,
+    showDnsModal,
+    selectedDnsProvider, // For highlighting the card if modal opened from elsewhere and for auto-popup
+    setSelectedDnsProvider // To potentially clear or set provider
+  } = useDnsStatus();
 
   const [emailSetupData, setEmailSetupData] = useState<EmailSetupData | null>(null);
   const [displayedDnsRecords, setDisplayedDnsRecords] = useState<DnsRecord[]>([]);
@@ -53,16 +62,19 @@ const DnsConfirmationPage: React.FC = () => {
   const [detectedProviderId, setDetectedProviderId] = useState<string | null>(null);
   const [detectedProviderDisplayName, setDetectedProviderDisplayName] = useState<string | null>(null);
 
-  const [selectedProviderForModal, setSelectedProviderForModal] = useState<typeof DNS_PROVIDER_DISPLAY_OPTIONS[0] | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // const [selectedProviderForModal, setSelectedProviderForModal] = useState<typeof DNS_PROVIDER_DISPLAY_OPTIONS[0] | null>(null); // Handled by context
+  // const [isModalOpen, setIsModalOpen] = useState(false); // Handled by context (isDnsModalOpenGlobally)
   
   const [isLoadingPage, setIsLoadingPage] = useState(true); 
   const [isDetectingProvider, setIsDetectingProvider] = useState(true);
-  const [isVerifyingDns, setIsVerifyingDns] = useState(false);
+  const [isVerifyingDns, setIsVerifyingDns] = useState(false); // This state might move to global context if modal verify button is truly global
   const [pageError, setPageError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
 
+  // copyToClipboard and getStatusIcon will be needed by the global modal.
+  // They might need to be passed to context or App.tsx if the modal is fully managed there.
+  // For now, assume they might be passed as props to the global modal from App.tsx
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text).then(() => {
       toast({
@@ -81,6 +93,20 @@ const DnsConfirmationPage: React.FC = () => {
     });
   };
 
+  const getStatusIcon = (status?: 'verified' | 'failed' | 'pending' | 'error' | 'partially_verified' | 'failed_to_verify') => {
+    switch (status) {
+      case 'verified': return <CheckCircle className="text-green-400 h-5 w-5" />;
+      case 'partially_verified': return <Info className="text-yellow-400 h-5 w-5" />;
+      case 'failed':
+      case 'failed_to_verify': 
+        return <AlertTriangle className="text-red-400 h-5 w-5" />;
+      case 'error': return <AlertTriangle className="text-orange-400 h-5 w-5" />;
+      case 'pending':
+      default: return <Loader2 className="text-gray-400 h-5 w-5 animate-spin" />;
+    }
+  };
+
+
   const constructDnsRecords = useCallback((data: EmailSetupData | null): DnsRecord[] => {
     if (!data || !data.domain) return [];
     const records: DnsRecord[] = [];
@@ -92,7 +118,7 @@ const DnsConfirmationPage: React.FC = () => {
       records.push({
         id: 'mx',
         type: 'MX',
-        name: data.domain, // Typically '@' or domain itself
+        name: data.domain, 
         value: value,
         priority: priority,
         purpose: 'Routes incoming mail.',
@@ -104,7 +130,7 @@ const DnsConfirmationPage: React.FC = () => {
       records.push({
         id: 'spf',
         type: 'TXT',
-        name: data.domain, // Typically '@' or domain itself
+        name: data.domain, 
         value: data.spf_record_value,
         purpose: 'Authorizes sending servers.',
         status: data.spf_status || 'pending',
@@ -139,12 +165,33 @@ const DnsConfirmationPage: React.FC = () => {
     console.log("DnsConfirmationPage: Fetching full email_setups for user:", userId);
     const { data, error: dbError } = await supabase
       .from('email_setups')
-      .select('*, dns_provider_name') // Ensure dns_provider_name is selected
+      .select('*, dns_provider_name') 
       .eq('user_id', userId)
       .maybeSingle();
     if (dbError) throw dbError;
     return data as EmailSetupData | null;
   }, [supabase]);
+
+  // This useEffect was for syncing global modal state to a local modal instance.
+  // Since the modal is now fully global, this is no longer needed here.
+  // useEffect(() => {
+  //   if (isDnsModalOpenGlobally) {
+  //     if (!isModalOpen) {
+  //       if (!selectedProviderForModal) {
+  //         const providerModalTargetId = userSetProviderId || detectedProviderId || 'other';
+  //         const providerToShowInModal = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === providerModalTargetId) || DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === 'other');
+  //         if (providerToShowInModal) {
+  //           setSelectedProviderForModal(providerToShowInModal);
+  //         }
+  //       }
+  //       setIsModalOpen(true);
+  //     }
+  //   } else {
+  //     if (isModalOpen) {
+  //       setIsModalOpen(false);
+  //     }
+  //   }
+  // }, [isDnsModalOpenGlobally, isModalOpen, selectedProviderForModal, userSetProviderId, detectedProviderId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -168,7 +215,6 @@ const DnsConfirmationPage: React.FC = () => {
         
         if (mountedRef.current) {
             setEmailSetupData(currentEmailSetup);
-            console.log("DnsConfirmationPage: currentEmailSetup before constructDnsRecords:", JSON.stringify(currentEmailSetup));
             setDisplayedDnsRecords(constructDnsRecords(currentEmailSetup));
             const providerIdFromWebsiteProvider = currentEmailSetup.website_provider ? PROVIDER_MAP_TO_DISPLAY_OPTION_ID[currentEmailSetup.website_provider] || 'other' : null;
             setUserSetProviderId(providerIdFromWebsiteProvider);
@@ -216,7 +262,8 @@ const DnsConfirmationPage: React.FC = () => {
             } catch (funcError: any) {
                 if (!mountedRef.current) return;
                 console.error("DnsConfirmationPage: Error calling get-domain-provider function:", funcError.message);
-                toast({ title: "Provider Detection Issue", description: `Could not auto-detect provider. Details: ${funcError.message}`, variant: "default"});
+                // toast({ title: "Provider Detection Issue", description: `Could not auto-detect provider. Details: ${funcError.message}`, variant: "default"});
+                // Soft failing this for now to not block the page, will show detected / user-set, or default to 'other'
             }
         }
 
@@ -225,12 +272,15 @@ const DnsConfirmationPage: React.FC = () => {
             setDetectedProviderId(finalDetectedProviderId);
             setIsDetectingProvider(false);
 
-            const providerModalTargetId = userSetProviderId || finalDetectedProviderId || 'other';
-            const providerToShowInModal = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === providerModalTargetId) || DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === 'other');
-            if (providerToShowInModal) {
-                setSelectedProviderForModal(providerToShowInModal);
-                setIsModalOpen(true); 
+            // If modal is opened globally (e.g. from notification bar) and a provider is in context,
+            // open the modal automatically for that provider.
+            if (selectedDnsProvider) {
+                const providerTarget = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === selectedDnsProvider.id);
+                if (providerTarget) {
+                    showDnsModal(providerTarget);
+                }
             }
+
         }
 
       } catch (err: any) {
@@ -260,8 +310,12 @@ const DnsConfirmationPage: React.FC = () => {
 
     return () => {
       mountedRef.current = false;
+      // When the page unmounts, if the global modal is open AND its selected provider was one specifically chosen on THIS page visit,
+      // perhaps clear the context's selected provider. This is to prevent the modal from re-opening with this page's context if user navigates away and back.
+      // For now, this is not implemented; modal closure is managed by its own close button or hideDnsModal().
     };
-  }, [user, authLoading, navigate, location.pathname, toast, constructDnsRecords, fetchFullEmailSetup, supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading, navigate, location.pathname, toast, constructDnsRecords, fetchFullEmailSetup, supabase, showDnsModal, selectedDnsProvider]);
 
 
   const handleNavigate = (direction: 'next' | 'previous') => {
@@ -310,18 +364,20 @@ const DnsConfirmationPage: React.FC = () => {
   };
 
   const handleProviderCardClick = (provider: typeof DNS_PROVIDER_DISPLAY_OPTIONS[0]) => {
-    setSelectedProviderForModal(provider);
-    setIsModalOpen(true);
+    // setSelectedProviderForModal(provider); // Handled by context
+    showDnsModal(provider); // Pass selected provider to global modal
   };
   
+  // handleVerifyDns now needs to be callable by the global modal.
+  // This might mean lifting it to App.tsx or context, or App.tsx calls this instance's function.
+  // For now, it remains here, but the global modal won't be able to call it directly without further changes.
   const handleVerifyDns = async () => {
-    if (!emailSetupData || !emailSetupData.id) {
-        toast({ title: "Error", description: "Email setup data not found.", variant: "destructive"});
+    if (!emailSetupData || !emailSetupData.id || !user?.id) { // Added user check
+        toast({ title: "Error", description: "Email setup data or user information not found.", variant: "destructive"});
         return;
     }
     setIsVerifyingDns(true);
     setPageError(null);
-    console.log("DnsConfirmationPage: Verifying DNS for emailSetupId:", emailSetupData.id);
     try {
         const { data: verificationResult, error: verificationError } = await supabase.functions.invoke('verify-dns-records', {
             body: { emailSetupId: emailSetupData.id },
@@ -330,45 +386,43 @@ const DnsConfirmationPage: React.FC = () => {
         if (verificationError) throw verificationError;
 
         if (verificationResult) {
-            console.log("DnsConfirmationPage: DNS verification result:", verificationResult);
             toast({
                 title: "DNS Verification Complete",
                 description: `Overall status: ${verificationResult.overallDnsStatus}. Record statuses updated.`,
                 duration: 5000
             });
             
-            const updatedSetup = await fetchFullEmailSetup(user!.id); // Refetch to get all latest statuses
+            const updatedSetup = await fetchFullEmailSetup(user.id); 
             if (updatedSetup) {
                 setEmailSetupData(updatedSetup);
                 setDisplayedDnsRecords(constructDnsRecords(updatedSetup));
+                setGlobalDnsStatus(updatedSetup.overall_dns_status as any || null);
             } else {
                  throw new Error("Failed to refetch email setup after verification.");
             }
-
         } else {
             throw new Error("Empty response from DNS verification function.");
         }
     } catch (err: any) {
-        console.error("DnsConfirmationPage: Error verifying DNS:", err.message);
         setPageError(`DNS verification failed: ${err.message}`);
         toast({ title: "DNS Verification Error", description: err.message || "Could not verify DNS records.", variant: "destructive" });
+        // If emailSetupData exists, use its current overall_dns_status, otherwise default to failed_to_verify
+        const currentStatus = emailSetupData?.overall_dns_status;
+        setGlobalDnsStatus(currentStatus as any || 'failed_to_verify');
     } finally {
         setIsVerifyingDns(false);
     }
   };
   
-  const getStatusIcon = (status?: 'verified' | 'failed' | 'pending' | 'error' | 'partially_verified' | 'failed_to_verify') => {
-    switch (status) {
-      case 'verified': return <CheckCircle className="text-green-400 h-5 w-5" />;
-      case 'partially_verified': return <Info className="text-yellow-400 h-5 w-5" />;
-      case 'failed':
-      case 'failed_to_verify': 
-        return <AlertTriangle className="text-red-400 h-5 w-5" />;
-      case 'error': return <AlertTriangle className="text-orange-400 h-5 w-5" />;
-      case 'pending':
-      default: return <Loader2 className="text-gray-400 h-5 w-5 animate-spin" />;
-    }
-  };
+  // const handleModalOpenChange = (open: boolean) => { // No longer needed
+  //   setIsModalOpen(open);
+  //   if (!open) {
+  //     hideDnsModal();
+  //     if (emailSetupData?.overall_dns_status !== 'verified') {
+  //       setGlobalDnsStatus(emailSetupData?.overall_dns_status as any || 'pending');
+  //     }
+  //   }
+  // };
 
   if (isLoadingPage || authLoading) {
     return (
@@ -436,8 +490,8 @@ const DnsConfirmationPage: React.FC = () => {
                 key={provider.id}
                 onClick={() => handleProviderCardClick(provider)}
                 className={`bg-green-700 hover:bg-green-600 border-2 border-green-600 hover:border-yellow-400 cursor-pointer transition-all duration-200 ease-in-out transform hover:scale-105 shadow-lg rounded-xl overflow-hidden 
-                            ${(userSetProviderId === provider.id || detectedProviderId === provider.id) && !selectedProviderForModal ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}
-                            ${selectedProviderForModal?.id === provider.id ? 'border-yellow-400 ring-2 ring-yellow-400' : ''}`}
+                            ${(userSetProviderId === provider.id || detectedProviderId === provider.id) && !selectedDnsProvider ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}
+                            ${selectedDnsProvider?.id === provider.id ? 'border-yellow-400 ring-2 ring-yellow-400' : ''}`}
               >
                 <CardHeader className="items-center justify-center text-center p-4">
                   {provider.logo && <img src={provider.logo} alt={`${provider.name} logo`} className="h-12 w-auto mx-auto mb-2" />}
@@ -447,30 +501,6 @@ const DnsConfirmationPage: React.FC = () => {
             ))}
           </div>
           
-          {/* Overall DNS Status - To be refactored into the global banner later */}
-          {emailSetupData && emailSetupData.overall_dns_status && (
-            <Card className="mb-8 bg-green-700 bg-opacity-60 border-green-600">
-              <CardHeader>
-                <CardTitle className="text-xl text-yellow-400 flex items-center">
-                  {getStatusIcon(emailSetupData.overall_dns_status)} 
-                  <span className="ml-2">Overall DNS Status</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-200">
-                  Current status: <span className={`font-semibold ${emailSetupData.overall_dns_status === 'verified' ? 'text-green-400' : 'text-yellow-400'}`}>{emailSetupData.overall_dns_status?.replace('_',' ')}</span>.
-                  {emailSetupData.last_verification_attempt_at && ` Last checked: ${new Date(emailSetupData.last_verification_attempt_at).toLocaleString()}`}
-                </p>
-                {emailSetupData.overall_dns_status !== 'verified' && (
-                     <p className="text-sm text-gray-300 mt-1">It can take some time for DNS changes to propagate. You can re-verify in the provider's guide.</p>
-                )}
-                {emailSetupData.verification_failure_reason && (
-                    <p className="text-sm text-red-400 mt-1">Details: {emailSetupData.verification_failure_reason}</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Navigation Buttons */}
           <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 pb-8">
             <Button
@@ -493,18 +523,18 @@ const DnsConfirmationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Render the DnsConfigurationModal component */}
-        <DnsConfigurationModal
+        {/* Render the DnsConfigurationModal component - REMOVED */}
+        {/* <DnsConfigurationModal
             isOpen={isModalOpen}
-            onOpenChange={setIsModalOpen}
+            onOpenChange={handleModalOpenChange}
             selectedProvider={selectedProviderForModal}
-            emailSetupData={emailSetupData} // This is EmailSetupData | null
+            emailSetupData={emailSetupData}
             displayedDnsRecords={displayedDnsRecords}
             onVerifyDns={handleVerifyDns}
             isVerifyingDns={isVerifyingDns}
             copyToClipboard={copyToClipboard} 
             getStatusIcon={getStatusIcon}
-        />
+        /> */}
       </div>
     </>
   );
