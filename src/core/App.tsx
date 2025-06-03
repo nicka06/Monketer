@@ -180,30 +180,50 @@ const AppRoutes = () => {
                         return;
                     }
                     let targetResumePath = null;
-                    if (!emailSetup.business_description) targetResumePath = '/';
-                    else if (!emailSetup.goals_form_raw_text) targetResumePath = '/goals-form';
-                    else if (!(emailSetup.selected_campaign_ids && Array.isArray(emailSetup.selected_campaign_ids) && emailSetup.selected_campaign_ids.length > 0)) targetResumePath = '/select-emails';
-                    else if (!emailSetup.website_provider) targetResumePath = '/website-status';
-                    else if (!emailSetup.domain) targetResumePath = '/website-status';
-                    else {
-                        const websiteStatusIndex = FORM_FLOW_ORDER.indexOf('/website-status');
-                        let nextLogicalStepIndex = websiteStatusIndex + 1;
-                        while(FORM_FLOW_ORDER[nextLogicalStepIndex] === '/auth-gate' && nextLogicalStepIndex < FORM_FLOW_ORDER.length -1) {
-                            nextLogicalStepIndex++;
-                        }
-                        if (nextLogicalStepIndex < FORM_FLOW_ORDER.length) {
-                            targetResumePath = FORM_FLOW_ORDER[nextLogicalStepIndex];
-                        } else {
-                            targetResumePath = '/dashboard';
+                    const requiredFields = [
+                        { field: 'business_description', path: '/' },
+                        { field: 'goals_form_raw_text', path: '/goals-form' },
+                        { field: 'selected_campaign_ids', path: '/select-emails', check: (val: any) => Array.isArray(val) && val.length > 0 },
+                        { field: 'website_provider', path: '/website-status' },
+                        { field: 'domain', path: '/website-status' },
+                    ];
+
+                    let firstIncompletePath = null;
+                    for (const item of requiredFields) {
+                        const value = emailSetup[item.field as keyof typeof emailSetup];
+                        const isMissing = item.check ? !item.check(value) : !value;
+                        if (isMissing) {
+                            firstIncompletePath = item.path;
+                            break;
                         }
                     }
+
+                    if (firstIncompletePath) {
+                        targetResumePath = firstIncompletePath;
+                    } else {
+                        const infoClarificationPath = '/info-clarification';
+                        const infoClarificationIndex = FORM_FLOW_ORDER.indexOf(infoClarificationPath);
+                        const currentIndexInFlow = FORM_FLOW_ORDER.indexOf(location.pathname);
+
+                        if (infoClarificationIndex !== -1 && currentIndexInFlow !== -1 && currentIndexInFlow < infoClarificationIndex) {
+                            targetResumePath = infoClarificationPath;
+                        } else {
+                            targetResumePath = null;
+                        }
+                    }
+
                     if (targetResumePath && location.pathname !== targetResumePath) {
-                        navigate(targetResumePath, { replace: true, state: { fromApp: true } });
-                        return;
+                        if (!(location.state?.fromApp && location.pathname === targetResumePath)) {
+                            navigate(targetResumePath, { replace: true, state: { fromApp: true } });
+                            return;
+                        }
+                    } else if (location.state?.fromApp && location.pathname === targetResumePath) {
+                        const { fromApp, ...restOfState } = location.state;
+                        navigate(location.pathname, { replace: true, state: Object.keys(restOfState).length > 0 ? restOfState : undefined });
                     }
                 } else {
                     const nonEntryFormPages = FORM_FLOW_ORDER.filter(p => p !== '/' && p !== '/optional-signup' && p !== '/business-overview');
-                    if (nonEntryFormPages.includes(location.pathname) && location.pathname !== '/subscription-plan') {
+                    if (nonEntryFormPages.includes(location.pathname) && location.pathname !== '/subscription-plan' && location.pathname !== '/auth-gate') {
                         navigate('/', { replace: true, state: { fromApp: true } });
                         return;
                     }
@@ -211,7 +231,8 @@ const AppRoutes = () => {
             };
             if (location.pathname !== '/login' && location.pathname !== '/signup' && location.pathname !== '/auth-gate') {
                 if (authStateJustChanged) {
-                    setTimeout(fetchAndRedirect, 100);
+                    const timer = setTimeout(fetchAndRedirect, 50);
+                    return () => clearTimeout(timer);
                 } else {
                     fetchAndRedirect();
                 }

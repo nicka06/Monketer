@@ -52,7 +52,7 @@ const DnsConfirmationPage: React.FC = () => {
     setOverallDnsStatus: setGlobalDnsStatus,
     showDnsModal,
     selectedDnsProvider, // For highlighting the card if modal opened from elsewhere and for auto-popup
-    setSelectedDnsProvider // To potentially clear or set provider
+    // setSelectedDnsProvider // No longer setting it from here, App.tsx/GlobalDnsNotificationBar will set it via showDnsModal
   } = useDnsStatus();
 
   const [emailSetupData, setEmailSetupData] = useState<EmailSetupData | null>(null);
@@ -172,26 +172,14 @@ const DnsConfirmationPage: React.FC = () => {
     return data as EmailSetupData | null;
   }, [supabase]);
 
-  // This useEffect was for syncing global modal state to a local modal instance.
-  // Since the modal is now fully global, this is no longer needed here.
+  // This useEffect was for syncing global modal state to a local modal instance OR for opening modal based on context.
+  // Since the modal is now fully global and initialLoad will handle auto-opening, this is no longer needed here.
   // useEffect(() => {
-  //   if (isDnsModalOpenGlobally) {
-  //     if (!isModalOpen) {
-  //       if (!selectedProviderForModal) {
-  //         const providerModalTargetId = userSetProviderId || detectedProviderId || 'other';
-  //         const providerToShowInModal = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === providerModalTargetId) || DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === 'other');
-  //         if (providerToShowInModal) {
-  //           setSelectedProviderForModal(providerToShowInModal);
-  //         }
-  //       }
-  //       setIsModalOpen(true);
-  //     }
-  //   } else {
-  //     if (isModalOpen) {
-  //       setIsModalOpen(false);
-  //     }
+  //   if (!isLoadingPage && selectedDnsProvider && emailSetupData?.domain) {
+  //       console.log("DnsConfirmationPage: selectedDnsProvider available on load/update:", selectedDnsProvider, "Highlighting and potentially opening modal.");
+  //       showDnsModal(selectedDnsProvider);
   //   }
-  // }, [isDnsModalOpenGlobally, isModalOpen, selectedProviderForModal, userSetProviderId, detectedProviderId]);
+  // }, [selectedDnsProvider, isLoadingPage, emailSetupData?.domain, showDnsModal]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -271,16 +259,22 @@ const DnsConfirmationPage: React.FC = () => {
             setDetectedProviderDisplayName(finalDetectedProviderDisplayName);
             setDetectedProviderId(finalDetectedProviderId);
             setIsDetectingProvider(false);
-
-            // If modal is opened globally (e.g. from notification bar) and a provider is in context,
-            // open the modal automatically for that provider.
-            if (selectedDnsProvider) {
-                const providerTarget = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === selectedDnsProvider.id);
-                if (providerTarget) {
-                    showDnsModal(providerTarget);
-                }
+            setGlobalDnsStatus(currentEmailSetup?.overall_dns_status || null); 
+            // Auto-open modal once all data is loaded and provider is determined
+            const providerIdToOpenWith = finalDetectedProviderId || userSetProviderId || 'other';
+            const providerObjectToOpenWith = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === providerIdToOpenWith) || DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === 'other');
+            
+            if (providerObjectToOpenWith) {
+                console.log("DnsConfirmationPage: initialLoad complete, attempting to show modal for:", providerObjectToOpenWith.id);
+                showDnsModal(providerObjectToOpenWith);
+            } else {
+                 console.warn("DnsConfirmationPage: Could not find provider object for ID:", providerIdToOpenWith, "defaulting to other or not opening.");
+                 // Fallback to 'other' if somehow the specific ID wasn't found but we still need to open.
+                 const otherProvider = DNS_PROVIDER_DISPLAY_OPTIONS.find(p => p.id === 'other');
+                 if (otherProvider) {
+                    showDnsModal(otherProvider);
+                 }
             }
-
         }
 
       } catch (err: any) {
@@ -290,9 +284,11 @@ const DnsConfirmationPage: React.FC = () => {
         toast({ title: "Loading Error", description: err.message || "Could not load data.", variant: "destructive" });
       } finally {
         if (mountedRef.current) {
-            console.log("DnsConfirmationPage: initialLoad finally block. Setting isLoadingPage to false.");
-            setIsLoadingPage(false);
+          setIsLoadingPage(false);
+          // Ensure isDetectingProvider is also false if it hasn't been set by successful path
+          if(isDetectingProvider) setIsDetectingProvider(false); 
         }
+        console.log("DnsConfirmationPage: initialLoad finally block. Setting isLoadingPage to false.");
       }
     };
 
@@ -315,8 +311,15 @@ const DnsConfirmationPage: React.FC = () => {
       // For now, this is not implemented; modal closure is managed by its own close button or hideDnsModal().
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, navigate, location.pathname, toast, constructDnsRecords, fetchFullEmailSetup, supabase, showDnsModal, selectedDnsProvider]);
+  }, [user, authLoading, navigate, location.pathname, toast, constructDnsRecords, fetchFullEmailSetup, supabase, showDnsModal, setGlobalDnsStatus]);
 
+  // Corrected useEffect for mountedRef cleanup
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const handleNavigate = (direction: 'next' | 'previous') => {
     const currentPath = location.pathname;
@@ -423,6 +426,9 @@ const DnsConfirmationPage: React.FC = () => {
   //     }
   //   }
   // };
+
+  // The selectedDnsProvider from context is used to highlight the card
+  const activeProviderId = userSetProviderId || (selectedDnsProvider ? selectedDnsProvider.id : null) || detectedProviderId || 'other';
 
   if (isLoadingPage || authLoading) {
     return (

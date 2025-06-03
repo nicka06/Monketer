@@ -67,6 +67,8 @@ const AuthGatePage: React.FC = () => {
         return true; // Nothing to save, but not an error state
     }
 
+    console.log("AuthGatePage: Persisting to email_setups:", updateData);
+
     const { error } = await supabase
       .from('email_setups')
       .upsert(updateData, { onConflict: 'user_id' })
@@ -82,7 +84,7 @@ const AuthGatePage: React.FC = () => {
     // Clear localStorage items
     localStorage.removeItem('pendingBusinessDescription');
     localStorage.removeItem('pendingUserGoalsRawText');
-    localStorage.removeItem('pendingUserGoals'); // Also clear the parsed array if it was stored
+    localStorage.removeItem('pendingUserGoals'); 
     localStorage.removeItem('pendingSelectedCampaignIds');
     localStorage.removeItem('pendingWebsiteProvider');
     localStorage.removeItem('pendingDomainName');
