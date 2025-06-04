@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,19 +10,33 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Navbar from '@/components/Navbar';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const SelectEmailsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
 
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const hideLoadingCalledRef = useRef(false);
+
+  useEffect(() => {
+    hideLoadingCalledRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoadingData && !hideLoadingCalledRef.current) {
+      console.log("SelectEmailsPage: Data loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingData, hideLoading]);
 
   const loadSelectedCampaigns = useCallback(async () => {
-    setIsLoading(true);
     if (user && user.id) {
       try {
         const { data, error } = await supabase
@@ -44,7 +58,7 @@ const SelectEmailsPage: React.FC = () => {
         setSelectedCampaigns(JSON.parse(saved));
       }
     }
-    setIsLoading(false);
+    setIsLoadingData(false);
   }, [user, toast]);
 
   useEffect(() => {
@@ -113,10 +127,6 @@ const SelectEmailsPage: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-green-800 text-white">Loading email options...</div>;
-  }
-
   return (
     <>
       <Navbar />
@@ -172,7 +182,7 @@ const SelectEmailsPage: React.FC = () => {
             variant="outline"
             onClick={() => handleNavigate('previous')}
             className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-            disabled={isSaving || isLoading}
+            disabled={isSaving || isLoadingData}
           >
             Previous
           </Button>
@@ -180,7 +190,7 @@ const SelectEmailsPage: React.FC = () => {
             type="button"
             onClick={() => handleNavigate('next')}
             className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-            disabled={isSaving || isLoading}
+            disabled={isSaving || isLoadingData}
           >
             {isSaving ? 'Saving...' : 'Save & Continue'}
           </Button>

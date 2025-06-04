@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '@/components/Navbar'; // Added Navbar import
 // import Footer from '@/components/Footer'; // Removed Footer
@@ -7,6 +7,7 @@ import { useAuth } from "@/features/auth/useAuth"; // Added useAuth import
 import { useToast } from "@/hooks/use-toast"; // Added useToast import
 import { supabase } from '@/integrations/supabase/client'; // Corrected Supabase client import path
 import { FORM_FLOW_ORDER } from '@/core/constants'; // Import the constant
+import { useLoading } from '@/contexts/LoadingContext'; // Import useLoading
 
 // Placeholder for Supabase auth or user context if needed later
 // import { useAuth } from '@/contexts/AuthContext'; 
@@ -16,10 +17,48 @@ const OptionalSignUpPage: React.FC = () => {
   const location = useLocation();
   const { signUp, user } = useAuth();
   const { toast } = useToast(); 
+  const { hideLoading } = useLoading(); // Get hideLoading
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [signedUpUserId, setSignedUpUserId] = useState<string | null>(null); // To store userId after signup success
+
+  // Refs for critical images
+  const backgroundRef = useRef<HTMLImageElement>(null);
+  const monkeyRef = useRef<HTMLImageElement>(null);
+
+  // State to track image loading for page load buffer
+  const [isPageBackgroundLoaded, setIsPageBackgroundLoaded] = useState(false);
+  const [isPageMonkeyLoaded, setIsPageMonkeyLoaded] = useState(false);
+  const pageHideLoadingCalledRef = useRef(false); // Ref to track if hideLoading was called for page assets
+
+  useEffect(() => {
+    // Reset the flag if the component were to somehow remount for a *new* page load.
+    pageHideLoadingCalledRef.current = false;
+  }, []);
+
+  // Effect to check if images are loaded and hide loading screen
+  useEffect(() => {
+    const bgStatus = backgroundRef.current?.complete || isPageBackgroundLoaded;
+    const monkeyStatus = monkeyRef.current?.complete || isPageMonkeyLoaded;
+
+    if (bgStatus && monkeyStatus && !pageHideLoadingCalledRef.current) {
+      console.log("OptionalSignUpPage: All critical images loaded/complete. Hiding loading screen ONCE.");
+      hideLoading();
+      pageHideLoadingCalledRef.current = true; // Set flag to prevent multiple calls
+    }
+  }, [isPageBackgroundLoaded, isPageMonkeyLoaded, hideLoading]);
+
+  // Image load/error handlers for page load buffer
+  const handlePageImageLoad = (setter: React.Dispatch<React.SetStateAction<boolean>>, imageName: string) => {
+    console.log(`OptionalSignUpPage: ${imageName} loaded.`);
+    setter(true);
+  };
+
+  const handlePageImageError = (imageName: string, setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    console.error(`OptionalSignUpPage: ${imageName} failed to load.`);
+    setter(true); // Treat error as "load attempt finished" for hiding loader
+  };
 
   // Effect to run when signedUpUserId is set (meaning signup was successful)
   // and the user object from context is available.
@@ -187,15 +226,21 @@ const OptionalSignUpPage: React.FC = () => {
     <div className="page-container text-white"> 
       <div className="images-container"> 
         <img 
+          ref={backgroundRef}
           src="/images/Background pt 2.png" 
           alt="Jungle background with different theme"
           className="background-image-element"
+          onLoad={() => handlePageImageLoad(setIsPageBackgroundLoaded, 'optional_signup_background')}
+          onError={() => handlePageImageError('optional_signup_background', setIsPageBackgroundLoaded)}
         />
         <div className="auth-monkey-unit"> {/* Unit wrapper for monkey and bubble */}
           <img 
+            ref={monkeyRef}
             src="/images/monkeylock.png" 
             alt="Monkey with a lock"
             className="auth-monkey-image" /* Image specific styles here */
+            onLoad={() => handlePageImageLoad(setIsPageMonkeyLoaded, 'optional_signup_monkey')}
+            onError={() => handlePageImageError('optional_signup_monkey', setIsPageMonkeyLoaded)}
           />
           <div className="auth-monkey-speech-bubble"> {/* Speech bubble */}
             <p>Sign up to save your progress!</p>
@@ -227,6 +272,7 @@ const OptionalSignUpPage: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   placeholder="you@example.com"
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -243,6 +289,7 @@ const OptionalSignUpPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   placeholder="Create a password (min. 6 characters)"
+                  disabled={isLoading}
                 />
               </div>
               <Button 

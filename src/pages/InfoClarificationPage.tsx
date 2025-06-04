@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { useLoading } from '@/contexts/LoadingContext';
 
 // TODO: Refactor PROVIDER_OPTIONS to a shared constants file
 const PROVIDER_OPTIONS = [
@@ -40,10 +41,12 @@ const InfoClarificationPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [isProcessingNext, setIsProcessingNext] = useState(false);
   const [isConfirmedAccurate, setIsConfirmedAccurate] = useState(false);
+  const hideLoadingCalledRef = useRef(false);
 
   const [emailSetupId, setEmailSetupId] = useState<string | null>(null);
   const [businessDescription, setBusinessDescription] = useState('');
@@ -72,8 +75,19 @@ const InfoClarificationPage: React.FC = () => {
     return provider ? provider.name : providerId;
   }, []);
 
+  useEffect(() => {
+    hideLoadingCalledRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoadingData && !hideLoadingCalledRef.current) {
+      console.log("InfoClarificationPage: Data loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingData, hideLoading]);
+
   const loadData = useCallback(async () => {
-    setIsLoading(true);
     try {
       if (user && user.id) {
         const { data, error } = await supabase
@@ -108,7 +122,7 @@ const InfoClarificationPage: React.FC = () => {
       console.error("InfoClarificationPage: Error loading data:", error);
       toast({ title: "Error Loading Data", description: "Could not load your information for review.", variant: "destructive" });
     }
-    setIsLoading(false);
+    setIsLoadingData(false);
   }, [user, toast, getCampaignDetails, getProviderName]);
 
   useEffect(() => {
@@ -208,10 +222,6 @@ const InfoClarificationPage: React.FC = () => {
     </Card>
   );
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-green-800 text-white"><Loader2 className="mr-2 h-8 w-8 animate-spin" />Loading your information...</div>;
-  }
-
   return (
     <>
       <Navbar />
@@ -270,14 +280,14 @@ const InfoClarificationPage: React.FC = () => {
           <Button
             variant="outline"
             onClick={() => handleNavigate('previous')}
-            disabled={isProcessingNext}
+            disabled={isProcessingNext || isLoadingData}
             className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md"
           >
             Previous Page
           </Button>
           <Button
             onClick={() => handleNavigate('next')}
-            disabled={!isConfirmedAccurate || isLoading || isProcessingNext}
+            disabled={!isConfirmedAccurate || isLoadingData || isProcessingNext}
             className="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md"
           >
             {isProcessingNext ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}

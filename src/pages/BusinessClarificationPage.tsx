@@ -3,12 +3,19 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FORM_FLOW_ORDER } from '@/core/constants';
 import Navbar from '@/components/Navbar';
+import { useLoading } from '@/contexts/LoadingContext';
 // import Footer from '@/components/Footer'; // If needed later
 
 const BusinessClarificationPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingForm, setIsLoadingForm] = useState(false);
+  const { hideLoading } = useLoading();
+
+  useEffect(() => {
+    console.log("BusinessClarificationPage: Hiding loading screen immediately.");
+    hideLoading();
+  }, [hideLoading]);
 
   // Placeholder useEffect for data loading
   useEffect(() => {
@@ -62,7 +69,7 @@ const BusinessClarificationPage: React.FC = () => {
             variant="outline"
             onClick={() => handleNavigate('previous')}
             className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-            disabled={isLoading}
+            disabled={isLoadingForm}
           >
             Previous
           </Button>
@@ -70,7 +77,7 @@ const BusinessClarificationPage: React.FC = () => {
             type="button"
             onClick={() => handleNavigate('next')}
             className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-            disabled={isLoading}
+            disabled={isLoadingForm}
           >
             Next
           </Button>

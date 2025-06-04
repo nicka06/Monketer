@@ -11,8 +11,9 @@ import Navbar from "@/components/Navbar";
 // Site-wide footer component
 import Footer from "@/components/Footer";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
+import { useLoading } from '@/contexts/LoadingContext';
 
 /**
  * Index component - Landing page layout
@@ -23,7 +24,30 @@ import { FORM_FLOW_ORDER } from '@/core/constants';
 const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { hideLoading } = useLoading();
   const [businessDescription, setBusinessDescription] = useState('');
+  const backgroundRef = useRef<HTMLImageElement>(null);
+  const monkeyRef = useRef<HTMLImageElement>(null);
+  const [isBackgroundLoaded, setIsBackgroundLoaded] = useState(false);
+  const [isMonkeyLoaded, setIsMonkeyLoaded] = useState(false);
+  const hideLoadingCalledRef = useRef(false); // Ref to track if hideLoading was called
+
+  useEffect(() => {
+    // Reset the flag if the component were to somehow remount for a *new* page load, though unlikely here.
+    // For this page, it's primarily for ensuring one call per image set load.
+    hideLoadingCalledRef.current = false; 
+  }, []); // Empty dependency array means this runs once on mount
+
+  useEffect(() => {
+    const bgStatus = backgroundRef.current?.complete || isBackgroundLoaded;
+    const monkeyStatus = monkeyRef.current?.complete || isMonkeyLoaded;
+
+    if (bgStatus && monkeyStatus && !hideLoadingCalledRef.current) {
+      console.log("IndexPage: All critical images loaded/complete. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true; // Set flag to prevent multiple calls
+    }
+  }, [isBackgroundLoaded, isMonkeyLoaded, hideLoading]); // hideLoading is stable, fine in deps
 
   // Simplified navigation: Index only goes to /business-overview
   const handleNavigateToNextStep = () => {
@@ -40,20 +64,36 @@ const Index = () => {
     handleNavigateToNextStep();
   };
 
+  const handleImageLoad = (setter: React.Dispatch<React.SetStateAction<boolean>>, imageName: string) => {
+    console.log(`IndexPage: ${imageName} loaded.`);
+    setter(true);
+  };
+
+  const handleImageError = (imageName: string, setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    console.error(`IndexPage: ${imageName} failed to load.`);
+    setter(true); 
+  };
+
   return (
     <div className="page-container text-white"> 
       <div className="images-container">
         <img 
+          ref={backgroundRef}
           src="/images/background.png" 
           alt="Jungle background"
           className="background-image-element"
+          onLoad={() => handleImageLoad(setIsBackgroundLoaded, 'background')}
+          onError={() => handleImageError('background', setIsBackgroundLoaded)}
         />
         {/* New Monkey Unit Container */}
         <div className="monkey-unit-container">
           <img 
+            ref={monkeyRef}
             src="/images/monketer_main_monkey.png" 
             alt="Emailore Monkey Assistant"
             className="scene-monkey-image"
+            onLoad={() => handleImageLoad(setIsMonkeyLoaded, 'monkey')}
+            onError={() => handleImageError('monkey', setIsMonkeyLoaded)}
           />
           <div className="monkey-speech-bubble">
             <p>Tell me about your business and I'll help you get started!</p>

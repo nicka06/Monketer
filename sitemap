@@ -258,6 +258,15 @@
 │   │     - Includes responsive behavior for mobile (hamburger menu) and desktop.
 │   │   Usage: Used globally across most pages.
 │   │
+│   ├── 📄 LoadingScreen.tsx
+│   │   Purpose: Displays a full-screen loading animation with a monkey and orbiting bananas.
+│   │   Details:
+│   │     - Shows a solid green background (`rgb(34, 139, 34)`).
+│   │     - Features a central monkey image (`/images/googly_monkey.png`).
+│   │     - Six banana images (`/images/banana.png`) individually orbit the monkey. Each banana uses a CSS animation (`@keyframes orbitAroundMonkey`) with a 6-second duration and staggered `animation-delay` to create a continuous circular motion.
+│   │     - Visibility is controlled by an `isLoading` prop (typically from `LoadingContext`).
+│   │   Usage: Rendered globally by `AppRoutesWrapper` in `src/core/App.tsx` and shown/hidden via `LoadingContext`.
+│   │
 │   └── 📄 UserProgressContext.tsx
 │       Purpose: Provides context for user progress through the multi-step form.
 │       Details: 
@@ -267,6 +276,31 @@
 │       Usage: Wrapped around the main application or form flow to manage navigation and state.
 │
 ├── 📁 contexts/
+│   ├── 📄 DnsStatusContext.tsx
+│   │   Purpose: Manages and provides global state related to DNS verification status and the DNS configuration modal.
+│   │   Details:
+│   │     - Exports `DnsStatusProvider` and `useDnsStatus` hook.
+│   │     - Manages state for:
+│   │       - `overallDnsStatus`: ('pending' | 'partially_verified' | 'verified' | 'failed_to_verify' | null) - Current overall DNS status.
+│   │       - `isDnsModalOpenGlobally`: (boolean) - Controls visibility of the global `DnsConfigurationModal`.
+│   │       - `selectedDnsProvider`: (object | null) - The DNS provider object selected by the user (from `DNS_PROVIDER_DISPLAY_OPTIONS`).
+│   │       - `dnsContextLoaded`: (boolean) - Indicates if the initial DNS status has been loaded.
+│   │     - Provides functions:
+│   │       - `setOverallDnsStatus`: Updates `overallDnsStatus`.
+│   │       - `showDnsModal(provider?)`: Sets `isDnsModalOpenGlobally` to true and updates `selectedDnsProvider`. If no provider is passed and none is already selected, defaults to "other".
+│   │       - `hideDnsModal()`: Sets `isDnsModalOpenGlobally` to false.
+│   │       - `setSelectedDnsProvider`: Updates `selectedDnsProvider`.
+│   │       - `setDnsContextLoaded`: Updates `dnsContextLoaded`.
+│   │   Usage: `DnsStatusProvider` wraps relevant parts of the application (likely in `App.tsx`). Components like `GlobalDnsNotificationBar`, `DnsConfirmationPage`, and `MainContentWithGlobalModal` (in `App.tsx`) use the `useDnsStatus` hook to access and modify this shared state.
+│   │
+│   ├── 📄 LoadingContext.tsx
+│   │   Purpose: Manages and provides global state for showing/hiding a loading screen.
+│   │   Details:
+│   │     - Exports `LoadingProvider` and `useLoading` hook.
+│   │     - Manages an `isLoading` boolean state.
+│   │     - Provides `showLoading()` and `hideLoading()` functions to toggle the state.
+│   │   Usage: `LoadingProvider` should wrap the application (e.g., in `App.tsx`). Components can use `useLoading` to trigger the loading screen.
+│   │
 │   └── 📄 DnsStatusContext.tsx
 │       Purpose: Manages and provides global state related to DNS verification status and the DNS configuration modal.
 │       Details:
@@ -282,7 +316,7 @@
 │           - `hideDnsModal()`: Sets `isDnsModalOpenGlobally` to false.
 │           - `setSelectedDnsProvider`: Updates `selectedDnsProvider`.
 │           - `setDnsContextLoaded`: Updates `dnsContextLoaded`.
-│       Usage: `DnsStatusProvider` wraps relevant parts of the application (likely in `App.tsx`). Components like `GlobalDnsNotificationBar`, `DnsConfirmationPage`, and `MainContentWithGlobalModal` (in `App.tsx`) use the `useDnsStatus` hook to access and modify this shared state.
+│       Usage: `DnsStatusProvider` wraps relevant parts of the application. Components use `useDnsStatus` hook.
 │
 ├── 📁 core/
 │   ├── 📄 constants.ts
@@ -476,21 +510,22 @@
 │       Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
 │
 ├── 📄 App.tsx 
-│   Purpose: Main application component, sets up routing, global providers, and manages the global DNS modal.
+│   Purpose: Main application component, sets up routing, providers, and global layout elements.
 │   Details:
-│     - Wraps routes with `DnsStatusProvider` for global DNS state.
-│     - Renders `GlobalDnsNotificationBar` and `MainContentWithGlobalModal`.
-│     - `MainContentWithGlobalModal` component:
-│       - Manages data fetching (`emailSetupDataForModal`, `displayedDnsRecordsForModal`) for the `DnsConfigurationModal` when `isDnsModalOpenGlobally` is true.
-│       - Provides handlers (`handleVerifyDnsInModal`, `copyToClipboardInModal`, `getStatusIconForModal`) to the modal.
-│       - Renders `DnsConfigurationModal`, passing global state and handlers. Modal's `isOpen` is tied to `isDnsModalOpenGlobally`.
-│       - Dynamically adjusts top padding of main content (`pt-16` or `pt-[108px]` or `pt-[44px]` or `pt-0`) based on `Navbar` presence and `GlobalDnsNotificationBar` visibility to prevent overlap.
-│     - `AppRoutes` component:
-│       - Manages redirection logic based on auth state and `email_setups` data.
-│       - Fetches `overall_dns_status` and updates `DnsStatusContext` via `setGlobalDnsStatusContext` and `setDnsContextLoaded`.
-│       - **Authenticated User Resume Logic:** (details as before)
-│       - Includes routes for all pages.
-│   Usage: Root of the React application.
+│     - Initializes `BrowserRouter` for client-side routing.
+│     - Wraps the application with `AuthProvider` (for user authentication state) and `QueryClientProvider` (for react-query).
+│     - Wraps the application with `DnsStatusProvider` to manage global DNS modal state and status.
+│     - **Wraps the application with `LoadingProvider` to manage global loading screen state.**
+│     - Uses `TooltipProvider` and renders `Toaster` for notifications.
+│     - Defines `ProtectedRoute` HOC to guard routes requiring authentication.
+│     - Defines `AppRoutes` component which contains the main navigation logic (useEffect) based on auth state and user's progress in the form flow. It fetches `email_setups` and `user_info` to determine redirection.
+│     - **Defines `AppRoutesWrapper` component which renders the global `LoadingScreen` (controlled by `useLoading` from `LoadingContext`), the `GlobalDnsNotificationBar`, and the `MainContentWithGlobalModal`.**
+│     - **`MainContentWithGlobalModal` renders the main `Routes` and the global `DnsConfigurationModal`.**
+│       - It fetches detailed `email_setups` data when the DNS modal is opened.
+│       - Handles DNS verification logic within the modal by calling `verify-dns-records` function.
+│       - Manages local state for the DNS modal content (records, verification status) and interacts with `DnsStatusContext` for modal visibility (`isDnsModalOpenGlobally`, `showDnsModal`, `hideDnsModal`, `selectedDnsProvider`) and global DNS status (`overallDnsStatus`, `setOverallDnsStatus`).
+│     - Defines all application routes using `react-router-dom`, including public pages, auth pages, form flow pages, and protected dashboard/editor pages.
+│   Usage: The root component rendered into the DOM.
 │
 └── 📄 .env.example
     Purpose: Example environment variables file.
