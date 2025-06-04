@@ -4,6 +4,14 @@ import { useDnsStatus } from '@/contexts/DnsStatusContext';
 import { AlertTriangle, Info, ChevronRight } from 'lucide-react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
 
+// Define pages that do not have the standard top navigation bar
+const PAGES_WITHOUT_NAVBAR = [
+  '/subscription-plan', // Add other pages as needed, e.g., /dashboard, /editor
+  '/editor',
+  '/dashboard',
+  // Add '/login', '/signup' if they also don't have the *main* app navbar and the bar should be at top-0
+];
+
 const GlobalDnsNotificationBar: React.FC = () => {
   const { overallDnsStatus, showDnsModal, dnsContextLoaded, isDnsModalOpenGlobally } = useDnsStatus();
   const location = useLocation();
@@ -53,9 +61,13 @@ const GlobalDnsNotificationBar: React.FC = () => {
     showDnsModal();
   };
 
+  // Determine top position based on navbar presence
+  const hasNavbar = !PAGES_WITHOUT_NAVBAR.includes(location.pathname);
+  const topPositionClass = hasNavbar ? 'top-16' : 'top-0';
+
   return (
     <div 
-        className={`fixed top-16 left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-center shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
+        className={`fixed ${topPositionClass} left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-center shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
         onClick={handleBarClick}
     >
         <div className="flex items-center text-center">
