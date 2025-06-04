@@ -17,6 +17,7 @@ export const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5173', // Vite's default port
   'http://localhost:8080', // Added origin for local development
+  'https://www.crewassigner.com', // Added new origin
 ];
 
 /**
@@ -37,17 +38,22 @@ export const ALLOWED_ORIGINS = [
  *   }
  * });
  */
-export const corsHeadersFactory = (requestOrigin?: string) => {
-  const origin = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)
-    ? requestOrigin
-    : ALLOWED_ORIGINS[0]; // Default to production origin
-
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+export const corsHeadersFactory = (requestOrigin: string | null) => {
+  const headers: Record<string, string> = { // Explicitly type headers
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Max-Age': '86400', // 24 hours caching of preflight requests
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-custom-auth',
+    'Access-Control-Max-Age': '86400', // 24 hours
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS[0], // Default to first allowed origin
   };
+
+  if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    headers['Access-Control-Allow-Origin'] = requestOrigin;
+    headers['Access-Control-Allow-Credentials'] = 'true'; // Add Allow-Credentials
+  }
+  // If credentials are to be supported:
+  // headers['Access-Control-Allow-Credentials'] = 'true'; // This line was redundant or misplaced
+
+  return headers;
 };
 
 /**

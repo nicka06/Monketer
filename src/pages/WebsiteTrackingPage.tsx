@@ -17,6 +17,7 @@ const WebsiteTrackingPage: React.FC = () => {
   const { hideLoading } = useLoading();
 
   const [emailSetupId, setEmailSetupId] = useState<string | null>(null);
+  const [persistentTrackingId, setPersistentTrackingId] = useState<string | null>(null);
   const [pixelScript, setPixelScript] = useState<string>('');
   const [isLoadingPageData, setIsLoadingPageData] = useState(true);
   const [isTestingPixel, setIsTestingPixel] = useState(false);
@@ -38,46 +39,63 @@ const WebsiteTrackingPage: React.FC = () => {
   }, [isLoadingPageData, authLoading, hideLoading]);
 
   useEffect(() => {
-    const fetchEmailSetup = async () => {
+    const fetchIdsAndGenerateScript = async () => {
       if (!user) {
         toast({ title: "Authentication Error", description: "Please log in to continue.", variant: "destructive" });
         navigate('/login', { replace: true, state: { from: location.pathname } });
         return;
       }
       setIsLoadingPageData(true);
+      let currentEmailSetupId: string | null = null;
       try {
-        const { data, error } = await supabase
+        const { data: setupData, error: setupError } = await supabase
           .from('email_setups')
           .select('id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (error) throw error;
+        if (setupError) throw setupError;
 
-        if (data && data.id) {
-          setEmailSetupId(data.id);
+        if (setupData && setupData.id) {
+          currentEmailSetupId = setupData.id;
+          setEmailSetupId(currentEmailSetupId);
+
+          const { data: trackingIdData, error: trackingIdError } = await supabase.functions.invoke(
+            'get-or-create-tracking-id',
+            { body: { emailSetupId: currentEmailSetupId } }
+          );
+
+          if (trackingIdError) {
+            console.error("Error fetching/creating trackingPixelId:", trackingIdError);
+            throw new Error(trackingIdError.message || "Could not get or create tracking ID.");
+          }
+
+          if (trackingIdData && trackingIdData.trackingPixelId) {
+            setPersistentTrackingId(trackingIdData.trackingPixelId);
+          } else {
+            throw new Error("No trackingPixelId returned from function.");
+          }
         } else {
           toast({ title: "Setup Incomplete", description: "Email setup not found. Please complete previous steps.", variant: "destructive" });
           console.warn("WebsiteTrackingPage: email_setup_id not found for user.");
         }
       } catch (error: any) {
-        toast({ title: "Error Loading Data", description: `Could not load setup ID: ${error.message}`, variant: "destructive" });
-        console.error("Error fetching email_setup_id:", error);
+        toast({ title: "Error Loading Data", description: `Could not load required IDs: ${error.message}`, variant: "destructive" });
+        console.error("Error fetching IDs:", error);
       } finally {
         setIsLoadingPageData(false);
       }
     };
 
     if (!authLoading) {
-        fetchEmailSetup();
+        fetchIdsAndGenerateScript();
     }
-  }, [user, authLoading, toast, navigate, location.pathname]);
+  }, [user, authLoading, toast, navigate, location.pathname, supabase]);
 
   useEffect(() => {
-    if (emailSetupId) {
-      const scriptContent = `
+    const scriptContent = `
 (function() {
-  var setupId = '${emailSetupId}';
+  var setupId = '${persistentTrackingId}';
   var ingestUrl = '${ingestEventUrl}';
 
   function sendEvent(eventName, eventData) {
@@ -88,17 +106,13 @@ const WebsiteTrackingPage: React.FC = () => {
       page_url: window.location.href,
       client_timestamp: new Date().toISOString()
     };
-    if (navigator.sendBeacon) {
-      try {
-        var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(ingestUrl, blob);
-      } catch (e) {
-        console.warn('Emailore: sendBeacon failed, falling back to fetch.', e);
-        fetch(ingestUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(err => console.error('Emailore event (fetch fallback) failed:', eventName, err));
-      }
-    } else {
-      fetch(ingestUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }).catch(err => console.error('Emailore event (fetch) failed:', eventName, err));
-    }
+    fetch(ingestUrl, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(payload), 
+      keepalive: true,
+      credentials: 'omit'
+    }).catch(err => console.error('Emailore event (fetch) failed:', eventName, err));
   }
 
   sendEvent('emailore_pixel_loaded', { status: 'loaded', version: '1.0.0' });
@@ -113,11 +127,8 @@ const WebsiteTrackingPage: React.FC = () => {
   };
   console.log('Emailore Tracking Pixel Initialized for ' + setupId);
 })();`;
-      setPixelScript(scriptContent.trim());
-    } else {
-      setPixelScript('');
-    }
-  }, [emailSetupId, ingestEventUrl]);
+    setPixelScript(scriptContent.trim());
+  }, [persistentTrackingId, ingestEventUrl]);
 
   const copyToClipboard = () => {
     if (pixelScript) {
@@ -179,130 +190,120 @@ const WebsiteTrackingPage: React.FC = () => {
   };
   
   return (
-    <>
+    <div className="relative flex flex-col min-h-screen overflow-hidden">
+      <img
+        src="/images/background8.png"
+        alt="Jungle background"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+        // Add onLoad/onError if this page's loading screen needs to wait for it
+        // onLoad={() => console.log("background8.png loaded")}
+        // onError={() => console.error("background8.png failed to load")}
+      />
       <Navbar />
-      <div className="min-h-screen bg-green-800 text-white py-8 px-4 pt-20 md:pt-24">
+      <main className="flex-grow py-8 px-4 pt-24 md:pt-28 text-white">
         <div className="container mx-auto max-w-3xl">
-          <div className="text-center mb-10">
-            <Code size={64} className="mx-auto text-yellow-400 mb-4" />
-            <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-3">Website Tracking Pixel</h1>
-            <p className="text-lg text-gray-200">
-              Install our tracking pixel on your website to start collecting data and enable powerful automations.
-            </p>
+          <div className="bg-black bg-opacity-60 p-6 rounded-lg mb-10">
+            <div className="text-center">
+              <Code size={64} className="mx-auto text-yellow-400 mb-4" />
+              <h1 className="text-4xl md:text-5xl font-bold text-yellow-300 mb-3">Website Tracking Pixel</h1>
+              <p className="text-lg text-gray-100">
+                Install our tracking pixel on your website to start collecting data and enable powerful automations.
+              </p>
+            </div>
           </div>
 
           {!emailSetupId && !isLoadingPageData && !authLoading && (
-            <div className="bg-red-700 bg-opacity-80 p-6 rounded-lg text-center mb-8">
+            <div className="bg-red-700 bg-opacity-90 p-6 rounded-lg text-center mb-8">
                 <div className="flex items-center justify-center text-yellow-300 mb-2">
                     <AlertTriangle size={24} className="mr-2" /> 
                     <h2 className="text-xl font-semibold">Setup ID Missing</h2>
                 </div>
-                <p className="text-gray-200">
-                    We couldn't find your setup information. Please ensure you've completed the previous steps in the onboarding flow.
+                <p className="text-gray-100">
+                  We couldn't find your setup ID. Please ensure you've completed the previous steps in the onboarding flow. 
+                  If the issue persists, try refreshing or contacting support.
                 </p>
             </div>
           )}
 
           {emailSetupId && (
-            <>
-              <div className="mb-8 p-6 bg-green-700 bg-opacity-60 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-yellow-400 mb-4">1. Your Tracking Pixel Script</h2>
-                <p className="text-gray-300 mb-4">
-                  Copy the script below. It's configured with your unique Setup ID and is ready to use.
-                </p>
-                <div className="bg-gray-900 p-4 rounded-md relative">
-                  <pre className="text-sm text-gray-200 overflow-x-auto custom-scrollbar-css">
-                    <code>{pixelScript}</code>
-                  </pre>
+            <div className="space-y-8">
+              <div className="bg-green-700 bg-opacity-80 p-6 rounded-lg">
+                <h2 className="text-2xl font-semibold text-yellow-300 mb-3">1. Your Pixel Script</h2>
+                <p className="text-gray-100">Copy the script below and paste it into the {'`<head>`'} section of every page on your website. If you're using a website builder (like Shopify, WordPress, Wix, etc.), you can usually add this to a "custom code" or "header scripts" section in your site's settings.</p>
+              </div>
+              <div className="bg-gray-800 bg-opacity-90 rounded-md p-4 relative">
+                <pre className="text-sm text-gray-200 overflow-x-auto whitespace-pre-wrap break-all">
+                  {pixelScript || "Generating your script..."}
+                </pre>
+                <Button 
+                  onClick={copyToClipboard} 
+                  variant="ghost" 
+                  size="sm" 
+                  className="absolute top-2 right-2 bg-yellow-400 text-green-900 hover:bg-yellow-500 px-3 py-1"
+                  disabled={!pixelScript}
+                >
+                  <Copy size={16} className="mr-2" /> Copy Script
+                </Button>
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-semibold text-yellow-300 mb-3">2. Test Your Installation</h2>
+                <div className="bg-green-700 bg-opacity-80 p-6 rounded-lg">
+                  <p className="text-gray-100 mb-4">
+                    Once you've added the script to your site, publish the changes. Then, visit any page on your site where the pixel is installed. Finally, click the button below to test if we've received the signal. It might take a minute or two for the first event to arrive.
+                  </p>
                   <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={copyToClipboard}
-                    className="absolute top-2 right-2 text-gray-400 hover:text-yellow-300"
-                    aria-label="Copy script"
+                    onClick={handleTestPixel} 
+                    disabled={isTestingPixel || !emailSetupId}
+                    className="w-full sm:w-auto bg-yellow-400 text-green-900 hover:bg-yellow-500 font-semibold py-3 px-6 rounded-lg text-lg"
                   >
-                    <Copy size={18} />
+                    {isTestingPixel ? (
+                      <><Loader2 size={20} className="animate-spin mr-2" /> Testing...</>
+                    ) : (
+                      "Test Pixel Installation"
+                    )}
                   </Button>
+                  {pixelTestResult && (
+                    <div className={`mt-4 p-4 rounded-md text-gray-50 ${pixelTestResult.success ? 'bg-green-600 bg-opacity-90' : 'bg-red-600 bg-opacity-90'}`}>
+                      <div className="flex items-center">
+                        {pixelTestResult.success ? <CheckCircle size={20} className="mr-2" /> : <AlertTriangle size={20} className="mr-2" />}
+                        <h3 className="text-lg font-semibold">{pixelTestResult.message}</h3>
+                      </div>
+                      {pixelTestResult.details && typeof pixelTestResult.details === 'object' && (
+                        <pre className="mt-2 text-xs bg-black bg-opacity-30 p-2 rounded overflow-x-auto">
+                          {JSON.stringify(pixelTestResult.details, null, 2)}
+                        </pre>
+                      )}
+                       {!pixelTestResult.success && pixelTestResult.message.includes("not yet received") && (
+                         <p className="text-sm mt-2">Make sure you've saved/published the script on your site and visited a page. It can sometimes take a few minutes for the first signal to arrive.</p>
+                       )}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              <div className="mb-8 p-6 bg-green-700 bg-opacity-60 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-yellow-400 mb-3">2. Installation Instructions</h2>
-                <ol className="list-decimal list-inside space-y-2 text-gray-300">
-                  <li>Paste the copied script just before the closing <code className="bg-gray-800 text-yellow-300 px-1 rounded">&lt;/body&gt;</code> tag on every page of your website. (Alternatively, in the <code className="bg-gray-800 text-yellow-300 px-1 rounded">&lt;head&gt;</code> tag).</li>
-                  <li>Ensure your website changes are published and live.</li>
-                  <li>Return here and click the "Test Pixel Installation" button below.</li>
-                </ol>
-              </div>
-
-              <div className="mb-10 p-6 bg-green-700 bg-opacity-60 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-yellow-400 mb-4">3. Verify Installation</h2>
-                <Button 
-                  onClick={handleTestPixel} 
-                  disabled={isTestingPixel || !emailSetupId}
-                  className="w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-green-900 font-semibold py-3 px-6 text-lg rounded-lg shadow-md"
-                >
-                  {isTestingPixel ? (
-                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Testing...</>
-                  ) : (
-                    'Test Pixel Installation'
-                  )}
-                </Button>
-                {pixelTestResult && (
-                  <div className={`mt-6 p-4 rounded-md text-sm ${pixelTestResult.success ? 'bg-green-500 bg-opacity-30 text-green-200' : 'bg-red-500 bg-opacity-30 text-red-200'}`}>
-                    <div className="flex items-start">
-                      {pixelTestResult.success ? <CheckCircle size={20} className="mr-3 mt-1 text-green-300 flex-shrink-0" /> : <AlertTriangle size={20} className="mr-3 mt-1 text-red-300 flex-shrink-0" />}
-                      <div>
-                        <p className="font-semibold mb-1">{pixelTestResult.success ? 'Pixel Detected!' : 'Pixel Not Detected'}</p>
-                        <p>{pixelTestResult.message}</p>
-                        {pixelTestResult.details && (
-                            <details className="mt-2 text-xs">
-                                <summary className="cursor-pointer hover:underline">Toggle details</summary>
-                                <pre className="mt-1 p-2 bg-black bg-opacity-20 rounded custom-scrollbar-css overflow-x-auto">
-                                    <code>{JSON.stringify(pixelTestResult.details, null, 2)}</code>
-                                </pre>
-                            </details>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
+            </div>
           )}
-          
-          <div className="mb-8 p-6 bg-green-700 bg-opacity-60 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-semibold text-yellow-400 mb-4">Advanced: Tracking Custom Events</h2>
-                <p className="text-gray-300 mb-2">
-                    Once the pixel is installed, you can track custom events using <code className="bg-gray-800 text-yellow-300 px-1 rounded">window.emailore.track('yourEventName', &#123; custom: 'data' &#125;);</code> in your website's JavaScript.
-                </p>
-                <p className="text-gray-300 italic text-sm">
-                    (Detailed documentation and UI for defining event-based automations will be available in a future update.)
-                </p>
-          </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full mt-12 pb-8">
+          <div className="mt-12 flex flex-col sm:flex-row justify-between items-center gap-4 pb-8">
             <Button
-              type="button"
               variant="outline"
               onClick={() => handleNavigate('previous')}
               className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md"
-              disabled={isTestingPixel}
+              disabled={isLoadingPageData || isTestingPixel}
             >
               Previous Step
             </Button>
             <Button
-              type="button"
               onClick={() => handleNavigate('next')}
               className="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md"
-              disabled={isTestingPixel}
+              disabled={isLoadingPageData || isTestingPixel}
             >
               Continue to Plan Selection
             </Button>
           </div>
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 };
 
