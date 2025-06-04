@@ -4,6 +4,7 @@ import { ChatInterface } from '@/components/ChatInterface';
 import { EditorProvider, useEditor } from '@/features/contexts/EditorContext';
 import { EmailElement } from '@/shared/types';
 import { ManualEditPanel } from '@/components/ManualEditPanel';
+import { useLoading } from '@/contexts/LoadingContext'; // Import global loading context
 
 // Import our extracted components
 import EditorHeader from '@/components/editor/EditorHeader';
@@ -56,6 +57,9 @@ const EditorContent = () => {
     selectedManualEditElementId
   } = useEditor();
 
+  const { hideLoading } = useLoading(); // Get hideLoading from global context
+  const hideLoadingCalledRef = useRef(false); // Ref to prevent multiple calls
+
   // Reference to file input for image uploads from placeholders
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -84,6 +88,15 @@ const EditorContent = () => {
       fileInputRef.current.click();
     }
   }, [imageUploadRequested]);
+
+  // Effect to hide global loading screen once project loading is done
+  useEffect(() => {
+    if (!isLoadingProject && !hideLoadingCalledRef.current) {
+      console.log('[EditorContent] isLoadingProject is false, calling hideLoading()');
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingProject, hideLoading]);
 
   // Find the selected element to edit
   const elementToEdit: EmailElement | undefined = selectedManualEditElementId && projectData?.semantic_email_v2 ? 

@@ -499,7 +499,6 @@
 │   │     - Navigation: "Previous" to `/dns-confirmation`, "Next" to `/subscription-plan`.
 │   │     - Integrates with global loading screen.
 │   │   Usage: Step in the multi-step onboarding flow. Provides users with their unique, persistent tracking pixel.
-│   │   last_modified_by_agent: true
 │   │
 │   └── 📄 SubscriptionPlanPage.tsx
 │       Purpose: Wrapper page in the main `/pages` directory for the subscription plan selection component.
