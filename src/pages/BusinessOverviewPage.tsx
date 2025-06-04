@@ -1,5 +1,5 @@
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+// import Footer from "@/components/Footer"; // Removed Footer
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
@@ -97,49 +97,107 @@ const BusinessOverviewPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-green-700 text-white">
-      <Navbar />
-      
-      <main className="flex-grow flex items-center justify-center p-8">
-        <div className="flex flex-col md:flex-row items-stretch gap-8 w-full max-w-6xl">
-          <div className="md:w-1/2 bg-black bg-opacity-50 p-6 rounded-lg flex flex-col space-y-4">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-4 text-center">Describe Your Business</h2>
-            {isLoading ? (
-              <div className="flex-grow flex items-center justify-center">
-                <p className="text-lg">Loading description...</p>
+    <div className="page-container text-white"> {/* Added page-container */}
+      <div className="images-container"> {/* Added images-container */}
+        <img 
+          src="/images/background.png" 
+          alt="Jungle background"
+          className="background-image-element"
+        />
+      </div>
+
+      <div className="content-wrapper min-h-screen flex flex-col"> {/* Added content-wrapper */}
+        <Navbar />
+        
+        <main className="flex-grow flex items-center justify-center p-8">
+          <div className="flex flex-col md:flex-row items-stretch gap-8 w-full max-w-6xl">
+            <div className="md:w-1/2 bg-black bg-opacity-50 p-6 rounded-lg flex flex-col space-y-4">
+              <h2 className="text-2xl font-bold text-yellow-400 mb-4 text-center">Describe Your Business</h2>
+              {isLoading ? (
+                <div className="flex-grow flex items-center justify-center">
+                  <p className="text-lg">Loading description...</p>
+                </div>
+              ) : (
+                <textarea 
+                  id="businessDescription"
+                  placeholder="Explain your business. ex: An ecommerce store selling candles and soaps"
+                  className="flex-grow p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  rows={8}
+                  value={businessDescription}
+                  onChange={(e) => setBusinessDescription(e.target.value)}
+                />
+              )}
+              <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:justify-end">
+                <button 
+                  type="button"
+                  onClick={handleConfirmAndContinue}
+                  className="w-full md:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                >
+                  Confirm Business Overview & Continue
+                </button>
               </div>
-            ) : (
-              <textarea 
-                id="businessDescription"
-                placeholder="Explain your business. ex: An ecommerce store selling candles and soaps"
-                className="flex-grow p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                rows={8}
-                value={businessDescription}
-                onChange={(e) => setBusinessDescription(e.target.value)}
+            </div>
+
+            <div className="md:w-1/2 flex justify-center items-center">
+              <img 
+                src="/images/businessmonkey.png" 
+                alt="Business monkey with briefcase"
+                className="max-w-md h-auto object-contain business-overview-monkey" /* Apply bounce and size styling, changed max-w-sm to max-w-md */
               />
-            )}
-            <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:justify-end">
-              <button 
-                type="button"
-                onClick={handleConfirmAndContinue}
-                className="w-full md:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-              >
-                Confirm Business Overview & Continue
-              </button>
             </div>
           </div>
+        </main>
+        
+        {/* <Footer /> Removed Footer */}
+      </div>
+      <style jsx global>{`
+        .page-container {
+          position: relative;
+          min-height: 100vh;
+          overflow: hidden; /* Prevents scrollbars if background is larger */
+        }
+        .images-container {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 0; /* Background behind content */
+        }
+        .background-image-element {
+          width: 100%;
+          height: 100%;
+          object-fit: cover; /* Cover the entire container */
+          display: block;
+        }
+        .content-wrapper {
+          position: relative; /* To sit on top of the images-container */
+          z-index: 1;
+          background-color: transparent; /* Ensure it doesn't hide the background */
+        }
+        /* Adjust main content padding if needed due to navbar or other elements */
+        .content-wrapper > main {
+           padding-top: 4rem; /* Example: if Navbar is fixed height */
+        }
 
-          <div className="md:w-1/2 flex justify-center items-center">
-            <img 
-              src="/public/images/homepage_monkey_swinging.png" 
-              alt="Monkey in the jungle" 
-              className="max-w-full h-auto object-cover"
-            />
-          </div>
-        </div>
-      </main>
-      
-      <Footer />
+        .business-overview-monkey {
+          max-width: 90%; /* Increased from 80% */
+          max-height: 500px; /* Increased from 450px */
+          animation: subtleBounce 3s ease-in-out infinite;
+          transform-origin: bottom center;
+          margin-top: 1rem; /* Added for downward shift */
+          margin-left: 1rem; /* Added for rightward shift */
+        }
+
+        @keyframes subtleBounce {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px); 
+          }
+        }
+      `}</style>
     </div>
   );
 };

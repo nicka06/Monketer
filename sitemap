@@ -330,18 +330,14 @@
 │   │   Usage: Path `/signup`.
 │   │
 │   ├── 📄 BusinessOverviewPage.tsx
-│   │   Purpose: Allows users to confirm or edit their business description. This page is accessed if a user navigates "Previous" from the Optional Sign Up page, or directly by an authenticated user if it's their earliest incomplete step.
+│   │   Purpose: Allows users to input or confirm their business description as the first step in the form flow.
 │   │   Details:
-│   │   - Jungle theme, similar layout to the original Index page (textarea and monkey image).
-│   │   - Loads `pendingBusinessDescription` from `localStorage` into the textarea on mount.
-│   │   - **No "Previous" button.** Users can only confirm/edit and continue.
-│   │   - **"Confirm Business Overview & Continue" button (`handleConfirmAndContinue`):**
-│   │     - Saves `businessDescription` to `localStorage`.
-│   │     - **Authenticated User:** Navigates directly to `/goals-form` (skipping `/optional-signup`).
-│   │     - **Guest User:** Navigates to `/optional-signup`.
-│   │   - Uses `useAuth` to determine if a user is authenticated.
-│   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   Usage: Step in the multi-step onboarding flow. 
+│   │   - Fetches existing business description from Supabase or localStorage.
+│   │   - Provides a textarea for users to describe their business.
+│   │   - "Confirm Business Overview & Continue" button saves description to localStorage and navigates to the next step (either `/optional-signup` for guests or `/goals-form` for authenticated users).
+│   │   - Includes a decorative bouncing `businessmonkey.png` image.
+│   │   - Background is `background.png`. Footer has been removed. Layout uses image background with content overlay.
+│   │   Usage: First page in the primary user onboarding flow after the homepage.
 │   │
 │   ├── 📄 OptionalSignUpPage.tsx
 │   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
@@ -355,19 +351,10 @@
 │   ├── 📄 GoalsFormPage.tsx
 │   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
 │   │   Details:
-│   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
-│   │   - The business description display card has been removed.
-│   │   - Textarea for users to input their goals as a paragraph (placeholder updated to reflect this, label removed).
-│   │   - **Load Existing Goals (`useEffect`):** Loads `goals_form_raw_text` from `email_setups` (if signed in) or `pendingUserGoalsRawText` from `localStorage` (if guest). Also loads `business_description` for context (though not displayed anymore, it's fetched).
-│   │   - **Submit Goals Logic (`handleSubmitGoals`):**
-│   │     - Processes goals into an array.
-│   │     - **Signed-in user:** Updates `email_setups` table: `goals`, `goals_form_raw_text`, `form_complete: false`.
-│   │     - **Guest user:** Saves to `localStorage` (`pendingUserGoals`, `pendingUserGoalsRawText`).
-│   │     - Handles errors with toasts.
-│   │   - **Navigation**: Includes "Previous" and "Save Goals & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
-│   │     - When "Previous" is clicked by a guest user, current goals in the textarea are saved to `localStorage` (`pendingUserGoalsRawText`, `pendingUserGoals`). If textarea is empty, these items are removed from `localStorage`. Navigates to `/optional-signup`.
-│   │     - When "Previous" is clicked by an **authenticated user**: If the normal previous path (from `FORM_FLOW_ORDER`) would be `/optional-signup`, it navigates to `/business-overview` instead.
-│   │     - "Save Goals & Continue" button triggers `handleSubmitGoals` which saves data and then navigates Next.
+│   │   - Background is `/images/background3.png`. Layout uses image background with content overlay.
+│   │   - Textarea for users to input their goals as a paragraph.
+│   │   - Loads/Saves goals to `email_setups` (authenticated) or `localStorage` (guest).
+│   │   - Handles navigation and form submission.
 │   │   Usage: Part of the multi-step onboarding flow.
 │   │
 │   ├── 📄 BusinessClarificationPage.tsx
