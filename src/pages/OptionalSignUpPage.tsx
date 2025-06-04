@@ -184,96 +184,252 @@ const OptionalSignUpPage: React.FC = () => {
   };
 
   return (
-    <>
-      <Navbar />
-      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white pt-16"> {/* Added pt-16 for spacing below navbar */}
-        {/* Inner div now takes full width and has adjusted padding for full-screen feel */}
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-10 items-center w-full">
-            {/* Left Column: Monkey Image */}
-            <div className="md:w-1/2 flex justify-center items-center">
-              <img
-                src="/public/images/homepage_monkey_swinging.png"
-                alt="Monkey suggesting to sign up"
-                className="max-w-xs md:max-w-sm h-auto object-contain"
-              />
-            </div>
+    <div className="page-container text-white"> 
+      <div className="images-container"> 
+        <img 
+          src="/images/Background pt 2.png" 
+          alt="Jungle background with different theme"
+          className="background-image-element"
+        />
+        <div className="auth-monkey-unit"> {/* Unit wrapper for monkey and bubble */}
+          <img 
+            src="/images/monkeylock.png" 
+            alt="Monkey with a lock"
+            className="auth-monkey-image" /* Image specific styles here */
+          />
+          <div className="auth-monkey-speech-bubble"> {/* Speech bubble */}
+            <p>Sign up to save your progress!</p>
+          </div>
+        </div>
+      </div>
 
-            {/* Right Column: Sign Up Form */}
-            <div className="md:w-1/2 flex flex-col space-y-6 w-full">
-              <h1 className="text-3xl md:text-4xl font-bold text-yellow-400 text-center">Save Your Progress?</h1>
-              <p className="text-center text-gray-200">
-                Create an account to save your business ideas and pick up where you left off anytime.
-                Or, continue as a guest and we'll remember you for this session.
-              </p>
+      <div className="content-wrapper min-h-screen flex flex-col"> 
+        <Navbar />
+        <main className="flex-grow flex flex-col items-center justify-center p-4 md:p-8 pt-16 md:pt-20"> 
+          <div className="w-full max-w-sm md:ml-[48%] md:max-w-md lg:max-w-lg bg-black bg-opacity-70 p-6 md:p-8 rounded-xl shadow-2xl mb-6">
+            <h1 className="text-3xl md:text-4xl font-bold text-yellow-400 text-center mb-4">Save Your Progress?</h1>
+            <p className="text-center text-gray-200 mb-6">
+              Create an account to save your business ideas and pick up where you left off anytime.
+              Or, continue as a guest and we'll remember you for this session.
+            </p>
+            <form onSubmit={handleSignUpWrapper} className="space-y-4 mb-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3 rounded-md bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  placeholder="Create a password (min. 6 characters)"
+                />
+              </div>
+              <Button 
+                type="submit"
+                className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 text-base shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creating Account...' : 'Sign Up & Save Progress'}
+              </Button>
+            </form>
+          </div>
 
+          <div className="w-full max-w-sm md:ml-[48%] md:max-w-md lg:max-w-lg flex flex-row space-x-3">
               <Button 
                   type="button"
-                  onClick={handlePrevious}
+                  onClick={handlePrevious} 
                   variant="outline"
-                  className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base mb-4"
+                  className="w-1/2 text-gray-400 border-gray-500 hover:bg-gray-700 hover:text-white py-3 text-base shadow-md"
                   disabled={isLoading}
               >
                   Previous
               </Button>
-
-              <form onSubmit={handleSignUpWrapper} className="space-y-4">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                    placeholder="you@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 text-base"
+              <Button 
+                  type="button"
+                  onClick={handleContinueAsGuestWrapper}
+                  variant="outline"
+                  className="w-1/2 text-yellow-500 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base shadow-md"
                   disabled={isLoading}
-                >
-                  {isLoading ? 'Creating Account...' : 'Sign Up & Save Progress'}
-                </Button>
-              </form>
-
-              <Button
-                variant="outline"
-                onClick={handleContinueAsGuestWrapper}
-                className="w-full text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 text-base"
-                disabled={isLoading}
               >
-                Continue as Guest
+                  Continue as Guest
               </Button>
-            </div>
           </div>
-        </div>
+        </main>
       </div>
-    </>
+
+      <style jsx global>{`
+        .page-container {
+          position: relative;
+          min-height: 100vh;
+          overflow: hidden;
+        }
+        .images-container {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 0;
+        }
+        .background-image-element {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .auth-monkey-unit {
+          position: absolute;
+          left: 6%;  
+          bottom: 5%; 
+          width: 44%; 
+          max-width: 600px; 
+          height: auto;
+          animation: subtleBounce 3s ease-in-out infinite;
+          transform-origin: bottom center;
+          z-index: 1; 
+        }
+
+        .auth-monkey-image {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+
+        .auth-monkey-speech-bubble {
+          position: absolute;
+          width: auto;
+          max-width: 180px;
+          bottom: 88%;
+          left: 0%;
+          background-color: white;
+          color: #333;
+          padding: 10px 15px; 
+          border-radius: 12px; 
+          box-shadow: 2px 2px 8px rgba(0,0,0,0.25); 
+          text-align: center;
+          font-size: 0.85rem; 
+        }
+
+        .auth-monkey-speech-bubble::after {
+          content: "";
+          position: absolute;
+          width: 14px;  
+          height: 14px;
+          background-color: white;
+          transform: rotate(45deg); 
+          bottom: -6px;  
+          right: 25%;    
+          left: auto;    
+          z-index: -1; 
+        }
+        
+        .content-wrapper {
+          position: relative; 
+          z-index: 10;
+          background-color: transparent; 
+        }
+
+        /* Tablet adjustments */
+        @media (max-width: 1024px) { 
+          .auth-monkey-unit {
+            width: 35%; 
+            left: 3%; 
+            bottom: 8%; 
+            max-width: 450px;
+          }
+          .auth-monkey-speech-bubble {
+            max-width: 160px;
+            bottom: 86%;
+            left: 5%;
+            font-size: 0.8rem;
+            padding: 8px 12px;
+          }
+          .auth-monkey-speech-bubble::after {
+             right: 20%;
+             left: auto;
+             width: 12px;
+             height: 12px;
+             bottom: -5px;
+          }
+          .w-full.max-w-sm.md\:ml-\[48\%\] { 
+            margin-left: 40%; 
+            max-width: 55%;   
+          }
+           .w-full.max-w-sm.md\:ml-\[48\%\] .flex.flex-row.space-x-3 { 
+            margin-left: 0; 
+            max-width: 100%; 
+          }
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 767px) { 
+          .auth-monkey-unit {
+            width: 50%; 
+            left: 50%;
+            transform: translateX(-50%); 
+            bottom: 3%; 
+            max-width: 280px; 
+          }
+          .auth-monkey-speech-bubble {
+            max-width: 130px;
+            bottom: 83%;
+            left: 50%;
+            transform: translateX(-90%);
+            font-size: 0.7rem;
+            padding: 6px 8px;
+          }
+           .auth-monkey-speech-bubble::after {
+             right: 15%;
+             left: auto;
+             width: 10px;
+             height: 10px;
+             bottom: -4px;
+          }
+          .w-full.max-w-sm.md\:ml-\[48\%\] { 
+            margin-left: auto; 
+            margin-right: auto;
+            max-width: 90%; 
+          }
+           .w-full.max-w-sm.md\:ml-\[48\%\] .flex.flex-row.space-x-3 { 
+            margin-left: auto;
+            margin-right: auto;
+            max-width: 90%;
+          }
+        }
+
+        @keyframes subtleBounce {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px); 
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 
