@@ -32,61 +32,97 @@ serve(async (req) => {
     
     const supabaseAdminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Note: User authentication for this specific test function might not be strictly necessary
-    // if emailSetupId is considered a sufficiently unique token for this context.
-    // However, for other functions interacting with user data, auth is crucial.
-    // For now, proceeding without user auth check for simplicity of this test endpoint.
-
     const requestData = await req.json();
-    const emailSetupId = requestData?.emailSetupId;
+    const emailSetupRecordId = requestData?.emailSetupId; // This is the primary ID of the email_setups table row
 
-    if (!emailSetupId) {
-      console.error("test-pixel-status: emailSetupId is required in request body.");
-      return new Response(JSON.stringify({ error: "emailSetupId is required." }), {
+    if (!emailSetupRecordId) {
+      console.error("test-pixel-status: emailSetupId (record ID) is required in request body.");
+      return new Response(JSON.stringify({ error: "emailSetupId (record ID) is required." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
-    console.log("test-pixel-status: Testing for emailSetupId:", emailSetupId);
+    console.log("test-pixel-status: Testing for email_setups record ID:", emailSetupRecordId);
 
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // 1. Fetch the tracking_pixel_id from the email_setups table
+    const { data: setupData, error: setupFetchError } = await supabaseAdminClient
+      .from("email_setups")
+      .select("tracking_pixel_id, id") // Also select id for logging clarity
+      .eq("id", emailSetupRecordId)
+      .single();
 
-    const { data, error } = await supabaseAdminClient
-      .from("tracked_events")
-      .select("page_url, client_timestamp, received_at")
-      .eq("email_setup_id", emailSetupId)
-      .eq("event_name", "emailore_pixel_loaded")
-      .gte("received_at", tenMinutesAgo)
-      .order("received_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error("test-pixel-status: Error querying tracked_events:", error.message);
-      return new Response(JSON.stringify({ error: "Failed to query tracking data.", details: error.message }), {
+    if (setupFetchError) {
+      console.error("test-pixel-status: Error fetching email_setup data for record ID:", emailSetupRecordId, "Error:", setupFetchError.message);
+      return new Response(JSON.stringify({ error: "Failed to fetch setup data.", details: setupFetchError.message }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });
     }
 
-    if (data) {
-      console.log("test-pixel-status: Pixel detected for", emailSetupId, "Data:", data);
+    if (!setupData || !setupData.tracking_pixel_id) {
+      console.error("test-pixel-status: tracking_pixel_id not found or is null in email_setups for record ID:", emailSetupRecordId, "Fetched setupData:", JSON.stringify(setupData));
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "Tracking pixel ID not configured for this setup. Please ensure the pixel setup process on the Website Tracking page has completed."
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, // Still 200, but success: false
+      });
+    }
+
+    const actualTrackingPixelId = setupData.tracking_pixel_id;
+    console.log("test-pixel-status: Successfully fetched from email_setups. Record ID:", emailSetupRecordId, "Retrieved tracking_pixel_id:", actualTrackingPixelId);
+
+    // 2. Use the actualTrackingPixelId to query tracked_events
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const eventName = "emailore_pixel_loaded";
+
+    console.log(
+      "test-pixel-status: Querying tracked_events with params:",
+      JSON.stringify({
+        email_setup_id: actualTrackingPixelId,
+        event_name: eventName,
+        received_at_gte: tenMinutesAgo,
+      })
+    );
+
+    const { data: eventData, error: eventFetchError } = await supabaseAdminClient
+      .from("tracked_events")
+      .select("page_url, client_timestamp, received_at")
+      // IMPORTANT: Ensure the column in tracked_events that stores the pixel's ID is actually named 'email_setup_id'
+      // If it was intended to store the tracking_pixel_id, this query is correct.
+      .eq("email_setup_id", actualTrackingPixelId) 
+      .eq("event_name", eventName)
+      .gte("received_at", tenMinutesAgo)
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (eventFetchError) {
+      console.error("test-pixel-status: Error querying tracked_events:", eventFetchError.message);
+      return new Response(JSON.stringify({ error: "Failed to query tracking data.", details: eventFetchError.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+
+    if (eventData) {
+      console.log("test-pixel-status: Pixel detected for actualTrackingPixelId:", actualTrackingPixelId, "Data:", eventData);
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Pixel signal received successfully! Last seen on ${data.page_url || 'your site'} around ${new Date(data.received_at).toLocaleString()}.`,
-          details: data,
+          message: `Pixel signal received successfully! Last seen on ${eventData.page_url || 'your site'} around ${new Date(eventData.received_at).toLocaleString()}.`,
+          details: eventData,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     } else {
-      console.log("test-pixel-status: Pixel not detected for", emailSetupId);
+      console.log("test-pixel-status: Pixel not detected for actualTrackingPixelId:", actualTrackingPixelId);
       return new Response(
         JSON.stringify({
           success: false,
-          message: "Pixel not detected. We haven't received the initial signal from your website in the last 10 minutes. Please ensure the script is correctly installed, your website changes are live, and then try again. If you just installed it, wait a moment and retry.",
+          message: "Pixel not detected. We haven't received the initial signal from your website (using the correct tracking ID) in the last 10 minutes. Please ensure the script is correctly installed with the latest ID, your website changes are live, and then try again. If you just installed it, wait a moment and retry.",
         }),
-        // Consistent 200 OK with success:false, or 404 if preferred for "not found"
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 } 
       );
     }

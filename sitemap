@@ -44,35 +44,26 @@
 │   │   │   │   Usage: Imported by other functions to reduce code duplication.
 │   │   │   │   Files:
 │   │   │   │     *   **`cors.ts`**
-│   │   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers for Deno functions.
-│   │   │   │         *   Details: Exports a `corsHeaders` object: `{"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS"}`. The wildcard origin is suitable for development but should be more restrictive in production.
-│   │   │   │         *   Usage: Imported directly by Deno functions (e.g., `save-email-setup-form`, `ingest-tracking-event`) for simple OPTIONS request handling and adding permissive CORS headers.
+│   │   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers.
+│   │   │   │         *   Details: Exports a `corsHeaders` object with `Access-Control-Allow-Origin: '*'`. Primarily intended for public-facing ingestion endpoints like `ingest-tracking-event` where the client-side request is made with `credentials: 'omit'`.
+│   │   │   │         *   Usage: Imported by Deno functions that can accept requests from any origin without credentials.
 │   │   │   │     *   **`supabaseAdmin.ts`**
 │   │   │   │         *   Purpose: Initializes and exports a Supabase client instance configured with the `SUPABASE_SERVICE_ROLE_KEY`.
 │   │   │   │         *   Details: Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from environment variables. Throws an error if they are not set. Configures the client with `autoRefreshToken: false` and `persistSession: false` suitable for server-side admin operations.
 │   │   │   │         *   Usage: Imported by backend functions (`ingest-tracking-event`, `test-pixel-status`, etc.) that need to perform privileged operations against the Supabase database.
 │   │   │   │   ├── 📁 lib/
 │   │   │   │   │   ├── 📄 constants.ts
-│   │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions, ensuring secure API access.
+│   │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions that require specific origin validation, often when credentials are included in requests.
 │   │   │   │   │   │   Details:
-│   │   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS` for production (monketer.com, www.monketer.com) and common development ports (localhost:3000, localhost:5173, localhost:8080).
-│   │   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers. It returns the `requestOrigin` if it's in `ALLOWED_ORIGINS`, otherwise defaults to the primary production origin. This is the recommended method.
-│   │   │   │   │   │   - Specifies allowed HTTP headers (authorization, x-client-info, apikey, content-type) and methods (GET, POST, PUT, DELETE, OPTIONS).
-│   │   │   │   │   │   - Sets `Access-Control-Max-Age` to `86400` (24 hours) for preflight request caching.
-│   │   │   │   │   │   - Includes legacy `corsHeaders` with a wildcard `Access-Control-Allow-Origin: '*'`, which is deprecated but maintained for backward compatibility.
-│   │   │   │   │   │   Usage:
-│   │   │   │   │   │   - `corsHeadersFactory` is imported and used by multiple Supabase Edge Functions (`clarify-user-intent`, `generate-email-changes`, `manage-pending-changes`, `send-preview-email`) to set response headers for main requests, error responses, and OPTIONS preflight requests.
-│   │   │   │   │   │   - The legacy `corsHeaders` is directly used for OPTIONS preflight request handling in `generate-email-changes/index.ts`.
+│   │   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS`.
+│   │   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers, including `Access-Control-Allow-Credentials: 'true'` if the origin is whitelisted. Used for functions that handle credentialed requests.
+│   │   │   │   │   │   - Not used by `ingest-tracking-event`, which uses simpler wildcard CORS due to `credentials: 'omit'` in the pixel script.
+│   │   │   │   │   │   Usage: Imported by Supabase Edge Functions requiring nuanced CORS handling for specific origins, especially with credentials.
 │   │   │   │   │   │
-│   │   │   │   │   ├── 📄 uuid-utils.ts
-│   │   │   │   │   │   Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-│   │   │   │   │   │   Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-│   │   │   │   │   │   Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-│   │   │   │   │   │
-│   │   │   │   │   └── 📄 uuid.ts
-│   │   │   │   │       Purpose: Shared, canonical implementation for generating UUID v4 strings.
-│   │   │   │   │       Details: Uses `v4 as uuidv4` imported from a URL (`https://esm.sh/uuid`) for Deno/browser compatibility. A `@ts-ignore` comment is used to suppress a local TypeScript linter error related to resolving types from the URL, as Deno handles this at runtime. Exports `generateId()`.
-│   │   │   │   │       Usage: Standard way to generate unique IDs across the application (elements, sections, projects, etc.), replacing previous implementations that might have used direct npm package imports.
+│   │   │   │   │   └── 📄 uuid-utils.ts
+│   │   │   │   │       Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
+│   │   │   │   │       Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
+│   │   │   │   │       Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
 │   │   │   │   │
 │   │   │   │   └── 📁 services/
 │   │   │   │       ├── 📄 differ.ts
@@ -148,6 +139,21 @@
 │   │   │       Purpose: Defines types and interfaces for save-email-setup-form.
 │   │   │       Details: Contains `EmailSetupFormData` and `ScenarioSenderConfig`.
 │   │   │       Usage: Used by `save-email-setup-form/index.ts`.
+│   │   │
+│   │   ├── 📁 get-or-create-tracking-id/
+│   │   │   └── 📄 index.ts
+│   │   │       Purpose: Supabase Edge Function to retrieve an existing `tracking_pixel_id` for an `email_setup` record, or generate, save, and return a new UUID if one doesn't exist.
+│   │   │       Details:
+│   │   │         - Accepts `emailSetupId` (the primary ID of the `email_setups` row) in the request body.
+│   │   │         - Fetches the `email_setups` record.
+│   │   │         - If `tracking_pixel_id` field is already populated, it returns that ID.
+│   │   │         - If `tracking_pixel_id` is NULL, it generates a new UUID using `crypto.randomUUID()`.
+│   │   │         - Updates the corresponding `email_setups` row, setting the `tracking_pixel_id` to the new UUID.
+│   │   │         - Returns the (either existing or newly created) `trackingPixelId`.
+│   │   │         - Uses the shared Supabase admin client and CORS headers. Includes `@ts-ignore` for Deno-specific imports to satisfy local linters.
+│   │   │       Input: `{ "emailSetupId": "uuid" }`
+│   │   │       Output: `{ "trackingPixelId": "uuid" }` or an error object.
+│   │   │       Usage: Called by the frontend (e.g., `WebsiteTrackingPage.tsx`) to ensure a persistent and unique ID is available for generating the website tracking pixel script.
 │   │   │
 │   │   ├── 📁 initiate-email-setup/
 │   │   │   └── 📄 index.ts
@@ -416,27 +422,34 @@
 │   │   Usage: Step in the multi-step onboarding flow, after `GoalsFormPage`.
 │   │
 │   ├── 📄 WebsiteStatusPage.tsx
-│   │   Purpose: Collects website status information from the user (has website, provider, domain name) as part of the multi-step onboarding flow.
+│   │   Purpose: Guides the user through indicating if they have a website, selecting their provider, and entering their domain name.
 │   │   Details:
-│   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
-│   │   - Internal Sub-steps for questions. Includes "Back" buttons for internal navigation between sub-steps.
-│   │   - The main "Previous Page" button (navigating to the previous route in `FORM_FLOW_ORDER`) is now enabled even on the first sub-step, allowing users to go back to `/select-emails` immediately.
-│   │   - Data saving for authenticated users (to `email_setups`) and guest users (to `localStorage`).
-│   │   Usage: Step in the multi-step onboarding flow, after `SelectEmailsPage`.
+│   │     - Multi-sub-step form:
+│   │       1. "Do you have a website?": Yes/No buttons. "Previous Page" (to previous route) button is visible and centered.
+│   │       2. "Who hosts your website?": Provider buttons. **Container uses `flex flex-wrap justify-center` and buttons have `w-40` to ensure centered rows, especially the last row if not full.** Text within these buttons wraps. Internal "Back" button (to sub-step 1) is centered and styled with an outline. Main "Previous Page" button is hidden.
+│   │       3. "What's your domain name?": Input field. Internal "Back" button (to sub-step 2) available. Main "Previous Page" button is hidden.
+│   │     - Main content card has a darker background (`bg-green-800 bg-opacity-75`).
+│   │     - Fetches and saves `website_provider` and `domain` to `email_setups` table or localStorage.
+│   │     - Includes a modal to inform users that a website is required if they select "No, not yet" in sub-step 1.
+│   │     - Uses `background5.png` as a full-screen background image.
+│   │     - Integrates with global loading screen: waits for `isLoadingData` (from `email_setups` or localStorage) and for `background5.png` to load/error before calling `hideLoading()`.
+│   │   Usage: Part of the main onboarding form flow (`FORM_FLOW_ORDER`).
 │   │
 │   ├── 📄 InfoClarificationPage.tsx
 │   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
 │   │   Details:
-│   │   - Jungle theme, full-screen layout with scrollable content area. Uses the shared `@/components/Navbar`.
-│   │   - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name.
-│   │   - Each section is a `Card` component with an "Edit" button that navigates to the respective form page.
-│   │   - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
-│   │   - **Confirmation**: A checkbox ("Yes, all information is accurate...") must be checked to enable the "Next" button.
-│   │   - **Navigation (`handleNavigate`):**
-│   │     - "Previous" button navigates to `/website-status`.
-│   │     - "Confirm & Proceed" (Next) button navigates to:
-│   │       - `/auth-gate` if the user is a guest.
-│   │       - `/dns-confirmation` if the user is authenticated.
+│   │     - **NEW: Uses `background6.png` as a full-screen background image.**
+│   │     - Main content is in a centered container (`max-w-3xl`) with `z-10` to appear above the background.
+│   │     - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name in individual `Card` components.
+│   │     - Each section card has an "Edit" button linking to the respective form page.
+│   │     - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
+│   │     - **Confirmation**: A checkbox ("Yes, all information is accurate...") must be checked to enable the "Next" button.
+│   │     - **Navigation (`handleNavigate`):**
+│   │       - "Previous" button navigates to `/website-status`.
+│   │       - "Confirm & Proceed" (Next) button:
+│   │         - If guest, navigates to `/auth-gate`.
+│   │         - If authenticated, calls `initiate-email-setup` Supabase function, then navigates to `/dns-confirmation` (or the next step in `FORM_FLOW_ORDER`, skipping `/auth-gate`).
+│   │     - **Integrates with global loading screen: waits for `isLoadingData` (from `email_setups`/localStorage) and for `background6.png` to load/error before calling `hideLoading()**.
 │   │   Usage: Step in the multi-step onboarding flow, after `WebsiteStatusPage`.
 │   │
 │   ├── 📄 AuthGatePage.tsx
@@ -473,21 +486,20 @@
 │   │   Purpose: Allows users to get their website tracking pixel script and verify its installation.
 │   │   Details:
 │   │     - Uses the shared `@/components/Navbar`. Jungle-themed styling.
-│   │     - Fetches the authenticated user's `email_setup_id` from the `email_setups` table.
-│   │     - Dynamically generates a JavaScript pixel script that includes:
-│   │       - The user's unique `email_setup_id`.
-│   │       - The URL for the `ingest-tracking-event` Supabase function.
-│   │       - Logic to automatically send an `emailore_pixel_loaded` event when the script loads on the user's website.
-│   │       - Exposes a `window.emailore.track(eventName, eventData)` function for custom event tracking.
-│   │     - Displays the generated pixel script in a `<pre>` tag with a "Copy to Clipboard" button.
-│   │     - Provides clear instructions on how and where to install the pixel script on their website (e.g., in the `<head>` tag).
-│   │     - Features a "Test Pixel Installation" button.
-│   │       - When clicked, this button calls the `test-pixel-status` Supabase Edge Function, passing the `email_setup_id`.
-│   │       - The `test-pixel-status` function checks the `tracked_events` table for a recent (`<10 minutes`) `emailore_pixel_loaded` event associated with the `email_setup_id`.
-│   │     - Displays feedback to the user based on the test result (loading state, success message with checkmark, or failure message with warning triangle and details).
-│   │     - Includes "Previous" navigation to `/dns-confirmation`.
-│   │     - The "Next" button reads "Continue to Plan Selection" and navigates to `/subscription-plan` (using `FORM_FLOW_ORDER`).
-│   │   Usage: Step in the multi-step onboarding flow, after `/dns-confirmation` and before `/subscription-plan`. Provides the means for users to implement website activity tracking for Emailore.
+│   │     - Fetches a persistent `tracking_pixel_id` by calling the `get-or-create-tracking-id` Supabase function, using the user's `email_setup_id`.
+│   │     - Displays a static JavaScript pixel script. The script is hardcoded on the page.
+│   │       - The `EMAILORE_PIXEL_ID` in the script is dynamically replaced with the fetched `persistentTrackingId`.
+│   │       - The script includes the URL for the `ingest-tracking-event` Supabase function.
+│   │       - It automatically sends an `emailore_pixel_loaded` event when the script loads.
+│   │       - Exposes `window.emailore.track(eventName, eventData)` for custom events.
+│   │       - **Crucially, `fetch` calls within the pixel script now use `credentials: 'omit'` to allow wildcard CORS on the ingestion endpoint.**
+│   │     - Displays the pixel script with a "Copy to Clipboard" button and installation instructions.
+│   │     - Features a "Test Pixel Installation" button that calls `test-pixel-status` (passing the `email_setup_id` of the `email_setups` record, which `test-pixel-status` then uses to find the `tracking_pixel_id`).
+│   │     - Displays feedback based on the test result.
+│   │     - Navigation: "Previous" to `/dns-confirmation`, "Next" to `/subscription-plan`.
+│   │     - Integrates with global loading screen.
+│   │   Usage: Step in the multi-step onboarding flow. Provides users with their unique, persistent tracking pixel.
+│   │   last_modified_by_agent: true
 │   │
 │   └── 📄 SubscriptionPlanPage.tsx
 │       Purpose: Wrapper page in the main `/pages` directory for the subscription plan selection component.

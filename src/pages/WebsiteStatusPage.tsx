@@ -33,19 +33,33 @@ const WebsiteStatusPage: React.FC = () => {
   const [showNoWebsiteModal, setShowNoWebsiteModal] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [imageAttemptedLoadCount, setImageAttemptedLoadCount] = useState(0);
   const hideLoadingCalledRef = useRef(false);
 
   useEffect(() => {
     hideLoadingCalledRef.current = false;
-  }, []);
+    setImageAttemptedLoadCount(0); // Reset on path change
+  }, [location.pathname]);
 
   useEffect(() => {
-    if (!isLoadingData && !hideLoadingCalledRef.current) {
-      console.log("WebsiteStatusPage: Data loaded. Hiding loading screen ONCE.");
+    // Now waits for data AND the background image
+    if (!isLoadingData && imageAttemptedLoadCount >= 1 && !hideLoadingCalledRef.current) {
+      console.log(`WebsiteStatusPage: Conditions met (Data: ${!isLoadingData}, Images: ${imageAttemptedLoadCount}). Hiding loading screen ONCE.`);
       hideLoading();
       hideLoadingCalledRef.current = true;
     }
-  }, [isLoadingData, hideLoading]);
+  }, [isLoadingData, imageAttemptedLoadCount, hideLoading]);
+
+  const handleImageLoad = (imageName: string) => {
+    console.log(`WebsiteStatusPage: ${imageName} loaded.`);
+    setImageAttemptedLoadCount(prev => prev + 1);
+  };
+
+  const handleImageError = (imageName: string) => {
+    console.error(`WebsiteStatusPage: ${imageName} failed to load.`);
+    setImageAttemptedLoadCount(prev => prev + 1); // Still count as an attempt
+  };
 
   const loadData = useCallback(async () => {
     if (user && user.id) {
@@ -163,10 +177,17 @@ const WebsiteStatusPage: React.FC = () => {
   };
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-hidden">
+      <img
+        src="/images/background5.png"
+        alt="Jungle background"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+        onLoad={() => handleImageLoad("background5.png")}
+        onError={() => handleImageError("background5.png")}
+      />
       <Navbar />
-      <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-4 md:p-8 pt-20 md:pt-24">
-        <div className="bg-green-700 bg-opacity-75 p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg space-y-8">
+      <div className="min-h-screen flex flex-col items-center justify-center text-white p-4 md:p-8 pt-20 md:pt-24">
+        <div className="bg-green-800 bg-opacity-75 p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-lg space-y-8 z-10">
           {currentSubStep === 1 && (
             <div className="text-center space-y-6">
               <h2 className="text-3xl font-bold text-yellow-400">Do you have a website?</h2>
@@ -182,14 +203,25 @@ const WebsiteStatusPage: React.FC = () => {
             <div className="space-y-6">
               <h2 className="text-3xl font-bold text-yellow-400 text-center">Who hosts your website?</h2>
               <p className="text-gray-200 text-center">Knowing your provider helps us with setup guidance later.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="flex flex-wrap justify-center gap-4">
                 {PROVIDER_OPTIONS.map(provider => (
-                  <Button key={provider.id} variant={selectedProvider === provider.id ? "default" : "outline"} onClick={() => handleProviderSelect(provider.id)} className={`py-4 h-auto text-center ${selectedProvider === provider.id ? 'bg-yellow-400 text-green-900' : 'text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900'}`}>
+                  <Button 
+                    key={provider.id} 
+                    variant={selectedProvider === provider.id ? "default" : "outline"} 
+                    onClick={() => handleProviderSelect(provider.id)} 
+                    className={`w-40 py-4 h-auto text-center whitespace-normal ${selectedProvider === provider.id ? 'bg-yellow-400 text-green-900' : 'text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900'}`}>
                     {provider.name}
                   </Button>
                 ))}
               </div>
-               <Button variant="link" onClick={() => setCurrentSubStep(1)} className="text-sm text-yellow-200 hover:text-yellow-100">Back</Button>
+              <div className="flex justify-center pt-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setCurrentSubStep(1)} 
+                  className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-2 px-4 text-sm rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105">
+                  Back
+                </Button>
+              </div>
             </div>
           )}
 
@@ -214,8 +246,8 @@ const WebsiteStatusPage: React.FC = () => {
           )}
         </div>
 
-        {currentSubStep !== 3 && (
-          <div className="mt-8 w-full max-w-lg flex justify-start">
+        {currentSubStep === 1 && (
+          <div className="mt-8 w-full max-w-lg flex justify-center z-10">
               <Button
                   type="button"
                   variant="outline"
@@ -229,7 +261,7 @@ const WebsiteStatusPage: React.FC = () => {
         )}
 
         <Dialog open={showNoWebsiteModal} onOpenChange={setShowNoWebsiteModal}>
-          <DialogContent className="bg-green-700 text-white border-yellow-400">
+          <DialogContent className="bg-green-700 text-white border-yellow-400 z-20">
             <DialogHeader>
               <DialogTitle className="text-yellow-400">Website Required</DialogTitle>
               <DialogDescription className="text-gray-200">
@@ -242,7 +274,7 @@ const WebsiteStatusPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
-    </>
+    </div>
   );
 };
 

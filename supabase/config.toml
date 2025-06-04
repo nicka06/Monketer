@@ -38,6 +38,12 @@ import_map = "../src/backend/functions/import_map.json"
 entrypoint = "../src/backend/functions/initiate-email-setup/index.ts"
 import_map = "../src/backend/functions/import_map.json"
 
+[functions.get-or-create-tracking-id]
+entrypoint = "../src/backend/functions/get-or-create-tracking-id/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+verify_jwt = false
+
+
 [functions.verify-dns-records]
 entrypoint = "../src/backend/functions/verify-dns-records/index.ts"
 import_map = "../src/backend/functions/import_map.json"

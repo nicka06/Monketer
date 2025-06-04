@@ -447,45 +447,166 @@ const DnsConfirmationPage: React.FC = () => {
 
   if (isLoadingPage || authLoading) {
     return (
-      <>
+      <div className="relative flex flex-col min-h-screen overflow-hidden">
+        <img
+          src="/images/background7.png"
+          alt="Jungle background"
+          className="absolute inset-0 w-full h-full object-cover -z-10"
+          // Add onLoad/onError handlers if loading screen needs to wait for this image
+          // onLoad={() => console.log("background7.png loaded")}
+          // onError={() => console.error("background7.png failed to load")}
+        />
         <Navbar />
-        <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-8 pt-20">
-          <Loader2 className="h-16 w-16 text-yellow-400 animate-spin mb-4" />
-          <p className="text-xl">Loading your DNS jungle map...</p>
-        </div>
-      </>
+        {/* Adjust pt value if navbar height changes. Assumes navbar is approx 4rem-5rem (16-20 in tailwind units) */}
+        <main className="flex-grow py-8 px-4 pt-24 md:pt-28 text-white">
+          {isLoadingPage && !pageError && (
+            <div className="flex justify-center items-center h-full">
+              <Loader2 className="h-12 w-12 animate-spin text-yellow-400" />
+            </div>
+          )}
+          <div className="container mx-auto max-w-5xl">
+            <div className="bg-black bg-opacity-60 p-6 rounded-lg mb-8 md:mb-12">
+              <div className="text-center">
+                <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-3">Configure Your DNS</h1>
+                <p className="text-lg text-gray-100 max-w-2xl mx-auto">
+                  Select your DNS provider below to get tailored instructions. If your provider isn't listed, choose "Other".
+                </p>
+                {emailSetupData?.domain && (
+                     <p className="text-md text-yellow-300 mt-2">Configuring for domain: <span className="font-semibold">{emailSetupData.domain}</span></p>
+                )}
+              </div>
+            </div>
+
+            {isDetectingProvider && (
+              <div className="flex justify-center items-center my-8 p-6 bg-green-700 bg-opacity-50 rounded-lg">
+                <Loader2 className="mr-3 h-6 w-6 animate-spin text-yellow-400" />
+                <p className="text-yellow-400 text-lg">Detecting your DNS provider for <span className="font-semibold">{emailSetupData?.domain || 'your domain'}</span>...</p>
+              </div>
+            )}
+
+            {!isDetectingProvider && detectedProviderDisplayName && (
+              <div className="my-6 p-4 bg-green-600 bg-opacity-70 rounded-lg text-center">
+                <p className="text-yellow-300 text-md">
+                  <Info size={18} className="inline mr-2" /> 
+                  We think your DNS provider is <span className="font-bold">{detectedProviderDisplayName}</span>. 
+                  Click its card below or choose another if this is incorrect.
+                </p>
+              </div>
+            )}
+              
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
+              {DNS_PROVIDER_DISPLAY_OPTIONS.map((provider) => (
+                <Card 
+                  key={provider.id}
+                  onClick={() => handleProviderCardClick(provider)}
+                  className={`bg-green-700 hover:bg-green-600 border-2 border-green-600 hover:border-yellow-400 cursor-pointer transition-all duration-200 ease-in-out transform hover:scale-105 shadow-lg rounded-xl overflow-hidden 
+                              ${(userSetProviderId === provider.id || detectedProviderId === provider.id) && !selectedDnsProvider ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}
+                              ${selectedDnsProvider?.id === provider.id ? 'border-yellow-400 ring-2 ring-yellow-400' : ''}`}
+                >
+                  <CardHeader className="items-center justify-center text-center p-4">
+                    {provider.logo && <img src={provider.logo} alt={`${provider.name} logo`} className="h-12 w-auto mx-auto mb-2" />}
+                    <CardTitle className="text-lg text-yellow-300">{provider.name}</CardTitle>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+            
+            {/* Navigation Buttons */}
+            <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 pb-8">
+              <Button
+                variant="outline"
+                onClick={() => handleNavigate('previous')}
+                disabled={isVerifyingDns}
+                className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md"
+              >
+                Previous Step
+              </Button>
+              <Button
+                onClick={() => handleNavigate('next')}
+                disabled={isVerifyingDns}
+                className="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md"
+              >
+                {isVerifyingDns ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Checking...</>
+                ) : ('Continue to Website Tracking')}
+              </Button>
+            </div>
+          </div>
+
+          {/* Global DNS Configuration Modal is handled by App.tsx */}
+          
+        </main>
+      </div>
     );
   }
 
   if (pageError && !emailSetupData) { 
     return (
-      <>
+      <div className="relative flex flex-col min-h-screen overflow-hidden">
+        <img
+          src="/images/background7.png"
+          alt="Jungle background"
+          className="absolute inset-0 w-full h-full object-cover -z-10"
+          // Add onLoad/onError handlers if loading screen needs to wait for this image
+          // onLoad={() => console.log("background7.png loaded")}
+          // onError={() => console.error("background7.png failed to load")}
+        />
         <Navbar />
-        <div className="min-h-screen flex flex-col items-center justify-center bg-red-800 text-white p-8 text-center pt-20">
-           <AlertTriangle className="h-16 w-16 text-yellow-300 mb-4" />
-          <h1 className="text-3xl font-bold mb-2">Loading Error</h1>
-          <p className="text-lg mb-4">{pageError}</p>
-          <Button onClick={() => window.location.reload()} className="bg-yellow-400 text-red-900 hover:bg-yellow-500">
-            Try Again
-          </Button>
-        </div>
-      </>
+        {/* Adjust pt value if navbar height changes. Assumes navbar is approx 4rem-5rem (16-20 in tailwind units) */}
+        <main className="flex-grow py-8 px-4 pt-24 md:pt-28 text-white">
+          {isLoadingPage && !pageError && (
+            <div className="flex justify-center items-center h-full">
+              <Loader2 className="h-12 w-12 animate-spin text-yellow-400" />
+            </div>
+          )}
+          <div className="container mx-auto max-w-5xl">
+            <div className="bg-black bg-opacity-60 p-6 rounded-lg mb-8 md:mb-12">
+              <div className="text-center">
+                <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-3">Loading Error</h1>
+                <p className="text-lg text-gray-100 mb-4">{pageError}</p>
+                <Button onClick={() => window.location.reload()} className="bg-yellow-400 text-red-900 hover:bg-yellow-500">
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Global DNS Configuration Modal is handled by App.tsx */}
+          
+        </main>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="relative flex flex-col min-h-screen overflow-hidden">
+      <img
+        src="/images/background7.png"
+        alt="Jungle background"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+        // Add onLoad/onError handlers if loading screen needs to wait for this image
+        // onLoad={() => console.log("background7.png loaded")}
+        // onError={() => console.error("background7.png failed to load")}
+      />
       <Navbar />
-      <div className="min-h-screen bg-green-800 text-white py-8 px-4 pt-20 md:pt-24">
+      {/* Adjust pt value if navbar height changes. Assumes navbar is approx 4rem-5rem (16-20 in tailwind units) */}
+      <main className="flex-grow py-8 px-4 pt-24 md:pt-28 text-white">
+        {isLoadingPage && !pageError && (
+          <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-12 w-12 animate-spin text-yellow-400" />
+          </div>
+        )}
         <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-8 md:mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-3">Configure Your DNS</h1>
-            <p className="text-lg text-gray-200 max-w-2xl mx-auto">
-              Select your DNS provider below to get tailored instructions. If your provider isn't listed, choose "Other".
-            </p>
-            {emailSetupData?.domain && (
-                 <p className="text-md text-yellow-500 mt-2">Configuring for domain: <span className="font-semibold">{emailSetupData.domain}</span></p>
-            )}
+          <div className="bg-black bg-opacity-60 p-6 rounded-lg mb-8 md:mb-12">
+            <div className="text-center">
+              <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-3">Configure Your DNS</h1>
+              <p className="text-lg text-gray-100 max-w-2xl mx-auto">
+                Select your DNS provider below to get tailored instructions. If your provider isn't listed, choose "Other".
+              </p>
+              {emailSetupData?.domain && (
+                   <p className="text-md text-yellow-300 mt-2">Configuring for domain: <span className="font-semibold">{emailSetupData.domain}</span></p>
+              )}
+            </div>
           </div>
 
           {isDetectingProvider && (
@@ -544,20 +665,10 @@ const DnsConfirmationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Render the DnsConfigurationModal component - REMOVED */}
-        {/* <DnsConfigurationModal
-            isOpen={isModalOpen}
-            onOpenChange={handleModalOpenChange}
-            selectedProvider={selectedProviderForModal}
-            emailSetupData={emailSetupData}
-            displayedDnsRecords={displayedDnsRecords}
-            onVerifyDns={handleVerifyDns}
-            isVerifyingDns={isVerifyingDns}
-            copyToClipboard={copyToClipboard} 
-            getStatusIcon={getStatusIcon}
-        /> */}
-      </div>
-    </>
+        {/* Global DNS Configuration Modal is handled by App.tsx */}
+        
+      </main>
+    </div>
   );
 };
 

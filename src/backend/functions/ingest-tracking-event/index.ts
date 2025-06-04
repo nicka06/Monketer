@@ -1,8 +1,11 @@
 // @ts-ignore
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { corsHeaders } from '../_shared/cors.ts'; // Assuming cors.ts is in _shared
 // @ts-ignore
-import { supabaseAdmin } from '../_shared/supabaseAdmin.ts'; // Assuming supabaseAdmin client is set up
+import { supabaseAdmin } from '../_shared/supabaseAdmin.ts';
+// Remove the factory import
+// import { corsHeadersFactory } from '../_shared/lib/constants.ts';
+// Import the original simple corsHeaders
+import { corsHeaders } from '../_shared/cors.ts';
 
 console.log('Ingest Tracking Event function booting up...');
 
@@ -16,9 +19,13 @@ interface TrackedEventPayload {
 
 // @ts-ignore
 serve(async (req: Request) => {
+  // Remove dynamic CORS header generation
+  // const requestOrigin = req.headers.get('Origin');
+  // const dynamicCorsHeaders = corsHeadersFactory(requestOrigin);
+
   // Handle OPTIONS preflight request
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders }); // Use simple corsHeaders
   }
 
   try {
@@ -30,7 +37,7 @@ serve(async (req: Request) => {
     if (!payload.email_setup_id || !payload.event_name) {
         // @ts-ignore
       return new Response(JSON.stringify({ error: 'email_setup_id and event_name are required' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, // Use simple corsHeaders
         status: 400,
       });
     }
@@ -45,6 +52,8 @@ serve(async (req: Request) => {
       // user_agent and ip_address could be extracted from req headers if needed
     };
 
+    console.log('Ingesting event:', JSON.stringify(eventToInsert)); // Log the event object
+
     const { data, error } = await supabaseAdmin
       .from('tracked_events')
       .insert(eventToInsert)
@@ -54,7 +63,7 @@ serve(async (req: Request) => {
       console.error('Error inserting event into Supabase:', error);
       // @ts-ignore
       return new Response(JSON.stringify({ error: 'Failed to store tracking event', details: error.message }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, // Use simple corsHeaders
         status: 500,
       });
     }
@@ -64,7 +73,7 @@ serve(async (req: Request) => {
     // Or 200/201 if you want to return the created object or a success message
     // @ts-ignore
     return new Response(null, {
-      headers: { ...corsHeaders }, // Ensure CORS headers are on all responses
+      headers: corsHeaders, // Use simple corsHeaders
       status: 204, 
     });
 
@@ -72,7 +81,7 @@ serve(async (req: Request) => {
     console.error('Error processing request:', err);
     // @ts-ignore
     return new Response(JSON.stringify({ error: 'Bad request', details: err.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, // Use simple corsHeaders
       status: 400,
     });
   }

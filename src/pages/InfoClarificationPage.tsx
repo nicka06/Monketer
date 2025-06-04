@@ -46,6 +46,8 @@ const InfoClarificationPage: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isProcessingNext, setIsProcessingNext] = useState(false);
   const [isConfirmedAccurate, setIsConfirmedAccurate] = useState(false);
+  
+  const [imageAttemptedLoadCount, setImageAttemptedLoadCount] = useState(0);
   const hideLoadingCalledRef = useRef(false);
 
   const [emailSetupId, setEmailSetupId] = useState<string | null>(null);
@@ -77,15 +79,26 @@ const InfoClarificationPage: React.FC = () => {
 
   useEffect(() => {
     hideLoadingCalledRef.current = false;
-  }, []);
+    setImageAttemptedLoadCount(0); // Reset on path change
+  }, [location.pathname]);
 
   useEffect(() => {
-    if (!isLoadingData && !hideLoadingCalledRef.current) {
-      console.log("InfoClarificationPage: Data loaded. Hiding loading screen ONCE.");
+    if (!isLoadingData && imageAttemptedLoadCount >= 1 && !hideLoadingCalledRef.current) {
+      console.log(`InfoClarificationPage: Conditions met (Data: ${!isLoadingData}, Images: ${imageAttemptedLoadCount}). Hiding loading screen ONCE.`);
       hideLoading();
       hideLoadingCalledRef.current = true;
     }
-  }, [isLoadingData, hideLoading]);
+  }, [isLoadingData, imageAttemptedLoadCount, hideLoading]);
+
+  const handleImageLoad = (imageName: string) => {
+    console.log(`InfoClarificationPage: ${imageName} loaded.`);
+    setImageAttemptedLoadCount(prev => prev + 1);
+  };
+
+  const handleImageError = (imageName: string) => {
+    console.error(`InfoClarificationPage: ${imageName} failed to load.`);
+    setImageAttemptedLoadCount(prev => prev + 1); // Still count as an attempt
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -209,10 +222,10 @@ const InfoClarificationPage: React.FC = () => {
   };
   
   const SectionCard: React.FC<{ title: string; editPath: string; children: React.ReactNode }> = ({ title, editPath, children }) => (
-    <Card className="bg-green-700 bg-opacity-60 border-green-600">
+    <Card className="bg-green-800 border-green-700">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-xl text-yellow-400">{title}</CardTitle>
-        <Button variant="outline" size="sm" onClick={() => handleEdit(editPath)} className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900">
+        <Button variant="outline" size="sm" onClick={() => handleEdit(editPath)} className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-800">
           Edit
         </Button>
       </CardHeader>
@@ -223,13 +236,20 @@ const InfoClarificationPage: React.FC = () => {
   );
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-hidden">
+      <img
+        src="/images/background6.png"
+        alt="Jungle background"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+        onLoad={() => handleImageLoad("background6.png")}
+        onError={() => handleImageError("background6.png")}
+      />
       <Navbar />
-      <div className="min-h-screen bg-green-800 text-white py-8 px-4 pt-24">
-        <div className="container mx-auto max-w-3xl space-y-8 pb-8">
+      <div className="min-h-screen text-white py-8 px-4 pt-24">
+        <div className="container mx-auto max-w-3xl space-y-8 pb-8 z-10">
           <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">Confirm Your Information</h1>
-            <p className="text-lg text-gray-200">
+            <h1 className="text-4xl md:text-5xl font-bold text-yellow-300 mb-4">Confirm Your Information</h1>
+            <p className="text-lg text-gray-100">
               Please review all the details you've provided. If anything needs changing, just click "Edit".
             </p>
           </div>
@@ -248,54 +268,53 @@ const InfoClarificationPage: React.FC = () => {
                 {selectedCampaignsDetails.map(campaign => (
                   <li key={campaign.id}>
                     <strong>{campaign.categoryName}:</strong> {campaign.name}
-                    {campaign.description && <p className="text-sm text-gray-300 italic ml-2">- {campaign.description}</p>}
+                    {campaign.description && <p className="text-sm text-gray-200 italic ml-2">- {campaign.description}</p>}
                   </li>
                 ))}
               </ul>
             ) : <p className="italic">No email campaigns selected.</p>}
           </SectionCard>
 
-          <SectionCard title="Your Website Details" editPath="/website-status">
+          <SectionCard title="Your Website Information" editPath="/website-status">
             <p><strong>Provider:</strong> {websiteProviderDisplay}</p>
-            <p><strong>Domain:</strong> {domainName || <span className="italic">No domain provided.</span>}</p>
+            <p><strong>Domain:</strong> {domainName || <span className="italic">Not specified</span>}</p>
           </SectionCard>
 
-          <div className="bg-green-700 bg-opacity-60 border-green-600 p-6 rounded-lg shadow-lg space-y-4">
-            <h2 className="text-2xl font-semibold text-yellow-400 text-center">Ready to Proceed?</h2>
-            <div className="flex items-center space-x-2 justify-center">
-              <Checkbox 
-                id="confirmation-checkbox" 
-                checked={isConfirmedAccurate} 
-                onCheckedChange={(checked) => setIsConfirmedAccurate(checked as boolean)}
-                className="border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-green-900"
-              />
-              <Label htmlFor="confirmation-checkbox" className="text-lg text-gray-100 cursor-pointer">
-                Yes, all information is accurate and I'm ready to proceed.
-              </Label>
-            </div>
+          <div className="flex items-center space-x-2 pt-4">
+            <Checkbox 
+              id="confirm-accuracy" 
+              checked={isConfirmedAccurate}
+              onCheckedChange={(checked) => setIsConfirmedAccurate(checked as boolean)}
+              className="border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-green-900"
+            />
+            <Label htmlFor="confirm-accuracy" className="text-gray-100">
+              Yes, all information is accurate and I'm ready to proceed.
+            </Label>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 pt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleNavigate('previous')}
+              className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+              disabled={isProcessingNext}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleNavigate('next')}
+              className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+              disabled={!isConfirmedAccurate || isProcessingNext || isLoadingData}
+            >
+              {isProcessingNext ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+              {isProcessingNext ? 'Processing...' : (user ? 'Confirm & Proceed to DNS Setup' : 'Confirm & Proceed to Sign Up')}
+            </Button>
           </div>
         </div>
-        
-        <div className="container mx-auto max-w-3xl mt-8 flex flex-col sm:flex-row justify-between gap-4">
-          <Button
-            variant="outline"
-            onClick={() => handleNavigate('previous')}
-            disabled={isProcessingNext || isLoadingData}
-            className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md"
-          >
-            Previous Page
-          </Button>
-          <Button
-            onClick={() => handleNavigate('next')}
-            disabled={!isConfirmedAccurate || isLoadingData || isProcessingNext}
-            className="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md"
-          >
-            {isProcessingNext ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-            Confirm & Proceed to DNS Setup
-          </Button>
-        </div>
       </div>
-    </>
+    </div>
   );
 };
 
