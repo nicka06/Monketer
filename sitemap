@@ -244,18 +244,30 @@
 │   │   Usage: Used in `Index.tsx` and various pages throughout the application.
 │   │
 │   ├── 📄 GlobalDnsNotificationBar.tsx
-│   │   Purpose: Displays a persistent notification bar at the top of the screen if DNS records are not fully verified.
+│   │   Purpose: Displays a global notification bar related to DNS status. The bar is shown on pages after DNS confirmation or on pages not in the main flow (like dashboard/editor) if DNS is not fully verified. It allows users to click to open the DNS modal.
 │   │   Details:
-│   │     - Consumes `DnsStatusContext` to get `overallDnsStatus`, `dnsContextLoaded`, and `isDnsModalOpenGlobally`.
-│   │     - Conditionally renders based on `overallDnsStatus` (not 'verified' or null) and `dnsContextLoaded`.
-│   │     - Hidden if `isDnsModalOpenGlobally` is true.
-│   │     - Color and message change based on status (pending/partial vs. failed). Yellow for pending/partially_verified, Red for failed_to_verify.
-│   │     - Determines its `top` position (`top-0` or `top-16`) based on whether the current page is in `PAGES_WITHOUT_NAVBAR` (e.g., `/dashboard`, `/editor`).
-│   │     - Visibility is further refined by `shouldShowBasedOnPageEligibility`: only shows on `/dns-confirmation`, pages after it in `FORM_FLOW_ORDER`, or pages not in `FORM_FLOW_ORDER` at all.
-│   │     - Clicking the bar calls `showDnsModal()` from the context to open the `DnsConfigurationModal`.
-│   │   Usage: Rendered globally by `src/core/App.tsx`.
+│   │     - react_component: "GlobalDnsNotificationBar"
+│   │     - props: None
+│   │     - state: [
+│   │       "overallDnsStatus (from useDnsStatus)",
+│   │       "showDnsModal (from useDnsStatus)",
+│   │       "dnsContextLoaded (from useDnsStatus)",
+│   │       "isDnsModalOpenGlobally (from useDnsStatus)",
+│   │       "current location (from useLocation)",
+│   │       "navigation (from useNavigate)"
+│   │     ]
+│   │     - logic: [
+│   │       "Determines eligibility to show based on current page relative to DNS confirmation in FORM_FLOW_ORDER.",
+│   │       "Does not render if DNS context isn't loaded, DNS is verified, status is null, page is not eligible, or DNS modal is already open globally.",
+│   │       "Changes style and icon based on 'pending_verification', 'failed_to_verify', or 'partially_verified' DNS statuses.",
+│   │       "Clicking the bar calls showDnsModal().",
+│   │       "Adjusts its 'top' CSS property based on whether the current page is in PAGES_WITHOUT_NAVBAR (e.g., '/subscription-plan', '/editor', '/dashboard'). For these pages, top is '0'; otherwise, it's 'top-16' (assuming a 4rem/64px navbar height)."
+│   │     ]
+│   │     - constants: ["PAGES_WITHOUT_NAVBAR (defines pages where the bar should be at top-0)"]
+│   │     - external_dependencies: ["useDnsStatus", "useLocation", "useNavigate", "lucide-react", "FORM_FLOW_ORDER"]
+│   │   Usage: Imported and rendered within App.tsx, likely outside the main Routes but within the Router and DnsStatusProvider, to be globally available.
 │   │
-│   ├── 📄 Navbar.tsx
+│   ├── �� Navbar.tsx
 │   │   Purpose: Navigation bar for the application, themed for the jungle look. Handles user authentication status for displaying links.
 │   │   Details: Provides main site navigation links. Styled with a dark green background, white text, and yellow accents. 
 │   │     - Imports `useAuth` to get `user` and `signOut` function.

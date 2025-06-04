@@ -29,6 +29,7 @@ import { Project } from '@/features/types/editor';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/features/auth/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -37,22 +38,25 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, signOut } = useAuth();
+  const { hideLoading } = useLoading();
 
   useEffect(() => {
-    // Load projects and user data when component mounts
     loadProjects();
     
-    // Only try to get username if user exists
     if (user?.id) {
       getUsernameFromId(user.id)
         .then(name => setUsername(name))
         .catch(err => {
           console.error("Error getting username:", err);
-          // Use email as fallback if available
           if (user.email) {
             setUsername(user.email);
           }
         });
+    }
+    // Safeguard: if local loading is already false when this effect runs, hide global.
+    // The primary call to hideLoading() is in the finally block of loadProjects.
+    if (!loading) { 
+        hideLoading();
     }
   }, [user]);
 
@@ -62,7 +66,9 @@ const Dashboard = () => {
    */
   const loadProjects = async () => {
     try {
-      setLoading(true);
+      // The global loading screen is already shown by RouteChangeHandler.
+      // We just manage the local loading state for the dashboard's content.
+      setLoading(true); 
       const data = await getUserProjects();
       setProjects(data);
     } catch (error) {
@@ -73,7 +79,8 @@ const Dashboard = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setLoading(false); // Set dashboard's local loading to false
+      hideLoading(); // Hide the global (monkey) loading screen
     }
   };
 
