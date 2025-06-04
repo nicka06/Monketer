@@ -519,12 +519,12 @@ const DnsConfirmationPage: React.FC = () => {
             </Button>
             <Button
               onClick={() => handleNavigate('next')}
-              disabled={isVerifyingDns || (emailSetupData?.overall_dns_status !== 'verified' && emailSetupData?.overall_dns_status !== 'partially_verified')}
+              disabled={isVerifyingDns}
               className="w-full sm:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md"
             >
               {isVerifyingDns ? (
                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Checking...</>
-              ) : (emailSetupData?.overall_dns_status === 'verified' || emailSetupData?.overall_dns_status === 'partially_verified' ? 'Continue to Website Tracking' : 'Verify DNS to Proceed')}
+              ) : ('Continue to Website Tracking')}
             </Button>
           </div>
         </div>

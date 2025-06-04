@@ -41,3 +41,11 @@ import_map = "../src/backend/functions/import_map.json"
 [functions.verify-dns-records]
 entrypoint = "../src/backend/functions/verify-dns-records/index.ts"
 import_map = "../src/backend/functions/import_map.json"
+
+[functions.test-pixel-status]
+entrypoint = "../src/backend/functions/test-pixel-status/index.ts"
+import_map = "../src/backend/functions/import_map.json"
+
+[functions.ingest-tracking-event]
+entrypoint = "../src/backend/functions/ingest-tracking-event/index.ts"
+import_map = "../src/backend/functions/import_map.json"
