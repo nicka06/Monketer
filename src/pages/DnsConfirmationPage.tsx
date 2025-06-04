@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Navbar from '@/components/Navbar';
 // import DnsConfigurationModal from '@/components/DnsConfigurationModal'; // Modal is now global
 import { useDnsStatus } from '@/contexts/DnsStatusContext';
+import { useLoading } from '@/contexts/LoadingContext';
 
 interface DnsRecord {
   id: string;
@@ -54,6 +55,7 @@ const DnsConfirmationPage: React.FC = () => {
     selectedDnsProvider, // For highlighting the card if modal opened from elsewhere and for auto-popup
     // setSelectedDnsProvider // No longer setting it from here, App.tsx/GlobalDnsNotificationBar will set it via showDnsModal
   } = useDnsStatus();
+  const { hideLoading } = useLoading();
 
   const [emailSetupData, setEmailSetupData] = useState<EmailSetupData | null>(null);
   const [displayedDnsRecords, setDisplayedDnsRecords] = useState<DnsRecord[]>([]);
@@ -71,6 +73,7 @@ const DnsConfirmationPage: React.FC = () => {
   const [pageError, setPageError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
+  const hideLoadingCalledRef = useRef(false);
 
   // copyToClipboard and getStatusIcon will be needed by the global modal.
   // They might need to be passed to context or App.tsx if the modal is fully managed there.
@@ -180,6 +183,18 @@ const DnsConfirmationPage: React.FC = () => {
   //       showDnsModal(selectedDnsProvider);
   //   }
   // }, [selectedDnsProvider, isLoadingPage, emailSetupData?.domain, showDnsModal]);
+
+  useEffect(() => {
+    hideLoadingCalledRef.current = false;
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isLoadingPage && !hideLoadingCalledRef.current) {
+      console.log("DnsConfirmationPage: isLoadingPage is false. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingPage, hideLoading]);
 
   useEffect(() => {
     mountedRef.current = true;

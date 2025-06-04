@@ -1,22 +1,59 @@
 import Navbar from "@/components/Navbar";
 // import Footer from "@/components/Footer"; // Removed Footer
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
 import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useLoading } from '@/contexts/LoadingContext';
 
 const BusinessOverviewPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
+
   const [businessDescription, setBusinessDescription] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Refs for critical images
+  const backgroundRef = useRef<HTMLImageElement>(null);
+  const monkeyRef = useRef<HTMLImageElement>(null);
+
+  // State to track image loading for page load buffer
+  const [isPageBackgroundLoaded, setIsPageBackgroundLoaded] = useState(false);
+  const [isPageMonkeyLoaded, setIsPageMonkeyLoaded] = useState(false);
+  const pageHideLoadingCalledRef = useRef(false);
+
+  useEffect(() => {
+    pageHideLoadingCalledRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const bgStatus = backgroundRef.current?.complete || isPageBackgroundLoaded;
+    const monkeyStatus = monkeyRef.current?.complete || isPageMonkeyLoaded;
+
+    if (bgStatus && monkeyStatus && !isLoadingData && !pageHideLoadingCalledRef.current) {
+      console.log("BusinessOverviewPage: All critical images AND data loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      pageHideLoadingCalledRef.current = true;
+    }
+  }, [isPageBackgroundLoaded, isPageMonkeyLoaded, isLoadingData, hideLoading]);
+
+  const handlePageImageLoad = (setter: React.Dispatch<React.SetStateAction<boolean>>, imageName: string) => {
+    console.log(`BusinessOverviewPage: ${imageName} loaded.`);
+    setter(true);
+  };
+
+  const handlePageImageError = (imageName: string, setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    console.error(`BusinessOverviewPage: ${imageName} failed to load.`);
+    setter(true);
+  };
 
   const loadBusinessDescription = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoadingData(true);
     let desc = '';
     if (user && user.id) {
       try {
@@ -48,7 +85,7 @@ const BusinessOverviewPage = () => {
       }
     }
     setBusinessDescription(desc);
-    setIsLoading(false);
+    setIsLoadingData(false);
   }, [user, toast]);
 
   useEffect(() => {
@@ -100,9 +137,12 @@ const BusinessOverviewPage = () => {
     <div className="page-container text-white"> {/* Added page-container */}
       <div className="images-container"> {/* Added images-container */}
         <img 
+          ref={backgroundRef}
           src="/images/background.png" 
           alt="Jungle background"
           className="background-image-element"
+          onLoad={() => handlePageImageLoad(setIsPageBackgroundLoaded, 'business_overview_background')}
+          onError={() => handlePageImageError('business_overview_background', setIsPageBackgroundLoaded)}
         />
       </div>
 
@@ -113,7 +153,7 @@ const BusinessOverviewPage = () => {
           <div className="flex flex-col md:flex-row items-stretch gap-8 w-full max-w-6xl">
             <div className="md:w-1/2 bg-black bg-opacity-50 p-6 rounded-lg flex flex-col space-y-4">
               <h2 className="text-2xl font-bold text-yellow-400 mb-4 text-center">Describe Your Business</h2>
-              {isLoading ? (
+              {isLoadingData ? (
                 <div className="flex-grow flex items-center justify-center">
                   <p className="text-lg">Loading description...</p>
                 </div>
@@ -125,6 +165,7 @@ const BusinessOverviewPage = () => {
                   rows={8}
                   value={businessDescription}
                   onChange={(e) => setBusinessDescription(e.target.value)}
+                  disabled={isLoadingData}
                 />
               )}
               <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:justify-end">
@@ -132,6 +173,7 @@ const BusinessOverviewPage = () => {
                   type="button"
                   onClick={handleConfirmAndContinue}
                   className="w-full md:w-auto bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+                  disabled={isLoadingData}
                 >
                   Confirm Business Overview & Continue
                 </button>
@@ -140,9 +182,12 @@ const BusinessOverviewPage = () => {
 
             <div className="md:w-1/2 flex justify-center items-center">
               <img 
+                ref={monkeyRef}
                 src="/images/businessmonkey.png" 
                 alt="Business monkey with briefcase"
                 className="max-w-md h-auto object-contain business-overview-monkey" /* Apply bounce and size styling, changed max-w-sm to max-w-md */
+                onLoad={() => handlePageImageLoad(setIsPageMonkeyLoaded, 'business_overview_monkey')}
+                onError={() => handlePageImageError('business_overview_monkey', setIsPageMonkeyLoaded)}
               />
             </div>
           </div>

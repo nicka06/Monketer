@@ -8,17 +8,25 @@ import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom'; 
 import { FORM_FLOW_ORDER } from '@/core/constants';
 import Navbar from '@/components/Navbar';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const AuthGatePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { signUp, signIn, user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(true); // To toggle between Sign Up and Sign In views
+
+  // Hide loading screen on mount
+  useEffect(() => {
+    console.log("AuthGatePage: Hiding loading screen immediately.");
+    hideLoading();
+  }, [hideLoading]);
 
   // Redirect if user is already logged in
   useEffect(() => {

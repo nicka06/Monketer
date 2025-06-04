@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import Navbar from '@/components/Navbar';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const PROVIDER_OPTIONS = [
   { id: 'shopify', name: 'Shopify' },
@@ -24,16 +25,29 @@ const WebsiteStatusPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
 
   const [currentSubStep, setCurrentSubStep] = useState<1 | 2 | 3>(1);
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [domainName, setDomainName] = useState<string>('');
   const [showNoWebsiteModal, setShowNoWebsiteModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const hideLoadingCalledRef = useRef(false);
+
+  useEffect(() => {
+    hideLoadingCalledRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoadingData && !hideLoadingCalledRef.current) {
+      console.log("WebsiteStatusPage: Data loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingData, hideLoading]);
 
   const loadData = useCallback(async () => {
-    setIsLoading(true);
     if (user && user.id) {
       try {
         const { data, error } = await supabase
@@ -45,8 +59,6 @@ const WebsiteStatusPage: React.FC = () => {
         if (data) {
           if (data.website_provider) setSelectedProvider(data.website_provider);
           if (data.domain) setDomainName(data.domain);
-          // Determine currentSubStep based on loaded data if needed, or start at 1
-          // For now, we will always start at step 1 and let user confirm.
         }
       } catch (error: any) {
         console.error("WebsiteStatusPage: Error loading data:", error);
@@ -58,7 +70,7 @@ const WebsiteStatusPage: React.FC = () => {
       if (savedProvider) setSelectedProvider(savedProvider);
       if (savedDomain) setDomainName(savedDomain);
     }
-    setIsLoading(false);
+    setIsLoadingData(false);
   }, [user, toast]);
 
   useEffect(() => {
@@ -106,21 +118,13 @@ const WebsiteStatusPage: React.FC = () => {
         }
       } catch (error: any) {
         console.error("WebsiteStatusPage: Error saving data:", error);
-        // Check for Supabase unique constraint violation (PostgreSQL error code 23505)
-        // The actual error structure might vary, check Supabase client library specifics if needed.
-        // Often the code is on error.code or error.details.code or similar.
-        // For PostgREST, a 409 conflict often includes a code in the message or details.
-        // Example: error.message might contain "duplicate key value violates unique constraint"
-        // and error.code might be 'PGRST116' (if no rows found for update, not our case)
-        // or a more specific PostgreSQL code passed through.
-        // A direct 409 from the fetch response usually means a constraint.
-        if (error && error.message && error.message.includes('23505')) { // More robust check based on actual Supabase error object might be needed
+        if (error && error.message && error.message.includes('23505')) {
             toast({ 
                 title: "Domain Already In Use", 
                 description: "This domain name is already registered. Please try a different one.", 
                 variant: "destructive" 
             });
-        } else if (error && error.code === 'PGRST301' && error.details && error.details.includes('unique constraint')) { // Another possible way Supabase signals unique constraint
+        } else if (error && error.code === 'PGRST301' && error.details && error.details.includes('unique constraint')) {
             toast({
                 title: "Domain Already In Use",
                 description: "This domain name is already registered. Please use a different one.",
@@ -137,7 +141,7 @@ const WebsiteStatusPage: React.FC = () => {
         return; 
       }
       setIsSaving(false);
-    } else { // Previous navigation for guest
+    } else {
         if (!user) {
             saveCurrentStateToLocalStorage();
         }
@@ -157,10 +161,6 @@ const WebsiteStatusPage: React.FC = () => {
       navigate(targetPath, { replace: true, state: { ...location.state, fromFormFlow: true } });
     }
   };
-
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-green-800 text-white">Loading...</div>;
-  }
 
   return (
     <>
@@ -221,7 +221,7 @@ const WebsiteStatusPage: React.FC = () => {
                   variant="outline"
                   onClick={() => handleSaveAndNavigate('previous')}
                   className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-                  disabled={isSaving || isLoading}
+                  disabled={isSaving || isLoadingData}
               >
                   Previous Page
               </Button>

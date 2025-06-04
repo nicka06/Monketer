@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/useAuth';
 import { loadStripe } from '@stripe/stripe-js';
 import { SUBSCRIPTION_PLANS } from '@/shared/config/stripe';
+import { useLoading } from '@/contexts/LoadingContext';
 
 interface PlanFeature {
   name: string;
@@ -31,6 +32,12 @@ const PlanSelectionPage: React.FC = () => {
   const { user, session } = useAuth();
   const [selectedPlan, setSelectedPlan] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const { hideLoading } = useLoading();
+
+  useEffect(() => {
+    console.log("PlanSelectionPage: Hiding loading screen immediately.");
+    hideLoading();
+  }, [hideLoading]);
 
   const handlePlanSelection = async (plan: typeof SUBSCRIPTION_PLANS[number]) => {
     if (!user || !session) {

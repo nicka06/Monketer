@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { FORM_FLOW_ORDER } from '@/core/constants';
@@ -7,20 +7,35 @@ import { useAuth } from "@/features/auth/useAuth";
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/components/ui/use-toast";
 import { Code, Copy, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { useLoading } from '@/contexts/LoadingContext';
 
 const WebsiteTrackingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
 
   const [emailSetupId, setEmailSetupId] = useState<string | null>(null);
   const [pixelScript, setPixelScript] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPageData, setIsLoadingPageData] = useState(true);
   const [isTestingPixel, setIsTestingPixel] = useState(false);
   const [pixelTestResult, setPixelTestResult] = useState<{success: boolean; message: string; details?: any} | null>(null);
+  const hideLoadingCalledRef = useRef(false);
 
   const ingestEventUrl = 'https://nvlkyadiqucpjjgnhujm.supabase.co/functions/v1/ingest-tracking-event';
+
+  useEffect(() => {
+    hideLoadingCalledRef.current = false;
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isLoadingPageData && !authLoading && !hideLoadingCalledRef.current) {
+      console.log("WebsiteTrackingPage: Page data and auth loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isLoadingPageData, authLoading, hideLoading]);
 
   useEffect(() => {
     const fetchEmailSetup = async () => {
@@ -29,7 +44,7 @@ const WebsiteTrackingPage: React.FC = () => {
         navigate('/login', { replace: true, state: { from: location.pathname } });
         return;
       }
-      setIsLoading(true);
+      setIsLoadingPageData(true);
       try {
         const { data, error } = await supabase
           .from('email_setups')
@@ -49,7 +64,7 @@ const WebsiteTrackingPage: React.FC = () => {
         toast({ title: "Error Loading Data", description: `Could not load setup ID: ${error.message}`, variant: "destructive" });
         console.error("Error fetching email_setup_id:", error);
       } finally {
-        setIsLoading(false);
+        setIsLoadingPageData(false);
       }
     };
 
@@ -163,18 +178,6 @@ const WebsiteTrackingPage: React.FC = () => {
     }
   };
   
-  if (authLoading || isLoading) {
-    return (
-      <>
-        <Navbar />
-        <div className="min-h-screen flex flex-col items-center justify-center bg-green-800 text-white p-8 pt-20">
-          <Loader2 className="h-16 w-16 text-yellow-400 animate-spin mb-4" />
-          <p className="text-xl">Loading tracking setup...</p>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <Navbar />
@@ -188,7 +191,7 @@ const WebsiteTrackingPage: React.FC = () => {
             </p>
           </div>
 
-          {!emailSetupId && !isLoading && (
+          {!emailSetupId && !isLoadingPageData && !authLoading && (
             <div className="bg-red-700 bg-opacity-80 p-6 rounded-lg text-center mb-8">
                 <div className="flex items-center justify-center text-yellow-300 mb-2">
                     <AlertTriangle size={24} className="mr-2" /> 

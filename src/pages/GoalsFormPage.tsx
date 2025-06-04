@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea'; // Assuming a Textarea component is available
@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import { FORM_FLOW_ORDER } from '@/core/constants'; // Import the constant
 import Navbar from '@/components/Navbar'; // Added Navbar import
+import { useLoading } from '@/contexts/LoadingContext'; // Import useLoading
 // import Footer from '@/components/Footer'; // No Footer for this form page for now
 
 const GoalsFormPage: React.FC = () => {
@@ -14,9 +15,45 @@ const GoalsFormPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { hideLoading } = useLoading(); // Get hideLoading
   const [goals, setGoals] = useState(''); // This will store the raw text from textarea
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false); // Renamed from isLoading
   const [businessDescription, setBusinessDescription] = useState<string | null>(null);
+
+  // Ref for critical image
+  const backgroundRef = useRef<HTMLImageElement>(null);
+
+  // State to track image loading for page load buffer
+  const [isPageBackgroundLoaded, setIsPageBackgroundLoaded] = useState(false);
+  const pageHideLoadingCalledRef = useRef(false); // Ref to track if hideLoading was called
+
+  useEffect(() => {
+    // Reset the flag on mount
+    pageHideLoadingCalledRef.current = false;
+  }, []);
+
+  // Effect to check if image and data are loaded, then hide loading screen
+  useEffect(() => {
+    const bgStatus = backgroundRef.current?.complete || isPageBackgroundLoaded;
+
+    // Hide loading screen only when image is ready AND initial data loading is done
+    if (bgStatus && !isLoadingData && !pageHideLoadingCalledRef.current) {
+      console.log("GoalsFormPage: Background image AND data loaded. Hiding loading screen ONCE.");
+      hideLoading();
+      pageHideLoadingCalledRef.current = true;
+    }
+  }, [isPageBackgroundLoaded, isLoadingData, hideLoading]);
+
+  // Image load/error handlers for page load buffer
+  const handlePageImageLoad = (setter: React.Dispatch<React.SetStateAction<boolean>>, imageName: string) => {
+    console.log(`GoalsFormPage: ${imageName} loaded.`);
+    setter(true);
+  };
+
+  const handlePageImageError = (imageName: string, setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    console.error(`GoalsFormPage: ${imageName} failed to load.`);
+    setter(true); // Treat error as "load attempt finished" for hiding loader
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -24,9 +61,10 @@ const GoalsFormPage: React.FC = () => {
       if (desc) {
         setBusinessDescription(desc);
       }
+      // Initial data load starts, page loader should be visible if not already
+      setIsLoadingData(true); // Ensure this is set before async operations
 
       if (user && user.id) {
-        setIsLoading(true);
         console.log(`GoalsFormPage: Attempting to load goals for user ${user.id}`);
         const { data, error } = await supabase
           .from('email_setups')
@@ -46,7 +84,6 @@ const GoalsFormPage: React.FC = () => {
             setBusinessDescription(data.business_description);
           }
         }
-        setIsLoading(false);
       } else {
         // Guest user, load from localStorage
         const savedGoalsRaw = localStorage.getItem('pendingUserGoalsRawText');
@@ -54,6 +91,7 @@ const GoalsFormPage: React.FC = () => {
           setGoals(savedGoalsRaw);
         }
       }
+      setIsLoadingData(false); // Data loading finished
     };
     loadData();
   }, [user, toast]); // Added toast to dependency array
@@ -110,7 +148,7 @@ const GoalsFormPage: React.FC = () => {
       });
       return;
     }
-    setIsLoading(true);
+    setIsLoadingData(true); // Use renamed state for submit button loading
 
     const goalsArray = goals.split('\n').map(g => g.trim()).filter(g => g !== '');
 
@@ -153,7 +191,7 @@ const GoalsFormPage: React.FC = () => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLoadingData(false); // Use renamed state for submit button loading
     }
   };
 
@@ -161,9 +199,12 @@ const GoalsFormPage: React.FC = () => {
     <div className="page-container text-white">
       <div className="images-container">
         <img 
+          ref={backgroundRef} // Add ref
           src="/images/background3.png" 
           alt="Jungle background theme 3"
           className="background-image-element"
+          onLoad={() => handlePageImageLoad(setIsPageBackgroundLoaded, 'goals_form_background')} // Add handler
+          onError={() => handlePageImageError('goals_form_background', setIsPageBackgroundLoaded)} // Add handler
         />
       </div>
       <div className="content-wrapper min-h-screen flex flex-col">
@@ -187,7 +228,7 @@ const GoalsFormPage: React.FC = () => {
                   className="w-full p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:ring-2 focus:ring-yellow-400 focus:border-transparent min-h-[150px]"
                   rows={5}
                   required
-                  disabled={isLoading} // Disable textarea while loading saved goals
+                  disabled={isLoadingData} // Disable textarea while loading saved goals or submitting
                 />
               </div>
 
@@ -197,16 +238,16 @@ const GoalsFormPage: React.FC = () => {
                   variant="outline"
                   onClick={() => handleNavigate('previous')}
                   className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-                  disabled={isLoading}
+                  disabled={isLoadingData} // Disable during data operations
                 >
                   Previous
                 </Button>
                 <Button
                   type="submit"
                   className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-                  disabled={isLoading}
+                  disabled={isLoadingData} // Disable during data operations
                 >
-                  {isLoading ? 'Saving Goals...' : 'Save Goals & Continue'}
+                  {isLoadingData ? 'Saving Goals...' : 'Save Goals & Continue'}
                 </Button>
               </div>
             </form>

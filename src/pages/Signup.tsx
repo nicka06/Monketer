@@ -5,7 +5,7 @@
  * Handles form submission, validation, and account creation via Supabase.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/useAuth";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { FORM_FLOW_ORDER } from "@/core/constants";
 import Navbar from "@/components/Navbar";
+import { useLoading } from '@/contexts/LoadingContext';
 
 /**
  * Signup Component
@@ -32,6 +33,12 @@ const Signup = () => {
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hideLoading } = useLoading();
+
+  useEffect(() => {
+    console.log("SignupPage: Hiding loading screen immediately.");
+    hideLoading();
+  }, [hideLoading]);
 
   /**
    * Form submission handler for account creation

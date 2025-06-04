@@ -11,6 +11,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import GlobalDnsNotificationBar from "@/components/GlobalDnsNotificationBar";
 import { AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
+import { LoadingProvider, useLoading } from '@/contexts/LoadingContext';
+import LoadingScreen from '@/components/LoadingScreen';
 
 import Index from "../pages/Index";
 import Login from "../pages/Login";
@@ -68,10 +70,11 @@ interface EmailSetupDataForModal { // Renamed to avoid conflict if DnsConfirmati
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    const { user, loading } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const location = useLocation();
+    const { isLoading: isGlobalLoading } = useLoading();
 
-    if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    if (authLoading) return <div className="flex items-center justify-center h-screen">Authenticating...</div>;
     
     if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
@@ -81,13 +84,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 
 const AppRoutes = () => {
-    const { user, loading: authLoading, session } = useAuth(); // renamed loading to authLoading
+    const { user, loading: authLoading, session } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const isNavigatingFormFlow = useRef(false);
     const previousUserRef = useRef(user);
     const previousLoadingRef = useRef(authLoading);
-    const { setOverallDnsStatus: setGlobalDnsStatusContext, setDnsContextLoaded } = useDnsStatus(); // Renamed setOverallDnsStatus
+    const { setOverallDnsStatus, setDnsContextLoaded, overallDnsStatus: globalOverallDnsStatus } = useDnsStatus();
 
     useEffect(() => {
         const authStateJustChanged = (previousLoadingRef.current && !authLoading) || (previousUserRef.current?.id !== user?.id);
@@ -113,7 +116,7 @@ const AppRoutes = () => {
             const fetchAndRedirect = async () => {
                 if (!user || !user.id) {
                     setDnsContextLoaded(true);
-                    setGlobalDnsStatusContext(null);
+                    setOverallDnsStatus(null);
                     return;
                 }
                 const [emailSetupResult, userInfoResult] = await Promise.all([
@@ -133,8 +136,8 @@ const AppRoutes = () => {
 
                 if (emailSetupError) {
                     toast({ title: "Error Loading Setup", description: "Could not retrieve your setup information.", variant: "destructive" });
-                    setDnsContextLoaded(true); // Still mark as loaded to prevent indefinite loading states for DNS bar
-                    setGlobalDnsStatusContext(null);
+                    setDnsContextLoaded(true);
+                    setOverallDnsStatus(null);
                     return;
                 }
                 if (userInfoError) {
@@ -142,9 +145,9 @@ const AppRoutes = () => {
                 }
 
                 if (emailSetup) {
-                    setGlobalDnsStatusContext(emailSetup.overall_dns_status as any || null);
+                    setOverallDnsStatus(emailSetup.overall_dns_status as any || null);
                 } else {
-                    setGlobalDnsStatusContext(null);
+                    setOverallDnsStatus(null);
                 }
                 setDnsContextLoaded(true);
 
@@ -166,6 +169,7 @@ const AppRoutes = () => {
                             toast({ title: "Error Saving Progress", description: "Could not update completion status.", variant: "destructive" });
                         } else if (updatedEmailSetup) {
                             emailSetup = updatedEmailSetup;
+                            setOverallDnsStatus(updatedEmailSetup.overall_dns_status as any || null);
                         }
                     }
                 }
@@ -208,7 +212,18 @@ const AppRoutes = () => {
                         if (infoClarificationIndex !== -1 && currentIndexInFlow !== -1 && currentIndexInFlow < infoClarificationIndex) {
                             targetResumePath = infoClarificationPath;
                         } else {
-                            targetResumePath = null;
+                            const dnsConfirmationPath = '/dns-confirmation';
+                            const websiteTrackingPath = '/website-tracking';
+                            const dnsConfirmationIndex = FORM_FLOW_ORDER.indexOf(dnsConfirmationPath);
+                            const websiteTrackingIndex = FORM_FLOW_ORDER.indexOf(websiteTrackingPath);
+
+                            if (globalOverallDnsStatus === 'verified') {
+                                if (currentIndexInFlow < websiteTrackingIndex) {
+                                     targetResumePath = websiteTrackingPath;
+                                }
+                            } else if (currentIndexInFlow < dnsConfirmationIndex) {
+                                targetResumePath = dnsConfirmationPath;
+                            }
                         }
                     }
 
@@ -243,10 +258,10 @@ const AppRoutes = () => {
                 if (location.pathname === '/dashboard') navigate('/login', { replace: true, state: { from: location } });
                 else navigate('/', { replace: true });
             }
-            setGlobalDnsStatusContext(null);
+            setOverallDnsStatus(null);
             setDnsContextLoaded(true);
         }
-    }, [user, authLoading, navigate, location, setGlobalDnsStatusContext, setDnsContextLoaded]);
+    }, [user, authLoading, navigate, location, setOverallDnsStatus, setDnsContextLoaded, globalOverallDnsStatus]);
   
     if (authLoading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
     
@@ -283,53 +298,81 @@ const AppRoutes = () => {
 
 const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth();
-    const { 
+    const location = useLocation();
+    const {
         isDnsModalOpenGlobally,
         hideDnsModal,
         selectedDnsProvider,
-        setOverallDnsStatus: setGlobalDnsStatusContext, // Renamed for clarity
-        overallDnsStatus,
-        dnsContextLoaded // Added dnsContextLoaded here
+        setOverallDnsStatus,
+        dnsContextLoaded,
+        overallDnsStatus
     } = useDnsStatus();
-    const location = useLocation();
 
     const [emailSetupDataForModal, setEmailSetupDataForModal] = useState<EmailSetupDataForModal | null>(null);
     const [displayedDnsRecordsForModal, setDisplayedDnsRecordsForModal] = useState<DnsRecord[]>([]);
     const [isVerifyingDnsModal, setIsVerifyingDnsModal] = useState(false);
     const [isLoadingModalData, setIsLoadingModalData] = useState(false);
 
-    const constructDnsRecordsForModal = useCallback((data: EmailSetupDataForModal | null): DnsRecord[] => {
-        if (!data || !data.domain) return [];
+    const constructDnsRecordsForModal = useCallback((setupData: EmailSetupDataForModal | null) => {
+        if (!setupData || !setupData.domain) return [];
         const records: DnsRecord[] = [];
-        if (data.mx_record_value) {
-            const parts = data.mx_record_value.split(' ');
-            const priority = parts.length > 1 ? parseInt(parts[0], 10) : 10;
-            const value = parts.length > 1 ? parts[1] : parts[0];
-            records.push({ id: 'mx', type: 'MX', name: data.domain, value: value, priority: priority, purpose: 'Routes incoming mail.', status: data.mx_status || 'pending' });
+        const dkimSelector = setupData.dkim_selector || 'default';
+
+        if (setupData.mx_record_value) {
+            records.push({
+                id: 'mx',
+                type: 'MX',
+                name: setupData.domain,
+                value: setupData.mx_record_value,
+                priority: 10,
+                purpose: 'Route emails to your domain.',
+                status: setupData.mx_status || 'pending',
+            });
         }
-        if (data.spf_record_value) {
-            records.push({ id: 'spf', type: 'TXT', name: data.domain, value: data.spf_record_value, purpose: 'Authorizes sending servers.', status: data.spf_status || 'pending' });
+        if (setupData.spf_record_value) {
+            records.push({
+                id: 'spf',
+                type: 'TXT',
+                name: setupData.domain,
+                value: setupData.spf_record_value,
+                purpose: 'Verify sending servers.',
+                status: setupData.spf_status || 'pending',
+            });
         }
-        if (data.dkim_selector && data.dkim_public_key) {
-            records.push({ id: 'dkim', type: 'TXT', name: `${data.dkim_selector}._domainkey.${data.domain}`, value: `v=DKIM1; k=rsa; p=${data.dkim_public_key}`, purpose: 'Verifies email authenticity.', status: data.dkim_status || 'pending' });
+        if (setupData.dkim_public_key && setupData.domain) {
+            records.push({
+                id: 'dkim',
+                type: 'CNAME',
+                name: `${dkimSelector}._domainkey.${setupData.domain}`,
+                value: `dkim.emailore.com`,
+                purpose: 'Verify email authenticity.',
+                status: setupData.dkim_status || 'pending',
+            });
         }
-        if (data.dmarc_record_value) {
-            records.push({ id: 'dmarc', type: 'TXT', name: `_dmarc.${data.domain}`, value: data.dmarc_record_value, purpose: 'Handles unauthenticated mail.', status: data.dmarc_status || 'pending' });
+        if (setupData.dmarc_record_value && setupData.domain) {
+            records.push({
+                id: 'dmarc',
+                type: 'TXT',
+                name: `_dmarc.${setupData.domain}`,
+                value: setupData.dmarc_record_value,
+                purpose: 'Define actions for failed checks.',
+                status: setupData.dmarc_status || 'pending',
+            });
         }
         return records;
     }, []);
 
-    const fetchFullEmailSetupForModal = useCallback(async (userId: string): Promise<EmailSetupDataForModal | null> => {
+    const fetchFullEmailSetupForModal = useCallback(async (userId: string) => {
         const { data, error } = await supabase
             .from('email_setups')
             .select('id, domain, dkim_public_key, dkim_selector, spf_record_value, mx_record_value, dmarc_record_value, mx_status, spf_status, dkim_status, dmarc_status, overall_dns_status')
             .eq('user_id', userId)
-            .maybeSingle();
+            .single();
         if (error) {
-            toast({ title: "Modal Error", description: "Could not load DNS data for modal.", variant: "destructive" });
-            throw error;
+            toast({ title: "Error Fetching DNS Data", description: error.message, variant: "destructive" });
+            return null;
         }
-        return data as EmailSetupDataForModal | null;
+        return data as EmailSetupDataForModal;
     }, []);
 
     useEffect(() => {
@@ -339,34 +382,43 @@ const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ c
                 .then(data => {
                     setEmailSetupDataForModal(data);
                     setDisplayedDnsRecordsForModal(constructDnsRecordsForModal(data));
+                    if (data?.overall_dns_status) {
+                         setOverallDnsStatus(data.overall_dns_status as any);
+                    }
                 })
-                .catch(err => console.error("Error fetching data for global modal:", err))
+                .catch(err => {
+                    console.error("Error in modal data fetch useEffect: ", err);
+                    toast({ title: "Modal Error", description: "Could not load necessary data for DNS modal.", variant: "destructive" });
+                })
                 .finally(() => setIsLoadingModalData(false));
         }
     }, [isDnsModalOpenGlobally, user?.id, fetchFullEmailSetupForModal, constructDnsRecordsForModal]);
 
     const handleVerifyDnsInModal = async () => {
-        if (!emailSetupDataForModal?.id || !user?.id) {
-            toast({ title: "Verification Error", description: "Required data not found.", variant: "destructive" });
+        if (!emailSetupDataForModal || !emailSetupDataForModal.id) {
+            toast({ title: "Error", description: "No setup data to verify.", variant: "destructive" });
             return;
         }
         setIsVerifyingDnsModal(true);
         try {
             const { data: verificationResult, error } = await supabase.functions.invoke('verify-dns-records', {
-                body: { emailSetupId: emailSetupDataForModal.id },
+                body: { emailSetupId: emailSetupDataForModal.id }
             });
+
             if (error) throw error;
-            if (verificationResult) {
-                toast({ title: "DNS Verification Complete", description: `Overall status: ${verificationResult.overallDnsStatus}. Record statuses updated.`, duration: 5000 });
-                const updatedSetup = await fetchFullEmailSetupForModal(user.id);
+            if (verificationResult?.error) throw new Error(verificationResult.error);
+
+            const updatedSetup = verificationResult?.emailSetup as EmailSetupDataForModal;
+            if (updatedSetup) {
                 setEmailSetupDataForModal(updatedSetup);
                 setDisplayedDnsRecordsForModal(constructDnsRecordsForModal(updatedSetup));
-                setGlobalDnsStatusContext(updatedSetup?.overall_dns_status as any || null);
+                setOverallDnsStatus(updatedSetup?.overall_dns_status as any || null);
+                toast({ title: "Verification Updated", description: "DNS records status refreshed.", variant: "default" });
             }
         } catch (err: any) {
             toast({ title: "DNS Verification Error", description: err.message || "Could not verify records.", variant: "destructive" });
             const currentStatus = emailSetupDataForModal?.overall_dns_status;
-            setGlobalDnsStatusContext(currentStatus as any || 'failed_to_verify');
+            setOverallDnsStatus(currentStatus as any || 'failed_to_verify');
         } finally {
             setIsVerifyingDnsModal(false);
         }
@@ -374,61 +426,56 @@ const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ c
 
     const copyToClipboardInModal = (text: string, type: string) => {
         navigator.clipboard.writeText(text).then(() => {
-            toast({ title: "Copied!", description: `${type} copied.`, duration: 2000 });
+            toast({ title: `${type} Copied`, description: `${text} copied to clipboard.`, variant: "default" });
         }).catch(err => {
-            toast({ title: "Copy Failed", description: `Could not copy.`, variant: "destructive" });
+            toast({ title: `Copy Failed`, description: `Could not copy ${type}.`, variant: "destructive" });
         });
     };
 
     const getStatusIconForModal = (status?: DnsRecord['status'] | EmailSetupDataForModal['overall_dns_status']) => {
         switch (status) {
-            case 'verified': return <CheckCircle className="text-green-400 h-5 w-5" />;
-            case 'partially_verified': return <Info className="text-yellow-400 h-5 w-5" />;
-            case 'failed': case 'failed_to_verify': return <AlertTriangle className="text-red-400 h-5 w-5" />;
-            case 'error': return <AlertTriangle className="text-orange-400 h-5 w-5" />;
-            default: return <Loader2 className="text-gray-400 h-5 w-5 animate-spin" />;
+            case 'verified': return <CheckCircle className="h-4 w-4 text-green-500" />;
+            case 'failed':
+            case 'failed_to_verify': return <AlertTriangle className="h-4 w-4 text-red-500" />;
+            case 'pending':
+            case 'partially_verified': return <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />;
+            default: return <Info className="h-4 w-4 text-gray-500" />;
         }
     };
-
-    // Logic for main content padding
-    const PAGES_WITHOUT_NAVBAR = ['/dashboard', '/editor']; // Mirrored from GlobalDnsNotificationBar
-    const hasNavbar = !PAGES_WITHOUT_NAVBAR.some(path => location.pathname.startsWith(path));
-
-    const dnsConfirmationPath = '/dns-confirmation';
-    const locationPath = location.pathname;
-    const dnsConfirmationIndex = FORM_FLOW_ORDER.indexOf(dnsConfirmationPath);
-    const currentIndexInFlow = FORM_FLOW_ORDER.indexOf(locationPath);
-    const shouldShowBasedOnPageEligibility = dnsConfirmationIndex !== -1 && (currentIndexInFlow === -1 || currentIndexInFlow >= dnsConfirmationIndex);
+    
+    const eligibleForDnsNotificationBar = [
+        '/dashboard',
+        '/editor',
+        '/send-email',
+        '/website-tracking',
+    ];
+    const shouldShowBasedOnPageEligibility = eligibleForDnsNotificationBar.includes(location.pathname);
     
     const isNotificationBarActuallyVisible = 
-        dnsContextLoaded && // Use dnsContextLoaded from useDnsStatus
+        user &&
+        dnsContextLoaded && 
         overallDnsStatus !== 'verified' && 
         overallDnsStatus !== null && 
         shouldShowBasedOnPageEligibility && 
         !isDnsModalOpenGlobally;
 
-    let paddingTopClass = 'pt-0'; // Default to no padding if no navbar and no bar
-    if (hasNavbar) {
-        paddingTopClass = isNotificationBarActuallyVisible ? "pt-[108px]" : "pt-16";
-    } else {
-        paddingTopClass = isNotificationBarActuallyVisible ? "pt-[44px]" : "pt-0"; // Assuming bar height is approx 44px (p-3 = 12px*2 + text height)
-        // p-3 tailwind is 0.75rem = 12px. So padding is 24px. Let's say text is 20px. Total height ~44px. Or measure precisely if needed.
+    let paddingTopClass = 'pt-0';
+    if (shouldShowBasedOnPageEligibility) {
+      if (isNotificationBarActuallyVisible) {
+        paddingTopClass = 'pt-[44px]';
+      }
     }
 
     return (
         <div className={`app-container flex flex-col min-h-screen ${paddingTopClass}`}>
+            {isNotificationBarActuallyVisible && <GlobalDnsNotificationBar />}
             {children}
             {selectedDnsProvider && (
-                <DnsConfigurationModal
+                 <DnsConfigurationModal
                     isOpen={isDnsModalOpenGlobally}
                     onOpenChange={(isOpen) => {
                         if (!isOpen) {
                             hideDnsModal();
-                            // If the modal is closed and DNS is not verified, the bar should reflect this.
-                            // The overallDnsStatus is already in context, so the bar will update.
-                            // We might also want to ensure the global state (`overallDnsStatus` in context)
-                            // is updated if a verification attempt inside the modal changed it and wasn't the last thing to set it.
-                            // For now, handleVerifyDnsInModal updates it.
                         }
                     }}
                     selectedProvider={selectedDnsProvider}
@@ -438,30 +485,92 @@ const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ c
                     isVerifyingDns={isVerifyingDnsModal}
                     copyToClipboard={copyToClipboardInModal}
                     getStatusIcon={getStatusIconForModal}
-                />
+                 />
             )}
         </div>
     );
 };
 
+const RouteChangeHandler = () => {
+  const location = useLocation();
+  const { showLoading } = useLoading();
+  const previousPathnameRef = useRef(location.pathname); // Store previous pathname
+
+  useEffect(() => {
+    // Only call showLoading if the pathname itself has changed.
+    // This avoids re-showing the loader for navigations that only change search, hash, or state.
+    if (location.pathname !== previousPathnameRef.current) {
+      console.log(`RouteChangeHandler: Path changed from ${previousPathnameRef.current} to ${location.pathname}, calling showLoading().`);
+      showLoading();
+    } else if (previousPathnameRef.current === location.pathname && !previousPathnameRef.current) {
+      // This condition handles the very initial load where previousPathnameRef.current might be undefined or empty
+      // and location.pathname is set (e.g., "/").
+      console.log(`RouteChangeHandler: Initial path ${location.pathname}, calling showLoading().`);
+      showLoading();
+    }
+    // Update previous pathname for the next comparison
+    previousPathnameRef.current = location.pathname;
+  }, [location.pathname, showLoading]); // Only re-run if pathname or showLoading changes
+
+  return null; // This component doesn't render anything visible
+};
+
 const App = () => {
     return (
-        <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-                <BrowserRouter>
-                    <AuthProvider>
-                        <DnsStatusProvider>
-                            <GlobalDnsNotificationBar />
-                            <MainContentWithGlobalModal>
-                                <AppRoutes />
-                            </MainContentWithGlobalModal>
-                            <Toaster />
-                        </DnsStatusProvider>
-                    </AuthProvider>
-                </BrowserRouter>
-            </TooltipProvider>
-        </QueryClientProvider>
+        <BrowserRouter>
+            <AuthProvider>
+                <QueryClientProvider client={queryClient}>
+                    <DnsStatusProvider>
+                        <LoadingProvider>
+                            <TooltipProvider>
+                                <Toaster />
+                                <AppRoutesWrapper />
+                            </TooltipProvider>
+                        </LoadingProvider>
+                    </DnsStatusProvider>
+                </QueryClientProvider>
+            </AuthProvider>
+        </BrowserRouter>
     );
 };
+
+const AppRoutesWrapper = () => {
+    const { isLoading } = useLoading();
+    const { user, loading: authLoading } = useAuth();
+    const { 
+      setOverallDnsStatus, 
+      setDnsContextLoaded, 
+      dnsContextLoaded, 
+      overallDnsStatus,
+      isDnsModalOpenGlobally
+    } = useDnsStatus();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const eligibleForDnsNotificationBar = [
+        '/dashboard',
+        '/editor',
+        '/send-email',
+        '/website-tracking',
+    ];
+    const shouldShowBasedOnPageEligibility = eligibleForDnsNotificationBar.includes(location.pathname);
+    
+    const isNotificationBarActuallyVisible = 
+      dnsContextLoaded && 
+      overallDnsStatus && 
+      overallDnsStatus !== 'verified' && 
+      !isDnsModalOpenGlobally;
+
+    return (
+        <>
+            <RouteChangeHandler />
+            {isLoading && <LoadingScreen isLoading={true} />}
+            <GlobalDnsNotificationBar />
+            <MainContentWithGlobalModal>
+                <AppRoutes />
+            </MainContentWithGlobalModal>
+        </>
+    );
+}
 
 export default App;

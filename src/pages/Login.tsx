@@ -5,11 +5,12 @@
  * Provides a form for email/password entry and handles the authentication flow.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { useAuth } from "@/features/auth/useAuth";
+import { useLoading } from '@/contexts/LoadingContext';
 
 /**
  * Login Component
@@ -25,6 +26,12 @@ const Login = () => {
   
   // Authentication hook for sign-in functionality
   const { signIn } = useAuth();
+  const { hideLoading } = useLoading();
+
+  useEffect(() => {
+    console.log("LoginPage: Hiding loading screen immediately.");
+    hideLoading();
+  }, [hideLoading]);
 
   /**
    * Form submission handler

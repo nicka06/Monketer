@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDnsStatus } from '@/contexts/DnsStatusContext';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, ChevronRight } from 'lucide-react';
 import { FORM_FLOW_ORDER } from '@/core/constants';
 
 const GlobalDnsNotificationBar: React.FC = () => {
@@ -36,17 +36,17 @@ const GlobalDnsNotificationBar: React.FC = () => {
   }
 
   let barStyle = 'bg-yellow-500 border-yellow-600';
-  let icon = <Info size={20} className="mr-3 text-black" />;
-  let message = "Your DNS records are pending verification. Click here to complete setup.";
+  let icon = <Info size={20} className="mr-3 text-black shrink-0" />;
+  let message = "DNS records pending.";
 
   if (overallDnsStatus === 'failed_to_verify') {
     barStyle = 'bg-red-500 border-red-600';
-    icon = <AlertTriangle size={20} className="mr-3 text-white" />;
-    message = "DNS verification failed. Please review your records and try again.";
+    icon = <AlertTriangle size={20} className="mr-3 text-white shrink-0" />;
+    message = "DNS verification failed. Please review.";
   } else if (overallDnsStatus === 'partially_verified') {
     barStyle = 'bg-yellow-500 border-yellow-600';
-    icon = <Info size={20} className="mr-3 text-black" />;
-    message = "Some DNS records are still pending. Click here to review and complete setup.";
+    icon = <Info size={20} className="mr-3 text-black shrink-0" />;
+    message = "Some DNS records still pending.";
   }
 
   const handleBarClick = () => {
@@ -55,12 +55,16 @@ const GlobalDnsNotificationBar: React.FC = () => {
 
   return (
     <div 
-        className={`fixed top-16 left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-between shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
+        className={`fixed top-16 left-0 right-0 z-[100] p-3 border-b text-sm flex items-center justify-center shadow-lg ${barStyle} text-black cursor-pointer hover:opacity-90 transition-opacity`}
         onClick={handleBarClick}
     >
-        <div className="flex items-center">
+        <div className="flex items-center text-center">
             {icon}
-            <span>{message} <span className="font-semibold">This can take a few hours, but if you haven't added the records, please do so now.</span></span>
+            <span>
+              {message} 
+              <span className="font-semibold ml-1">This can take a few hours, but if you haven't added the records, please do so now.</span>
+            </span>
+            <ChevronRight size={20} className="ml-2 shrink-0" />
         </div>
     </div>
   );
