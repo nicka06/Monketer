@@ -558,3 +558,13 @@ Purpose: Stores information related to a user's email domain setup process. This
   - `mx_status`: `text` - Status of the MX record.
   - `spf_status`: `text` - Status of the SPF record.
   - `dkim_status`: `text`
+
+📁 types/
+│   Purpose: Holds TypeScript definition files for the project, ensuring type safety and enabling better developer tooling for external libraries or custom JSX pragma.
+│   Details: Contains `.d.ts` files that describe the shape of JavaScript modules or add custom typings.
+│   Usage: TypeScript compiler automatically picks up these definition files. No direct import needed in most cases. Crucial for integrating libraries that don't have their own up-to-date types or for custom global type declarations.
+│   Children:
+│     └── 📄 styled-jsx.d.ts
+│         Purpose: Adds TypeScript definitions for the `styled-jsx` library, specifically for the `jsx` and `global` props on `<style>` tags.
+│         Details: Declares an augmentation for the 'react' module, extending `StyleHTMLAttributes` to include optional `jsx` and `global` boolean properties. This prevents TypeScript errors when using `styled-jsx` syntax like `<style jsx global>{`...`}</style>`.
+│         Usage: Automatically used by the TypeScript compiler to correctly type-check components using `styled-jsx`. Resolves linter errors related to unknown props on style tags.

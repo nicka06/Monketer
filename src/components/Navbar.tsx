@@ -99,7 +99,7 @@ const Navbar = () => {
               </Button>
             ) : (
               <>
-                <Button variant="ghost" className="text-white hover:bg-green-700 hover:text-yellow-300" asChild>
+                <Button variant="ghost" className="bg-green-900 text-gray-100 hover:bg-green-700 hover:text-yellow-400 focus:bg-green-700 focus:text-yellow-400" asChild>
                   <Link to="/login">Sign in</Link>
                 </Button>
               </>
@@ -122,7 +122,7 @@ const Navbar = () => {
               </Button>
             ) : (
               <>
-                <Button variant="ghost" className="w-full justify-center text-white hover:bg-green-700 hover:text-yellow-300" asChild>
+                <Button variant="ghost" className="w-full justify-center bg-green-900 text-gray-100 hover:bg-green-700 hover:text-yellow-400 focus:bg-green-700 focus:text-yellow-400" asChild>
                   <Link to="/login">Sign in</Link>
                 </Button>
               </>
