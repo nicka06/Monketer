@@ -15,6 +15,26 @@ steps:
   - '--build-arg'
   - '_VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID=${_VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID}'
   - '.'
+
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/monketer-website/monketer-app']
+
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+  - 'run'
+  - 'deploy'
+  - 'monketer-app'
+  - '--image'
+  - 'gcr.io/monketer-website/monketer-app'
+  - '--region'
+  - 'us-central1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated' # or configure IAM for authentication
+
 images:
 - 'gcr.io/monketer-website/monketer-app'
 substitutions:
