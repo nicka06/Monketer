@@ -227,7 +227,7 @@ const OptionalSignUpPage: React.FC = () => {
       <div className="images-container"> 
         <img 
           ref={backgroundRef}
-          src="/images/Background pt 2.png" 
+          src="/images/background_pt_2.png" 
           alt="Jungle background with different theme"
           className="background-image-element"
           onLoad={() => handlePageImageLoad(setIsPageBackgroundLoaded, 'optional_signup_background')}
