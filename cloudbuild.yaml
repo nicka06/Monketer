@@ -1,4 +1,16 @@
 steps:
+# Authorize Cloud Build to access secrets
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'sh'
+  args:
+  - '-c'
+  - |
+    gcloud secrets versions access latest --secret=VITE_SUPABASE_URL > /workspace/VITE_SUPABASE_URL
+    gcloud secrets versions access latest --secret=VITE_SUPABASE_ANON_KEY > /workspace/VITE_SUPABASE_ANON_KEY
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY > /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PRO_PRICE_ID > /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID > /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID
+
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Build Docker Image'
   args:
@@ -6,22 +18,16 @@ steps:
   - '--tag'
   - 'gcr.io/monketer-website/monketer-app'
   - '--build-arg'
-  - 'VITE_SUPABASE_URL'
+  - 'VITE_SUPABASE_URL=$(cat /workspace/VITE_SUPABASE_URL)'
   - '--build-arg'
-  - 'VITE_SUPABASE_ANON_KEY'
+  - 'VITE_SUPABASE_ANON_KEY=$(cat /workspace/VITE_SUPABASE_ANON_KEY)'
   - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY'
+  - 'VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY=$(cat /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY)'
   - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PRO_PRICE_ID'
+  - 'VITE_PUBLIC_STRIPE_PRO_PRICE_ID=$(cat /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID)'
   - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID'
+  - 'VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID=$(cat /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID)'
   - '.'
-  secretEnv:
-  - 'VITE_SUPABASE_URL'
-  - 'VITE_SUPABASE_ANON_KEY'
-  - 'VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY'
-  - 'VITE_PUBLIC_STRIPE_PRO_PRICE_ID'
-  - 'VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID'
 
 # Push the container image to Container Registry
 - name: 'gcr.io/cloud-builders/docker'
@@ -46,19 +52,6 @@ steps:
 
 images:
 - 'gcr.io/monketer-website/monketer-app'
-
-availableSecrets:
-  secretManager:
-  - versionName: projects/913896969230/secrets/VITE_SUPABASE_URL/versions/latest
-    env: 'VITE_SUPABASE_URL'
-  - versionName: projects/913896969230/secrets/VITE_SUPABASE_ANON_KEY/versions/latest
-    env: 'VITE_SUPABASE_ANON_KEY'
-  - versionName: projects/913896969230/secrets/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY/versions/latest
-    env: 'VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY'
-  - versionName: projects/913896969230/secrets/VITE_PUBLIC_STRIPE_PRO_PRICE_ID/versions/latest
-    env: 'VITE_PUBLIC_STRIPE_PRO_PRICE_ID'
-  - versionName: projects/913896969230/secrets/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID/versions/latest
-    env: 'VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID'
 
 options:
   logging: CLOUD_LOGGING_ONLY 
