@@ -1,0 +1,27 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '--tag'
+  - 'gcr.io/monketer-website/monketer-app'
+  - '--build-arg'
+  - '_VITE_SUPABASE_URL=${_VITE_SUPABASE_URL}'
+  - '--build-arg'
+  - '_VITE_SUPABASE_ANON_KEY=${_VITE_SUPABASE_ANON_KEY}'
+  - '--build-arg'
+  - '_VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY=${_VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY}'
+  - '--build-arg'
+  - '_VITE_PUBLIC_STRIPE_PRO_PRICE_ID=${_VITE_PUBLIC_STRIPE_PRO_PRICE_ID}'
+  - '--build-arg'
+  - '_VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID=${_VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID}'
+  - '.'
+images:
+- 'gcr.io/monketer-website/monketer-app'
+substitutions:
+  _VITE_SUPABASE_URL: ''
+  _VITE_SUPABASE_ANON_KEY: ''
+  _VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY: ''
+  _VITE_PUBLIC_STRIPE_PRO_PRICE_ID: ''
+  _VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID: ''
+options:
+  logging: CLOUD_LOGGING_ONLY 
