@@ -5,29 +5,27 @@ steps:
   args:
   - '-c'
   - |
-    gcloud secrets versions access latest --secret=VITE_SUPABASE_URL > /workspace/VITE_SUPABASE_URL
-    gcloud secrets versions access latest --secret=VITE_SUPABASE_ANON_KEY > /workspace/VITE_SUPABASE_ANON_KEY
-    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY > /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PRO_PRICE_ID > /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID
-    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID > /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID
+    gcloud secrets versions access latest --secret=VITE_SUPABASE_URL | tr -d '\n' > /workspace/VITE_SUPABASE_URL
+    gcloud secrets versions access latest --secret=VITE_SUPABASE_ANON_KEY | tr -d '\n' > /workspace/VITE_SUPABASE_ANON_KEY
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY | tr -d '\n' > /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PRO_PRICE_ID | tr -d '\n' > /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID
+    gcloud secrets versions access latest --secret=VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID | tr -d '\n' > /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID
 
+# Build the Docker image using a shell to correctly interpret build arguments
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Build Docker Image'
+  entrypoint: 'sh'
   args:
-  - 'build'
-  - '--tag'
-  - 'gcr.io/monketer-website/monketer-app'
-  - '--build-arg'
-  - 'VITE_SUPABASE_URL=$(cat /workspace/VITE_SUPABASE_URL)'
-  - '--build-arg'
-  - 'VITE_SUPABASE_ANON_KEY=$(cat /workspace/VITE_SUPABASE_ANON_KEY)'
-  - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY=$(cat /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY)'
-  - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PRO_PRICE_ID=$(cat /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID)'
-  - '--build-arg'
-  - 'VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID=$(cat /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID)'
-  - '.'
+  - '-c'
+  - |
+    docker build \
+      --tag gcr.io/monketer-website/monketer-app \
+      --build-arg VITE_SUPABASE_URL="$(cat /workspace/VITE_SUPABASE_URL)" \
+      --build-arg VITE_SUPABASE_ANON_KEY="$(cat /workspace/VITE_SUPABASE_ANON_KEY)" \
+      --build-arg VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY="$(cat /workspace/VITE_PUBLIC_STRIPE_PUBLISHABLE_KEY)" \
+      --build-arg VITE_PUBLIC_STRIPE_PRO_PRICE_ID="$(cat /workspace/VITE_PUBLIC_STRIPE_PRO_PRICE_ID)" \
+      --build-arg VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID="$(cat /workspace/VITE_PUBLIC_STRIPE_PREMIUM_PRICE_ID)" \
+      .
 
 # Push the container image to Container Registry
 - name: 'gcr.io/cloud-builders/docker'

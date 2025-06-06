@@ -73,13 +73,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const { user, loading: authLoading } = useAuth();
     const location = useLocation();
     const { isLoading: isGlobalLoading } = useLoading();
-
+  
     if (authLoading) return <div className="flex items-center justify-center h-screen">Authenticating...</div>;
-    
-    if (!user) {
+  
+  if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-    return <>{children}</>;
+  }
+  return <>{children}</>;
 };
 
 
@@ -276,10 +276,10 @@ const AppRoutes = () => {
             <Route path="/editor/:projectId" element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>} />
             <Route path="/editor/:username/:projectName" element={<ProtectedRoute><SubscriptionProtectedRoute><Editor /></SubscriptionProtectedRoute></ProtectedRoute>} />
             <Route path="/send-email" element={<ProtectedRoute><SendEmailPage /></ProtectedRoute>} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-            <Route path="/terms-of-service" element={<TermsOfService />} />
-            <Route path="/blog" element={<BlogIndexPage />} />
-            <Route path="/blog/:slug" element={<BlogPostPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/blog" element={<BlogIndexPage />} />
+      <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/optional-signup" element={<OptionalSignUpPage />} />
             <Route path="/goals-form" element={<GoalsFormPage />} />
             <Route path="/business-clarification" element={<BusinessClarificationPage />} />
@@ -291,9 +291,9 @@ const AppRoutes = () => {
             <Route path="/website-tracking" element={<WebsiteTrackingPage />} />
             <Route path="/subscription-plan" element={<ProtectedRoute><PlanSelectionPage /></ProtectedRoute>} />
             <Route path="/business-overview" element={<BusinessOverviewPage />} />
-            <Route path="*" element={<NotFound />} />
-        </Routes>
-    );
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
 };
 
 const MainContentWithGlobalModal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -516,22 +516,22 @@ const RouteChangeHandler = () => {
 };
 
 const App = () => {
-    return (
-        <BrowserRouter>
+  return (
+    <BrowserRouter>
             <AuthProvider>
-                <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
                     <DnsStatusProvider>
                         <LoadingProvider>
-                            <TooltipProvider>
-                                <Toaster />
+          <TooltipProvider>
+            <Toaster />
                                 <AppRoutesWrapper />
-                            </TooltipProvider>
+          </TooltipProvider>
                         </LoadingProvider>
                     </DnsStatusProvider>
                 </QueryClientProvider>
-            </AuthProvider>
-        </BrowserRouter>
-    );
+        </AuthProvider>
+    </BrowserRouter>
+  );
 };
 
 const AppRoutesWrapper = () => {

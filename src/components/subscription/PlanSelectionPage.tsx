@@ -135,7 +135,7 @@ const PlanSelectionPage: React.FC = () => {
   return (
     <div className="relative flex flex-col min-h-screen overflow-hidden">
       <img
-        src="/images/Background pt 2.png"
+        src="/images/background_pt_2.png"
         alt="Jungle background"
         className="absolute inset-0 w-full h-full object-cover -z-10"
         onLoad={() => {

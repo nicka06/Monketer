@@ -280,36 +280,33 @@ const InfoClarificationPage: React.FC = () => {
             <p><strong>Domain:</strong> {domainName || <span className="italic">Not specified</span>}</p>
           </SectionCard>
 
-          <div className="flex items-center space-x-2 pt-4">
+          <div className="bg-green-700 p-4 rounded-lg flex items-center justify-center space-x-3 shadow-lg border border-yellow-500">
             <Checkbox 
-              id="confirm-accuracy" 
+              id="confirmation-checkbox" 
               checked={isConfirmedAccurate}
               onCheckedChange={(checked) => setIsConfirmedAccurate(checked as boolean)}
               className="border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-green-900"
             />
-            <Label htmlFor="confirm-accuracy" className="text-gray-100">
+            <Label htmlFor="confirmation-checkbox" className="text-base text-white font-semibold cursor-pointer">
               Yes, all information is accurate and I'm ready to proceed.
             </Label>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 pt-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleNavigate('previous')}
-              className="w-full sm:w-auto text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+          <div className="flex justify-between items-center pt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => handleNavigate('previous')} 
               disabled={isProcessingNext}
+              className="py-3 px-6 text-lg border-2 border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white"
             >
               Previous
             </Button>
-            <Button
-              type="button"
-              onClick={() => handleNavigate('next')}
-              className="w-full bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-              disabled={!isConfirmedAccurate || isProcessingNext || isLoadingData}
+            <Button 
+              onClick={() => handleNavigate('next')} 
+              disabled={isProcessingNext || !isConfirmedAccurate}
+              className="py-3 px-8 text-lg bg-yellow-400 text-green-900 hover:bg-yellow-500 font-bold disabled:bg-gray-500 disabled:text-gray-300"
             >
-              {isProcessingNext ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-              {isProcessingNext ? 'Processing...' : (user ? 'Confirm & Proceed to DNS Setup' : 'Confirm & Proceed to Sign Up')}
+              {isProcessingNext ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Finalizing Setup...</> : 'Confirm & Continue'}
             </Button>
           </div>
         </div>

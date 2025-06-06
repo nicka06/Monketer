@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,11 +22,17 @@ const AuthGatePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(true); // To toggle between Sign Up and Sign In views
 
-  // Hide loading screen on mount
+  // Image loading logic
+  const [isBgImageLoaded, setIsBgImageLoaded] = useState(false);
+  const hideLoadingCalledRef = useRef(false);
+
   useEffect(() => {
-    console.log("AuthGatePage: Hiding loading screen immediately.");
-    hideLoading();
-  }, [hideLoading]);
+    if (isBgImageLoaded && !hideLoadingCalledRef.current) {
+      console.log("AuthGatePage: Background image loaded, hiding loading screen.");
+      hideLoading();
+      hideLoadingCalledRef.current = true;
+    }
+  }, [isBgImageLoaded, hideLoading]);
 
   // Redirect if user is already logged in
   useEffect(() => {
@@ -127,6 +133,45 @@ const AuthGatePage: React.FC = () => {
         return;
       }
 
+      // New logic: Initiate DNS setup right after authentication for a guest
+      console.log("AuthGatePage: Data persisted, now initiating DNS setup.");
+      const { data: setupData, error: setupError } = await supabase
+        .from('email_setups')
+        .select('id, website_provider')
+        .eq('user_id', authenticatedUser.id)
+        .single();
+
+      if (setupError || !setupData) {
+        console.error("AuthGatePage: Error fetching email_setup after persist:", setupError);
+        // Don't block navigation, but warn the user.
+        toast({
+          title: "Configuration Finalization Failed",
+          description: "We saved your progress, but couldn't automatically prepare your DNS records. Please proceed and try again on the next page.",
+          variant: "destructive"
+        });
+      } else if (setupData.website_provider) {
+        // Only initiate if there is data to process
+        console.log(`AuthGatePage: Calling initiate-email-setup for ID: ${setupData.id}`);
+        const { error: initiateError } = await supabase.functions.invoke(
+          'initiate-email-setup',
+          { body: { emailSetupId: setupData.id, providerInfo: { name: setupData.website_provider || 'Unknown' } } }
+        );
+
+        if (initiateError) {
+          console.error("AuthGatePage: Error from initiate-email-setup:", initiateError);
+          toast({
+            title: "DNS Setup Failed",
+            description: "We saved your progress, but couldn't prepare your DNS records automatically. You can try again on the next page.",
+            variant: "destructive"
+          });
+        } else {
+          console.log("AuthGatePage: initiate-email-setup successful.");
+          toast({ title: "DNS Setup Initiated", description: "Your DNS records are being prepared." });
+        }
+      } else {
+        console.log("AuthGatePage: No website provider info found for this user, skipping DNS setup initiation.");
+      }
+
       navigate('/dns-confirmation', { replace: true, state: { ...location.state, fromFormFlow: true } });
 
     } catch (error: any) {
@@ -137,12 +182,19 @@ const AuthGatePage: React.FC = () => {
   };
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-hidden">
+       <img
+        src="/images/background3.png"
+        alt="Jungle background"
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+        onLoad={() => setIsBgImageLoaded(true)}
+        onError={() => {
+          console.error("AuthGatePage: Failed to load background image.");
+          setIsBgImageLoaded(true); // Treat error as loaded to unblock loading screen
+        }}
+      />
       <Navbar />
-      <div className="min-h-screen bg-green-700 flex flex-col items-center justify-center p-4 relative pt-20">
-        <img src="/images/homepage_monkey_swinging.png" alt="Jungle Monkey" className="absolute top-20 left-10 w-32 h-auto hidden md:block opacity-80 z-0" />
-        <img src="/images/leaf_pattern_bottom_right.png" alt="Leaf Pattern" className="absolute bottom-0 right-0 w-64 h-auto hidden md:block opacity-70 z-0" />
-
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 relative pt-20">
         <div className="w-full max-w-md bg-green-800 bg-opacity-80 p-8 rounded-xl shadow-2xl space-y-6 z-10">
           <div className="text-center">
             <h1 className="text-4xl font-bold text-yellow-400 mb-2">Almost There!</h1>
@@ -214,7 +266,7 @@ const AuthGatePage: React.FC = () => {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
