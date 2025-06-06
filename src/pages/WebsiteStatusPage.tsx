@@ -248,32 +248,35 @@ const WebsiteStatusPage: React.FC = () => {
 
         {currentSubStep === 1 && (
           <div className="mt-8 w-full max-w-lg flex justify-center z-10">
-              <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleSaveAndNavigate('previous')}
-                  className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
-                  disabled={isSaving || isLoadingData}
-              >
-                  Previous Page
-              </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleSaveAndNavigate('previous')}
+              className="text-yellow-300 border-yellow-400 hover:bg-yellow-400 hover:text-green-900 py-3 px-6 text-lg rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-105"
+            >
+              Previous Page
+            </Button>
           </div>
         )}
-
-        <Dialog open={showNoWebsiteModal} onOpenChange={setShowNoWebsiteModal}>
-          <DialogContent className="bg-green-700 text-white border-yellow-400 z-20">
-            <DialogHeader>
-              <DialogTitle className="text-yellow-400">Website Required</DialogTitle>
-              <DialogDescription className="text-gray-200">
-                To effectively use our email marketing tools and features like DNS setup for your domain, a website is required. Please create a website and then return to this step.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button onClick={() => setShowNoWebsiteModal(false)} className="bg-yellow-400 hover:bg-yellow-500 text-green-900">OK</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+      <Dialog open={showNoWebsiteModal} onOpenChange={setShowNoWebsiteModal}>
+        <DialogContent className="bg-green-900 bg-opacity-80 backdrop-blur-sm border-yellow-400 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-yellow-400 text-2xl">A Website is Required</DialogTitle>
+            <DialogDescription className="text-gray-200 pt-2">
+              Our service is designed to integrate with an existing website to manage DNS and email settings. A live website is necessary to continue with the setup.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              onClick={() => setShowNoWebsiteModal(false)}
+              className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-bold"
+            >
+              I Understand
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
