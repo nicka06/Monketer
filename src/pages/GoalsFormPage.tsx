@@ -211,7 +211,7 @@ const GoalsFormPage: React.FC = () => {
         <Navbar />
         <main className="min-h-screen flex flex-col items-center justify-center text-white p-4 md:p-8 pt-20 md:pt-24"> {/* Removed bg-green-800, added main tag here */}
           <div className="w-full max-w-2xl space-y-8">
-            <div className="text-center">
+            <div className="text-center p-6 rounded-xl border-2 border-yellow-400 bg-green-700 bg-opacity-50 shadow-xl">
               <h1 className="text-4xl md:text-5xl font-bold text-yellow-400 mb-4">What Are Your Goals?</h1>
               <p className="text-lg text-gray-200">
                 Help us understand what you want to achieve with your email marketing.
