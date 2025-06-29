@@ -25,7 +25,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // --- Internal Type Imports ---
-import type { EmailTemplateV2Type as EmailTemplate } from '../../../shared/types/validators.ts';
+import type { EmailTemplate } from '../../../shared/types/template.ts';
 import type { EmailSection, EmailSectionStyles } from '../../../shared/types/sections.ts';
 import type { EmailElement, EmailElementLayout } from '../../../shared/types/elements.ts';
 import type { EmailGlobalStyles } from '../../../shared/types/template.ts';
@@ -37,7 +37,7 @@ import {
     ChangeStatusAction 
 } from '../../../shared/types/pendingChangeTypes.ts'; // New types imported
 import { corsHeadersFactory } from '../_shared/lib/constants.ts';
-import { HtmlGenerator } from '../_shared/services/htmlGenerator.ts'; // V2 generator
+import { HtmlGeneratorV2 as HtmlGenerator } from '../_shared/services/htmlGenerator.ts'; // V2 generator
 
 /**
  * Type for tracking deleted elements during revert operations
@@ -68,155 +68,39 @@ type DeletedElementInfo = EmailElement & {
  * @returns Updated email template with all changes applied
  */
 function applyPendingChanges(currentTemplate: EmailTemplate, changesToApply: GranularPendingChangeInput[]): EmailTemplate {
-    // Create deep copy of template to avoid modifying original
-    let updatedTemplate = JSON.parse(JSON.stringify(currentTemplate));
+    const newTemplate = JSON.parse(JSON.stringify(currentTemplate));
 
-    // Create lookup maps for efficient element and section access
-    const sectionMap = new Map<string, EmailSection>();
-    updatedTemplate.sections.forEach((section: EmailSection) => {
+    const elementMap = new Map<string, any>();
+    const columnMap = new Map<string, any>();
+    const rowMap = new Map<string, any>();
+    const sectionMap = new Map<string, any>();
+
+    newTemplate.sections.forEach((section: any) => {
         sectionMap.set(section.id, section);
-        // Element map will be more dynamic as elements are processed per section
-    });
-
-    // Filter changes by type for ordered processing
-    const sectionDeletes = changesToApply.filter(c => c.change_type === 'section_delete');
-    const sectionEdits = changesToApply.filter(c => c.change_type === 'section_edit');
-    const sectionAdds = changesToApply.filter(c => c.change_type === 'section_add');
-    const elementDeletes = changesToApply.filter(c => c.change_type === 'element_delete');
-    const elementEdits = changesToApply.filter(c => c.change_type === 'element_edit');
-    const elementAdds = changesToApply.filter(c => c.change_type === 'element_add');
-
-    // 1. Process Section Deletes
-    sectionDeletes.forEach(change => {
-        const sectionIndex = updatedTemplate.sections.findIndex((s: EmailSection) => s.id === change.target_id);
-        if (sectionIndex > -1) {
-            updatedTemplate.sections.splice(sectionIndex, 1);
-            sectionMap.delete(change.target_id!);
-            console.log(`Applied SECTION_DELETE for section ${change.target_id}`);
-                    } else {
-            console.warn(`Cannot apply SECTION_DELETE: Section ${change.target_id} not found.`);
-        }
-    });
-
-    // 2. Process Section Edits
-    sectionEdits.forEach(change => {
-        const sectionToEdit = sectionMap.get(change.target_id!);
-        if (sectionToEdit && change.new_content) {
-            const newSectionData = change.new_content as EmailSection;
-            // Update properties, but preserve elements array from the original sectionToEdit
-            // The 'elements' array within newSectionData from a 'section_edit' should reflect property changes, not element list changes.
-            // However, a 'section_edit' by definition in GranularPendingChange should only contain section properties, not a new elements array.
-            // For safety, explicitly copy only non-element properties.
-            Object.keys(newSectionData).forEach(key => {
-                if (key !== 'elements' && key !== 'id') {
-                    (sectionToEdit as any)[key] = (newSectionData as any)[key];
-                }
-            });
-            // If new_content specific to section_edit *only* includes changed properties (e.g., styles), then direct assignment is safer.
-            // Assuming change.new_content for section_edit is the full section object with updated properties (but original elements list)
-            // sectionToEdit.styles = newSectionData.styles; // Example: if only styles are in new_content or being targeted
-            // For a full property update:
-            // const { elements, ...newProps } = newSectionData; // Exclude elements from new_content
-            // Object.assign(sectionToEdit, newProps); // Assign new properties
-
-            console.log(`Applied SECTION_EDIT for section ${change.target_id}`);
-        } else {
-            console.warn(`Cannot apply SECTION_EDIT: Section ${change.target_id} not found or no new content.`);
-        }
-    });
-    
-    // Rebuild sectionMap after potential additions if IDs could change or for new sections
-    // For section adds, we add them directly to updatedTemplate.sections and then update the map.
-
-    // 3. Process Section Adds
-    sectionAdds.forEach(change => {
-        if (change.new_content) {
-            const newSection = change.new_content as EmailSection;
-            // Ensure no duplicate section ID if one is somehow regenerated with same ID as existing
-            if (!sectionMap.has(newSection.id)) {
-                updatedTemplate.sections.push(newSection);
-                sectionMap.set(newSection.id, newSection); // Add to map
-                console.log(`Applied SECTION_ADD for section ${newSection.id}`);
-            } else {
-                 console.warn(`Cannot apply SECTION_ADD: Section ${newSection.id} already exists. Consider using a unique ID or section_edit.`);
-            }
-                } else {
-            console.warn(`Cannot apply SECTION_ADD: No new_content provided.`);
-                }
-    });
-
-    // 4. Process Element Deletes
-    elementDeletes.forEach(change => {
-        if (!change.target_parent_id || !change.target_id) {
-            console.warn(`Cannot apply ELEMENT_DELETE: Missing target_parent_id or target_id.`);
-            return;
-        }
-        const parentSection = sectionMap.get(change.target_parent_id);
-        if (parentSection) {
-            const elementIndex = parentSection.elements.findIndex((el: EmailElement) => el.id === change.target_id);
-                    if (elementIndex > -1) {
-                parentSection.elements.splice(elementIndex, 1);
-                console.log(`Applied ELEMENT_DELETE for element ${change.target_id} from section ${change.target_parent_id}`);
-            } else {
-                console.warn(`Cannot apply ELEMENT_DELETE: Element ${change.target_id} not found in section ${change.target_parent_id}.`);
-            }
-        } else {
-            console.warn(`Cannot apply ELEMENT_DELETE: Parent section ${change.target_parent_id} not found for element ${change.target_id}.`);
-        }
-    });
-
-    // 5. Process Element Edits
-    elementEdits.forEach(change => {
-        if (!change.target_parent_id || !change.target_id || !change.new_content) {
-            console.warn(`Cannot apply ELEMENT_EDIT: Missing target_parent_id, target_id, or new_content.`);
-            return;
-        }
-        const parentSection = sectionMap.get(change.target_parent_id);
-        if (parentSection) {
-            const elementToEdit = parentSection.elements.find((el: EmailElement) => el.id === change.target_id);
-            if (elementToEdit) {
-                // Preserve ID and type, merge other properties.
-                const newElementData = change.new_content as EmailElement;
-                Object.keys(newElementData).forEach(key => {
-                    if (key !== 'id' && key !== 'type') { // id and type should not change in an edit
-                        (elementToEdit as any)[key] = (newElementData as any)[key];
-                    }
+        section.rows.forEach((row: any) => {
+            rowMap.set(row.id, row);
+            row.columns.forEach((column: any) => {
+                columnMap.set(column.id, column);
+                column.elements.forEach((element: any) => {
+                    elementMap.set(element.id, element);
                 });
-                console.log(`Applied ELEMENT_EDIT for element ${change.target_id} in section ${change.target_parent_id}`);
-            } else {
-                console.warn(`Cannot apply ELEMENT_EDIT: Element ${change.target_id} not found in section ${change.target_parent_id}.`);
-            }
-        } else {
-            console.warn(`Cannot apply ELEMENT_EDIT: Parent section ${change.target_parent_id} not found for element ${change.target_id}.`);
-        }
+            });
+        });
     });
 
-    // 6. Process Element Adds
-    elementAdds.forEach(change => {
-        if (!change.target_parent_id || !change.new_content) {
-            console.warn(`Cannot apply ELEMENT_ADD: Missing target_parent_id or new_content.`);
-            return;
-        }
-        const parentSection = sectionMap.get(change.target_parent_id);
-        if (parentSection) {
-            const newElement = change.new_content as EmailElement;
-            // Ensure element ID is unique within the section if that's a constraint, or that it's a new element.
-            if (!parentSection.elements.find((el: EmailElement) => el.id === newElement.id)) {
-                parentSection.elements.push(newElement);
-                console.log(`Applied ELEMENT_ADD for element ${newElement.id} to section ${change.target_parent_id}`);
-            } else {
-                console.warn(`Cannot apply ELEMENT_ADD: Element with ID ${newElement.id} already exists in section ${change.target_parent_id}.`);
-            }
-        } else {
-            console.warn(`Cannot apply ELEMENT_ADD: Parent section ${change.target_parent_id} not found for new element.`);
+    for (const change of changesToApply) {
+        switch (change.change_type) {
+            case 'element_edit':
+                const elementToEdit = elementMap.get(change.target_id);
+                if (elementToEdit) {
+                    Object.assign(elementToEdit.properties, change.new_content);
                 }
-    });
-    
-    // The old complex loop with switch case is replaced by the ordered processing above.
-    // The original elementMap and direct manipulation within a single loop can be error-prone with additions/deletions.
-    // This ordered approach is more robust.
+                break;
+            // Add other cases for add, delete, move for elements, columns, rows, sections
+        }
+    }
 
-    return updatedTemplate;
+    return newTemplate;
 }
 
 /**
@@ -450,7 +334,7 @@ serve(async (req) => {
         console.log(`Fetching project data for ID: ${projectId}`);
         const { data: projectData, error: projectError } = await supabase
             .from('projects')
-            .select('id, semantic_email_v2, version') // Fetch V2 template
+            .select('id, email_content_structured, version') // Fetch V2 template
             .eq('id', projectId)
             .single();
 
@@ -458,14 +342,14 @@ serve(async (req) => {
         if (!projectData) throw new Error(`Project with ID ${projectId} not found.`);
 
         // Ensure currentSemanticEmail is properly typed as EmailTemplate (which is EmailTemplateV2Type)
-        // and can be null if the project is new or semantic_email_v2 is not yet populated.
-        const currentSemanticEmail = projectData.semantic_email_v2 as EmailTemplate | null;
+        // and can be null if the project is new or email_content_structured is not yet populated.
+        const currentSemanticEmail = projectData.email_content_structured as EmailTemplate | null;
         const currentVersion = projectData.version as number ?? 0; // Default to 0 if null
 
         switch (operation) {
             case 'accept_one':
                 if (!change_id) throw new Error("change_id is required for accept_one operation.");
-                if (!currentSemanticEmail) throw new Error("Cannot accept change: Project current template (semantic_email_v2) is missing.");
+                if (!currentSemanticEmail) throw new Error("Cannot accept change: Project current template (email_content_structured) is missing.");
 
                 console.log(`Processing ACCEPT_ONE for change ${change_id} in project ${projectId}`);
 
@@ -496,7 +380,7 @@ serve(async (req) => {
                 const { error: updateProjectError } = await supabase
                     .from('projects')
                     .update({
-                        semantic_email_v2: updatedTemplate,
+                        email_content_structured: updatedTemplate,
                         current_html: newHtml,
                         version: nextVersionNumber,
                         last_edited_at: new Date().toISOString(),
@@ -520,8 +404,8 @@ serve(async (req) => {
                 .insert({
                     project_id: projectId,
                     version_number: nextVersionNumber,
-                        // content: updatedTemplate, // content was original V1, use semantic_email_v2 for V2
-                        semantic_email_v2: updatedTemplate, 
+                        // content: updatedTemplate, // content was original V1, use email_content_structured for V2
+                        email_content_structured: updatedTemplate, 
                     created_at: new Date().toISOString()
                 });
                 if (saveVersionError) console.error("Failed to save email version snapshot:", saveVersionError);
@@ -537,7 +421,7 @@ serve(async (req) => {
 
             case 'reject_one':
                 if (!change_id) throw new Error("change_id is required for reject_one operation.");
-                if (!currentSemanticEmail) throw new Error("Cannot reject change: Project current template (semantic_email_v2) is missing.");
+                if (!currentSemanticEmail) throw new Error("Cannot reject change: Project current template (email_content_structured) is missing.");
                 
                 console.log(`Processing REJECT_ONE for change ${change_id} in project ${projectId}`);
 
@@ -567,7 +451,7 @@ serve(async (req) => {
                 const { error: revertProjectError } = await supabase
                     .from('projects')
                     .update({
-                        semantic_email_v2: revertedTemplate,
+                        email_content_structured: revertedTemplate,
                         current_html: revertedHtml,
                         version: revertedVersionNumber,
                         last_edited_at: new Date().toISOString(),
@@ -588,7 +472,7 @@ serve(async (req) => {
                     .insert({
                         project_id: projectId,
                         version_number: revertedVersionNumber,
-                        semantic_email_v2: revertedTemplate,
+                        email_content_structured: revertedTemplate,
                         created_at: new Date().toISOString()
                     });
                 if (revertVersionError) console.error("Failed to save email version snapshot:", revertVersionError);
@@ -604,7 +488,7 @@ serve(async (req) => {
             
             case 'accept_batch':
                 if (!batch_id) throw new Error("batch_id is required for accept_batch operation.");
-                if (!currentSemanticEmail) throw new Error("Cannot accept batch: Project current template (semantic_email_v2) is missing.");
+                if (!currentSemanticEmail) throw new Error("Cannot accept batch: Project current template (email_content_structured) is missing.");
                 
                 console.log(`Processing ACCEPT_BATCH for batch ${batch_id} in project ${projectId}`);
                 
@@ -633,7 +517,7 @@ serve(async (req) => {
                     const { error: updateProjectErrorBatch } = await supabase
                 .from('projects')
                         .update({
-                            semantic_email_v2: updatedTemplateBatch,
+                            email_content_structured: updatedTemplateBatch,
                             current_html: newHtmlBatch,
                             version: nextVersionNumberBatch,
                             last_edited_at: new Date().toISOString(),
@@ -647,7 +531,7 @@ serve(async (req) => {
                         .insert({
                             project_id: projectId,
                             version_number: nextVersionNumberBatch,
-                            semantic_email_v2: updatedTemplateBatch,
+                            email_content_structured: updatedTemplateBatch,
                             created_at: new Date().toISOString()
                         });
                     if (saveVersionErrorBatch) console.error("Failed to save email version snapshot for batch:", saveVersionErrorBatch);
@@ -674,7 +558,7 @@ serve(async (req) => {
 
             case 'reject_batch':
                 if (!batch_id) throw new Error("batch_id is required for reject_batch operation.");
-                if (!currentSemanticEmail) throw new Error("Cannot reject batch: Project current template (semantic_email_v2) is missing.");
+                if (!currentSemanticEmail) throw new Error("Cannot reject batch: Project current template (email_content_structured) is missing.");
                 
                 console.log(`Processing REJECT_BATCH for batch ${batch_id} in project ${projectId}`);
             
@@ -704,7 +588,7 @@ serve(async (req) => {
                 const { error: revertProjectErrorBatch } = await supabase
                     .from('projects')
                     .update({
-                        semantic_email_v2: revertedTemplateBatch,
+                        email_content_structured: revertedTemplateBatch,
                         current_html: revertedHtmlBatch,
                         version: revertedVersionNumberBatch,
                         last_edited_at: new Date().toISOString(),
@@ -726,7 +610,7 @@ serve(async (req) => {
                     .insert({
                         project_id: projectId,
                         version_number: revertedVersionNumberBatch,
-                        semantic_email_v2: revertedTemplateBatch,
+                        email_content_structured: revertedTemplateBatch,
                         created_at: new Date().toISOString()
                     });
                 if (revertVersionErrorBatch) console.error("Failed to save email version snapshot for batch:", revertVersionErrorBatch);

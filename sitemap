@@ -1,615 +1,173 @@
-## SUMMARY MAP
-
-📁 supabase/
-  Purpose: Configuration and local development files for Supabase.
-  Details: This directory typically holds CLI-generated files, migrations, and project-specific Supabase settings.
-  ├── 📄 config.toml
-  │   Purpose: Main configuration file for the Supabase CLI, overriding default behaviors and specifying project structure.
-  │   Details:
-  │   - Defines function-specific settings for `clarify-user-intent`.
-  │   - `entrypoint`: Specifies the direct path to the main `index.ts` file for the `clarify-user-intent` function, relative to the `supabase` directory itself (e.g., `../src/backend/functions/clarify-user-intent/index.ts`). This tells the CLI where to find the function code if it's not in the default `supabase/functions` location.
-  │   - `import_map`: Specifies the path to the `import_map.json` file used by Deno for this function, also relative to the `supabase` directory (e.g., `../src/backend/functions/import_map.json`). This ensures correct module resolution during bundling and deployment.
-  │   - **Also defines similar `entrypoint` and `import_map` settings for the `generate-email-changes` function.**
-  │   Usage: Crucial for deploying Edge Functions when they are not located in the default `supabase/functions` directory. Ensures the Supabase CLI can locate the function code and its dependencies correctly.
+## Project Sitemap
 
 📁 src/
 ├── 📁 backend/
-│   ├── 📁 functions/
-│   │   ├── 📁 stripe-webhook-handler/
-│   │   │   ├── 📄 index.ts
-│   │   │   │   Purpose: Handles Stripe webhook events for subscription management.
-│   │   │   │   Details:
-│   │   │   │   - Processes various Stripe events (checkout.session.completed, invoice events, subscription updates).
-│   │   │   │   - Updates user subscription status and tier in Supabase database.
-│   │   │   │   - Handles subscription lifecycle (creation, updates, cancellation).
-│   │   │   │   - Integrates with Stripe API and Supabase client.
-│   │   │   │   Usage: Deployed as Supabase Edge Function to handle Stripe webhook notifications.
-│   │   │   │
-│   │   │   └── 📄 types.ts
-│   │   │       Purpose: Type definitions for subscription-related data.
-│   │   │       Details:
-│   │   │       - Defines `SubscriptionTier` type ('free' | 'pro' | 'premium').
-│   │   │       - Defines `SubscriptionPlan` interface.
-│   │   │       - Provides utility function `determineTierFromPriceId`.
-│   │   │       Usage: Used by webhook handler and other subscription-related components.
-│   │   │
-│   │   ├── 📁 .temp/  
-│   │   │   Purpose: Supabase CLI version tracking or temporary build files for backend.
-│   │   │   Details: (Clarify based on actual use)
-│   │   │
-│   │   ├── 📁 functions/ 
-│   │   │   ├── 📁 _shared/
-│   │   │   │   Purpose: Contains shared code, types, or utilities used by multiple backend functions.
-│   │   │   │   Details: For example, `cors.ts` for CORS headers, `lib/` for more complex shared utilities.
-│   │   │   │   Usage: Imported by other functions to reduce code duplication.
-│   │   │   │   Files:
-│   │   │   │     *   **`cors.ts`**
-│   │   │   │         *   Purpose: Provides basic Cross-Origin Resource Sharing (CORS) headers.
-│   │   │   │         *   Details: Exports a `corsHeaders` object with `Access-Control-Allow-Origin: '*'`. Primarily intended for public-facing ingestion endpoints like `ingest-tracking-event` where the client-side request is made with `credentials: 'omit'`.
-│   │   │   │         *   Usage: Imported by Deno functions that can accept requests from any origin without credentials.
-│   │   │   │     *   **`supabaseAdmin.ts`**
-│   │   │   │         *   Purpose: Initializes and exports a Supabase client instance configured with the `SUPABASE_SERVICE_ROLE_KEY`.
-│   │   │   │         *   Details: Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from environment variables. Throws an error if they are not set. Configures the client with `autoRefreshToken: false` and `persistSession: false` suitable for server-side admin operations.
-│   │   │   │         *   Usage: Imported by backend functions (`ingest-tracking-event`, `test-pixel-status`, etc.) that need to perform privileged operations against the Supabase database.
-│   │   │   │   ├── 📁 lib/
-│   │   │   │   │   ├── 📄 constants.ts
-│   │   │   │   │   │   Purpose: Manages Cross-Origin Resource Sharing (CORS) configuration for Supabase Edge Functions that require specific origin validation, often when credentials are included in requests.
-│   │   │   │   │   │   Details:
-│   │   │   │   │   │   - Defines a whitelist of `ALLOWED_ORIGINS`.
-│   │   │   │   │   │   - Exports `corsHeadersFactory(requestOrigin)`: A function that dynamically generates appropriate CORS headers, including `Access-Control-Allow-Credentials: 'true'` if the origin is whitelisted. Used for functions that handle credentialed requests.
-│   │   │   │   │   │   - Not used by `ingest-tracking-event`, which uses simpler wildcard CORS due to `credentials: 'omit'` in the pixel script.
-│   │   │   │   │   │   Usage: Imported by Supabase Edge Functions requiring nuanced CORS handling for specific origins, especially with credentials.
-│   │   │   │   │   │
-│   │   │   │   │   └── 📄 uuid-utils.ts
-│   │   │   │   │       Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-│   │   │   │   │       Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-│   │   │   │   │       Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-│   │   │   │   │
-│   │   │   │   └── 📁 services/
-│   │   │   │       ├── 📄 differ.ts
-│   │   │   │       │   Purpose: Backend-specific adapter for the V2 template diffing service.
-│   │   │   │       │   Details:
-│   │   │   │       │   - Extends `DifferV2Core` from `src/shared/services/differ.ts`.
-│   │   │   │       │   - Currently provides no backend-specific overrides, simply inherits core diffing logic.
-│   │   │   │       │   - Exports `DifferV2` class.
-│   │   │   │       │   Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
-│   │   │   │       │
-│   │   │   │       ├── 📄 htmlGenerator.ts
-│   │   │   │       │   Purpose: Backend adapter for the V2 HTML email generation service, extending `HtmlGeneratorCore`.
-│   │   │   │       │   Details:
-│   │   │   │       │   - Adapts `HtmlGeneratorCore` (from `src/shared/services/htmlGenerator.ts`) for the backend Deno environment.
-│   │   │   │       │   - Does not override any core methods, simply inherits the HTML generation logic.
-│   │   │   │       │   - **This means it includes the functionality from `HtmlGeneratorCore` to add `data-section-id` attributes to section containers, making these IDs available in the HTML stored in the database.**
-│   │   │   │       │   - Exports `HtmlGeneratorV2` class and a convenience `generateHtml(template)` function.
-│   │   │   │       │   Usage: Used by backend functions like `manage-pending-changes` to generate the final HTML for accepted email templates before saving to the database.
-│   │   │   │       │
-│   │   │   │       └── 📄 semanticParser.ts 
-│   │   │   │           Purpose: Backend adapter for V2 email HTML semantic parsing (if applicable, or if shared and used by backend).
-│   │   │   │           Details: (Details would depend on its actual backend use)
-│   │   │   │           Usage: (Usage would depend on its actual backend use)
-│   │   │   │
-│   │   ├── 📁 clarify-user-intent/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: AI conversation middleware, served as a Supabase Edge Function.
-│   │   │       Details: (Content as previously listed, summarized for brevity)
-│   │   │       - Analyzes user messages, asks clarifying questions, provides structured data for email generation.
-│   │   │       - Manages context, token limits, error handling.
-│   │   │       Usage: HTTP POST endpoint for frontend, uses OpenAI.
-│   │   │
-│   │   ├── 📁 generate-email-changes/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Supabase Edge Function to process AI-driven modifications to email templates, convert into granular pending changes, and save.
-│   │   │       Details: (Content as previously listed, summarized for brevity)
-│   │   │       - Receives payload, constructs OpenAI prompt for complete `EmailTemplateV2` (new or modified).
-│   │   │       - Parses AI response, merges with defaults, validates, generates batch ID.
-│   │   │       - Calls `convertDiffToGranularRows` to create `GranularPendingChangeInput[]`.
-│   │   │       - Saves granular changes to `pending_changes` table.
-│   │   │       Usage: Called by frontend after clarification to generate pending changes.
-│   │   │
-│   │   ├── 📁 manage-pending-changes/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Supabase Edge Function to manage granular pending V2 template changes (accept/reject/get).
-│   │   │       Details: (Content as previously listed, summarized for brevity)
-│   │   │       - Handles `accept_one`, `reject_one`, `accept_batch`, `reject_batch`, `get_batch`, `get_all_project`.
-│   │   │       - Uses `applyPendingChanges` helper to modify `EmailTemplateV2`.
-│   │   │       - Regenerates HTML using `HtmlGeneratorV2` on acceptance.
-│   │   │       - Updates project's `semantic_email_v2`, `current_html`, and change statuses in DB.
-│   │   │       Usage: HTTP POST endpoint for frontend to manage pending changes.
-│   │   │
-│   │   ├── 📁 send-preview-email/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Supabase Edge Function to send an email with provided HTML content for preview.
-│   │   │       Details: (Content as previously listed, summarized for brevity)
-│   │   │       - Accepts `recipientEmail` and `emailHtml`.
-│   │   │       - Uses `nodemailer` with Gmail SMTP (env var credentials) to send.
-│   │   │       Usage: HTTP POST endpoint for frontend to send preview emails.
-│   │   │
-│   │   ├── 📁 save-email-setup-form/
-│   │   │   ├── 📄 index.ts
-│   │   │   │   Purpose: Supabase Edge Function to save user's initial email setup information.
-│   │   │   │   Details:
-│   │   │   │     - Receives form data (business area, goals, scenarios, default sender, domain, sendTimeline).
-│   │   │   │     - Authenticates the user.
-│   │   │   │     - Validates required fields like domain, defaultFromEmail, defaultFromName.
-│   │   │   │     - Upserts data into the `email_setups` table (see "Database Schema" section for table details). Key fields set: user_id, domain, business_area, etc., status "pending_dns_config", send_timeline.
-│   │   │   │     - Upserts/deletes `scenario_sender_configs` associated with the `email_setup_id`.
-│   │   │   │   Usage: Called by the frontend when the user submits the initial email setup form.
-│   │   │   │
-│   │   │   └── 📄 types.ts  
-│   │   │       Purpose: Defines types and interfaces for save-email-setup-form.
-│   │   │       Details: Contains `EmailSetupFormData` and `ScenarioSenderConfig`.
-│   │   │       Usage: Used by `save-email-setup-form/index.ts`.
-│   │   │
-│   │   ├── 📁 get-or-create-tracking-id/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Supabase Edge Function to retrieve an existing `tracking_pixel_id` for an `email_setup` record, or generate, save, and return a new UUID if one doesn't exist.
-│   │   │       Details:
-│   │   │         - Accepts `emailSetupId` (the primary ID of the `email_setups` row) in the request body.
-│   │   │         - Fetches the `email_setups` record.
-│   │   │         - If `tracking_pixel_id` field is already populated, it returns that ID.
-│   │   │         - If `tracking_pixel_id` is NULL, it generates a new UUID using `crypto.randomUUID()`.
-│   │   │         - Updates the corresponding `email_setups` row, setting the `tracking_pixel_id` to the new UUID.
-│   │   │         - Returns the (either existing or newly created) `trackingPixelId`.
-│   │   │         - Uses the shared Supabase admin client and CORS headers. Includes `@ts-ignore` for Deno-specific imports to satisfy local linters.
-│   │   │       Input: `{ "emailSetupId": "uuid" }`
-│   │   │       Output: `{ "trackingPixelId": "uuid" }` or an error object.
-│   │   │       Usage: Called by the frontend (e.g., `WebsiteTrackingPage.tsx`) to ensure a persistent and unique ID is available for generating the website tracking pixel script.
-│   │   │
-│   │   ├── 📁 initiate-email-setup/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Orchestrates the initial DNS configuration steps for a user's domain. All configurations are manual. Primarily focuses on DKIM setup by calling an external mail server API.
-│   │   │       Details:
-│   │   │         - Authenticates the user and retrieves the `email_setups` record by ID (see "Database Schema" for table details).
-│   │   │         - **Idempotency Check:** If `dkim_public_key` column in `email_setups` table contains a valid Base64 key, it is reused.
-│   │   │         - **Calls External Mail Server API:**
-│   │   │           - Makes a POST request to `MAIL_SERVER_DKIM_ENDPOINT` (env var) with `{ domain }`. Expects `MAIL_SERVER_SHARED_SECRET` (env var) for Bearer token authentication.
-│   │   │           - Expects the mail server to return a JSON response like `{ dnsTxtRecord: "selector._domainkey.domain IN TXT \"v=DKIM1; k=rsa; p=PUBLIC_KEY_BASE64\"" }`.
-│   │   │         - **DKIM Public Key Parsing & Validation:**
-│   │   │           - Parses the received `dnsTxtRecord` string (using regex) to extract the Base64 public key part (`p=...`).
-│   │   │           - Validates the extracted public key for valid Base64 format.
-│   │   │         - **DNS Record Generation:**
-│   │   │           - Generates required DNS records (MX, SPF TXT, DKIM TXT, DMARC TXT).
-│   │   │           - Uses `DEFAULT_MX_VALUE` (env var) or a fallback for the MX record value.
-│   │   │           - Uses `DEFAULT_SPF_VALUE` (env var) or a fallback for the SPF record value.
-│   │   │           - Uses `DEFAULT_DMARC_VALUE` (env var) or a fallback for the DMARC record value (e.g., `v=DMARC1; p=none; rua=mailto:dmarc-reports@domain.com`).
-│   │   │           - Constructs the DKIM TXT record value using the (parsed and validated) public key and a DKIM selector (uses existing `dkim_selector` from DB or defaults to "default"). If parsing/validation/API call fails, a placeholder error value is used in the DKIM DNS record.
-│   │   │         - **Database Update:** Updates the `email_setups` record (see "Database Schema" for table details) with fields including:
-│   │   │           - `dns_provider_name` (from user input).
-│   │   │           - `dns_setup_strategy` (always "manual").
-│   │   │           - `dkim_selector` (used or defaulted).
-│   │   │           - `dkim_public_key` (the extracted Base64 key, or `null` if provisioning failed).
-│   │   │           - `dns_records_to_set` (the generated DNS records).
-│   │   │           - `status` (always "awaiting_manual_dns_config").
-│   │   │           - `mx_record_value`, `spf_record_value`, `dmarc_record_value` are populated with the actual values used.
-│   │   │           - `mx_status`, `spf_status`, `dkim_status`, `dmarc_status`, `overall_dns_status` are initialized to 'pending'.
-│   │   │       Input: `{ emailSetupId: string, providerInfo: { name: string, nameservers: string[] } }`  // Note: nameservers currently not used by function, can be omitted in call
-│   │   │       Output: `{ dnsSetupStrategy: "manual", dkimSelector: string, requiredDnsRecords: DnsRecord[], message: string }`
-│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER_DKIM_ENDPOINT`, `MAIL_SERVER_SHARED_SECRET`, `DEFAULT_MX_VALUE`, `DEFAULT_SPF_VALUE`, `DEFAULT_DMARC_VALUE`, `SUPABASE_ANON_KEY`.
-│   │   │
-│   │   ├── 📁 verify-dns-records/
-│   │   │   └── 📄 index.ts
-│   │   │       Purpose: Supabase Edge Function to verify DNS records (MX, SPF, DKIM, DMARC) for a given domain setup.
-│   │   │       Details:
-│   │   │         - Authenticates the user.
-│   │   │         - Accepts an `emailSetupId`.
-│   │   │         - Fetches the `email_setups` record to get the domain and expected DNS record values (`mx_record_value`, `spf_record_value`, `dmarc_record_value`, `dkim_public_key`, `dkim_selector`).
-│   │   │         - Uses `Deno.resolveDns(recordName, recordType)` to query actual DNS records from public resolvers.
-│   │   │         - **MX Check**: Compares the exchange part of resolved MX records against `mx_record_value`.
-│   │   │         - **SPF Check**: Looks for a TXT record starting with "v=spf1" that contains the `spf_record_value`.
-│   │   │         - **DKIM Check**: Looks for a TXT record at `dkim_selector._domainkey.domain` containing the `p=<dkim_public_key>`.
-│   │   │         - **DMARC Check**: Looks for a TXT record at `_dmarc.domain` starting with "v=DMARC1" that contains the `dmarc_record_value`.
-│   │   │         - Updates the `email_setups` table with the status for each record (`mx_status`, `spf_status`, `dkim_status`, `dmarc_status` - values: 'verified', 'failed', 'pending', 'error'), the `overall_dns_status`, `last_verification_attempt_at`, and `verification_failure_reason`.
-│   │   │         - Returns the detailed verification statuses.
-│   │   │       Input: `{ "emailSetupId": "uuid" }`
-│   │   │       Output: `{ overallDnsStatus, mxStatus, spfStatus, dkimStatus, dmarcStatus, lastVerificationAttemptAt, verificationFailureReason }` (see function interfaces for `DnsVerificationStatus` details).
-│   │   │       Environment Variables Used: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`.
-│   │   │
-│   ├── 📁 supabase-admin-example/  
-│   │   └── 📄 index.ts
-│   │       Purpose: Example or utility function demonstrating Supabase admin client usage.
-│   │       Details: (Content would depend on the specific example)
-│   │       Usage: Reference for admin-level operations or a specific utility.
-│   │
-│   └── 📄 import_map.json
-│       Purpose: Deno import map for backend functions if shared across all, or general backend utilities.
-│       Details: Maps module specifiers to URLs for Deno.
-│       Usage: Used by Deno runtime to resolve imports for functions not having their own `import_map.json` or for shared backend code.
-│   
+│   ├── 📄 config.toml - Configuration for backend functions.
+│   ├── 📄 deno.jsonc - Deno configuration for backend functions.
+│   └── 📁 functions/
+│       ├── 📁 _shared/
+│       │   ├── 📄 cors.ts - Handles Cross-Origin Resource Sharing headers for backend functions.
+│       │   ├── 📁 lib/
+│       │   │   ├── 📄 constants.ts - Shared constants for backend services.
+│       │   │   ├── 📄 dns-provider-instructions.ts - Contains DNS setup instructions for different providers.
+│       │   │   ├── 📄 uuid-utils.ts - Utility functions for handling UUIDs.
+│       │   │   └── 📄 uuid.ts - A library for UUID generation.
+│       │   ├── 📁 services/
+│       │   │   ├── 📄 agentLogger.ts - Service for logging the steps of the AI agentic process.
+│       │   │   ├── 📄 differ.ts - Backend service for diffing email templates.
+│       │   │   ├── 📄 htmlGenerator.ts - Backend service for generating HTML from email templates.
+│       │   │   └── 📄 semanticParser.ts - Backend service for parsing semantic email content.
+│       │   └── 📄 supabaseAdmin.ts - Initializes the Supabase admin client for privileged operations.
+│       ├── 📁 clarify-user-intent/
+│       │   └── 📄 index.ts - Supabase edge function to handle the AI clarification conversation with the user.
+│       ├── 📁 create-blog-post/
+│       │   └── 📄 index.ts - Supabase edge function to create a new blog post.
+│       ├── 📁 create-stripe-checkout-session/
+│       │   └── 📄 index.ts - Supabase edge function to create a Stripe checkout session for subscriptions.
+│       ├── 📁 generate-email-changes/
+│       │   ├── 📄 index.ts - Main Supabase edge function that orchestrates the agentic process for generating email changes.
+│       │   └── 📁 steps/
+│       │       ├── 📄 1-clarify-intent.ts - First step of the agentic process: clarifying user intent.
+│       │       ├── 📄 2-plan-changes.ts - Second step of the agentic process: creating a plan for changes.
+│       │       ├── 📄 3-execute-plan.ts - Third step of the agentic process: executing the change plan.
+│       │       └── 📄 4-generate-diff.ts - Fourth step of the agentic process: generating a diff of the changes.
+│       ├── 📁 get-domain-provider/
+│       │   ├── 📄 dns-lookup.ts - Helper for DNS lookups.
+│       │   ├── 📄 index.ts - Supabase edge function to detect the user's domain provider.
+│       │   ├── 📄 provider-map.ts - Maps nameservers to known DNS providers.
+│       │   └── 📄 types.ts - Types related to domain providers.
+│       ├── 📁 get-or-create-tracking-id/
+│       │   └── 📄 index.ts - Supabase edge function to get or create a tracking ID for a project.
+│       ├── 📄 import_map.json - Deno import map for backend functions.
+│       ├── 📁 ingest-tracking-event/
+│       │   └── 📄 index.ts - Supabase edge function to ingest tracking pixel events.
+│       ├── 📁 initiate-email-setup/
+│       │   └── 📄 index.ts - Supabase edge function to start the email setup process (e.g., creating DNS records).
+│       ├── 📁 manage-pending-changes/
+│       │   └── 📄 index.ts - Supabase edge function to accept or reject pending email changes.
+│       ├── 📁 save-email-setup-form/
+│       │   └── 📄 index.ts - Supabase edge function to save data from the email setup form.
+│       ├── 📁 send-preview-email/
+│       │   ├── 📄 deno.json - Deno configuration specific to the send-preview-email function.
+│       │   └── 📄 index.ts - Supabase edge function to send a preview email.
+│       ├── 📁 stripe-webhook-handler/
+│       │   ├── 📄 index.ts - Supabase edge function to handle incoming webhooks from Stripe.
+│       │   └── 📄 types.ts - Types for Stripe webhook payloads.
+│       ├── 📁 subscribe-to-free-plan/
+│       │   └── 📄 index.ts - Supabase edge function to subscribe a user to the free plan.
+│       ├── 📁 test-pixel-status/
+│       │   └── 📄 index.ts - Supabase edge function to test the status of the tracking pixel.
+│       └── 📁 verify-dns-records/
+│           └── 📄 index.ts - Supabase edge function to verify a domain's DNS records.
 ├── 📁 components/
-│   ├── 📄 DnsConfigurationModal.tsx
-│   │   Purpose: React modal component to display DNS records for a selected provider and allow users to trigger verification.
-│   │   Details:
-│   │     - Receives props for visibility (`isOpen`), data (`selectedProvider`, `emailSetupData`, `displayedDnsRecords`), and handlers (`onOpenChange`, `onVerifyDns`, `copyToClipboard`, `getStatusIcon`).
-│   │     - Renders DNS records, including their status, name, type, value (with copy-to-clipboard), and purpose. Uses `ScrollArea` for long lists.
-│   │     - Displays provider-specific information like name, logo, and a link to their DNS management page (from `instructionsUrl`).
-│   │     - Includes a "Verify My DNS Records" button (shows loading state) and a "Close" button.
-│   │     - Uses `Dialog` component from `@/components/ui/dialog`.
-│   │     - Defines interfaces `DnsRecordDisplayProps` (for internal helper) and `DnsConfigurationModalProps`.
-│   │   Usage: Rendered globally by `src/core/App.tsx` (specifically within `MainContentWithGlobalModal`). Its visibility and content are controlled by `DnsStatusContext`.
-│   │
-│   ├── 📄 EmailSetupForm.tsx
-│   │   Purpose: React component for the email setup onboarding form.
-│   │   Details:
-│   │   - Collects user input for business area, goals, scenarios, default sender info, domain.
-│   │   - Handles form submission, calling the `save-email-setup-form` Supabase function.
-│   │   - Likely includes state management for form fields and validation.
-│   │   Usage: Integrated into the onboarding flow pages.
-│   │
-│   ├── 📄 Footer.tsx
-│   │   Purpose: Site-wide footer component, themed for the jungle look and compacted.
-│   │   Details:
-│   │   - Displays centered links for "Privacy Policy" and "Terms of Service".
-│   │   - Includes the centered text "a westwood innovation" in a smaller font below the links.
-│   │   - Styled with a dark background and reduced vertical padding.
-│   │   Usage: Used in `Index.tsx` and various pages throughout the application.
-│   │
-│   ├── 📄 GlobalDnsNotificationBar.tsx
-│   │   Purpose: Displays a global notification bar related to DNS status. The bar is shown on pages after DNS confirmation or on pages not in the main flow (like dashboard/editor) if DNS is not fully verified. It allows users to click to open the DNS modal.
-│   │   Details:
-│   │     - react_component: "GlobalDnsNotificationBar"
-│   │     - props: None
-│   │     - state: [
-│   │       "overallDnsStatus (from useDnsStatus)",
-│   │       "showDnsModal (from useDnsStatus)",
-│   │       "dnsContextLoaded (from useDnsStatus)",
-│   │       "isDnsModalOpenGlobally (from useDnsStatus)",
-│   │       "current location (from useLocation)",
-│   │       "navigation (from useNavigate)"
-│   │     ]
-│   │     - logic: [
-│   │       "Determines eligibility to show based on current page relative to DNS confirmation in FORM_FLOW_ORDER.",
-│   │       "Does not render if DNS context isn't loaded, DNS is verified, status is null, page is not eligible, or DNS modal is already open globally.",
-│   │       "Changes style and icon based on 'pending_verification', 'failed_to_verify', or 'partially_verified' DNS statuses.",
-│   │       "Clicking the bar calls showDnsModal().",
-│   │       "Adjusts its 'top' CSS property based on whether the current page is in PAGES_WITHOUT_NAVBAR (e.g., '/subscription-plan', '/editor', '/dashboard'). For these pages, top is '0'; otherwise, it's 'top-16' (assuming a 4rem/64px navbar height)."
-│   │     ]
-│   │     - constants: ["PAGES_WITHOUT_NAVBAR (defines pages where the bar should be at top-0)"]
-│   │     - external_dependencies: ["useDnsStatus", "useLocation", "useNavigate", "lucide-react", "FORM_FLOW_ORDER"]
-│   │   Usage: Imported and rendered within App.tsx, likely outside the main Routes but within the Router and DnsStatusProvider, to be globally available.
-│   │
-│   ├── �� Navbar.tsx
-│   │   Purpose: Navigation bar for the application, themed for the jungle look. Handles user authentication status for displaying links.
-│   │   Details: Provides main site navigation links. Styled with a dark green background, white text, and yellow accents. 
-│   │     - Imports `useAuth` to get `user` and `signOut` function.
-│   │     - Conditionally renders a "Sign Out" button if a user is logged in. Clicking it calls `signOut()` and navigates to the homepage.
-│   │     - If no user is logged in, it displays only a "Sign in" link (Sign up button removed).
-│   │     - Includes responsive behavior for mobile (hamburger menu) and desktop.
-│   │   Usage: Used globally across most pages.
-│   │
-│   ├── 📄 LoadingScreen.tsx
-│   │   Purpose: Displays a full-screen loading animation with a monkey and orbiting bananas.
-│   │   Details:
-│   │     - Shows a solid green background (`rgb(34, 139, 34)`).
-│   │     - Features a central monkey image (`/images/googly_monkey.png`).
-│   │     - Six banana images (`/images/banana.png`) individually orbit the monkey. Each banana uses a CSS animation (`@keyframes orbitAroundMonkey`) with a 6-second duration and staggered `animation-delay` to create a continuous circular motion.
-│   │     - Visibility is controlled by an `isLoading` prop (typically from `LoadingContext`).
-│   │   Usage: Rendered globally by `AppRoutesWrapper` in `src/core/App.tsx` and shown/hidden via `LoadingContext`.
-│   │
-│   └── 📄 UserProgressContext.tsx
-│       Purpose: Provides context for user progress through the multi-step form.
-│       Details: 
-│         - Stores and provides `currentStep`, `completedSteps`, `totalSteps`.
-│         - Offers functions like `goToNextStep`, `goToPreviousStep`, `completeStep`, `isStepCompleted`.
-│         - May also store form data or a summary of it.
-│       Usage: Wrapped around the main application or form flow to manage navigation and state.
-│
+│   ├── 📄 ChatInterface.tsx - The main chat component for user interaction with the AI.
+│   ├── 📄 DnsConfigurationModal.tsx - Modal dialog for displaying DNS configuration instructions.
+│   ├── 📄 EmailHtmlRenderer.tsx - Renders email HTML content within a sandboxed iframe.
+│   ├── 📄 EmailPreview.tsx - Component for previewing emails, including overlays for changes and selections.
+│   ├── 📄 Footer.tsx - The application's footer component.
+│   ├── 📄 GlobalDnsNotificationBar.tsx - A notification bar for global DNS status.
+│   ├── 📄 LoadingScreen.tsx - A full-screen loading indicator.
+│   ├── 📄 ManualEditPanel.tsx - Panel for manually editing the properties of a selected email element.
+│   ├── 📄 Navbar.tsx - The main navigation bar for the application.
+│   ├── 📁 editor/
+│   │   ├── 📄 EditorHeader.tsx - The header component for the email editor page.
+│   │   ├── 📄 EmailPreviewControls.tsx - Controls for the email preview (e.g., mobile/desktop view).
+│   │   ├── 📄 EmailPreviewPanel.tsx - The panel that contains the email preview and its controls.
+│   │   ├── 📄 InitialPromptScreen.tsx - The screen shown before the user has sent any messages.
+│   │   ├── 📄 LoadingScreen.tsx - A loading screen specific to the editor.
+│   │   └── 📄 PendingChangesBar.tsx - The bar that displays pending changes and allows accepting/rejecting them.
+│   ├── 📁 subscription/
+│   │   ├── 📄 PlanSelectionPage.tsx - A page where users can select a subscription plan.
+│   │   └── 📄 SubscriptionProtectedRoute.tsx - A higher-order component to protect subscription-only routes.
+│   └── 📁 ui/ - Contains reusable UI components from shadcn/ui.
 ├── 📁 contexts/
-│   ├── 📄 DnsStatusContext.tsx
-│   │   Purpose: Manages and provides global state related to DNS verification status and the DNS configuration modal.
-│   │   Details:
-│   │     - Exports `DnsStatusProvider` and `useDnsStatus` hook.
-│   │     - Manages state for:
-│   │       - `overallDnsStatus`: ('pending' | 'partially_verified' | 'verified' | 'failed_to_verify' | null) - Current overall DNS status.
-│   │       - `isDnsModalOpenGlobally`: (boolean) - Controls visibility of the global `DnsConfigurationModal`.
-│   │       - `selectedDnsProvider`: (object | null) - The DNS provider object selected by the user (from `DNS_PROVIDER_DISPLAY_OPTIONS`).
-│   │       - `dnsContextLoaded`: (boolean) - Indicates if the initial DNS status has been loaded.
-│   │     - Provides functions:
-│   │       - `setOverallDnsStatus`: Updates `overallDnsStatus`.
-│   │       - `showDnsModal(provider?)`: Sets `isDnsModalOpenGlobally` to true and updates `selectedDnsProvider`. If no provider is passed and none is already selected, defaults to "other".
-│   │       - `hideDnsModal()`: Sets `isDnsModalOpenGlobally` to false.
-│   │       - `setSelectedDnsProvider`: Updates `selectedDnsProvider`.
-│   │       - `setDnsContextLoaded`: Updates `dnsContextLoaded`.
-│   │   Usage: `DnsStatusProvider` wraps relevant parts of the application (likely in `App.tsx`). Components like `GlobalDnsNotificationBar`, `DnsConfirmationPage`, and `MainContentWithGlobalModal` (in `App.tsx`) use the `useDnsStatus` hook to access and modify this shared state.
-│   │
-│   ├── 📄 LoadingContext.tsx
-│   │   Purpose: Manages and provides global state for showing/hiding a loading screen.
-│   │   Details:
-│   │     - Exports `LoadingProvider` and `useLoading` hook.
-│   │     - Manages an `isLoading` boolean state.
-│   │     - Provides `showLoading()` and `hideLoading()` functions to toggle the state.
-│   │   Usage: `LoadingProvider` should wrap the application (e.g., in `App.tsx`). Components can use `useLoading` to trigger the loading screen.
-│   │
-│   └── 📄 DnsStatusContext.tsx
-│       Purpose: Manages and provides global state related to DNS verification status and the DNS configuration modal.
-│       Details:
-│         - Exports `DnsStatusProvider` and `useDnsStatus` hook.
-│         - Manages state for:
-│           - `overallDnsStatus`: ('pending' | 'partially_verified' | 'verified' | 'failed_to_verify' | null) - Current overall DNS status.
-│           - `isDnsModalOpenGlobally`: (boolean) - Controls visibility of the global `DnsConfigurationModal`.
-│           - `selectedDnsProvider`: (object | null) - The DNS provider object selected by the user (from `DNS_PROVIDER_DISPLAY_OPTIONS`).
-│           - `dnsContextLoaded`: (boolean) - Indicates if the initial DNS status has been loaded.
-│         - Provides functions:
-│           - `setOverallDnsStatus`: Updates `overallDnsStatus`.
-│           - `showDnsModal(provider?)`: Sets `isDnsModalOpenGlobally` to true and updates `selectedDnsProvider`. If no provider is passed and none is already selected, defaults to "other".
-│           - `hideDnsModal()`: Sets `isDnsModalOpenGlobally` to false.
-│           - `setSelectedDnsProvider`: Updates `selectedDnsProvider`.
-│           - `setDnsContextLoaded`: Updates `dnsContextLoaded`.
-│       Usage: `DnsStatusProvider` wraps relevant parts of the application. Components use `useDnsStatus` hook.
-│
+│   ├── 📄 DnsStatusContext.tsx - React context for managing global DNS status.
+│   └── 📄 LoadingContext.tsx - React context for managing the global loading screen.
 ├── 📁 core/
-│   ├── 📄 constants.ts
-│   │   Purpose: Centralized location for application-wide constants.
-│   │   Details:
-│   │   - `FORM_FLOW_ORDER`: An array of strings defining the sequence of pages in the multi-step onboarding form. Now includes `/subscription-plan` after `/website-tracking`.
-│   │   - `DNS_PROVIDER_DISPLAY_OPTIONS`: An array of objects, each representing a DNS provider with properties like `id`, `name`, `logo` (path to image), and `instructionsUrl` (a template URL to the provider's DNS settings page). Used by `DnsConfirmationPage.tsx` and `DnsConfigurationModal.tsx`.
-│   │   - `PROVIDER_MAP_TO_DISPLAY_OPTION_ID`: A mapping object that translates provider names (as returned by the `get-domain-provider` function or stored as `website_provider` / `dns_provider_name` in `email_setups`) to the `id` used in `DNS_PROVIDER_DISPLAY_OPTIONS`.
-│   │   Usage: Imported by various components and pages, especially form pages for navigation and DNS-related components.
-│   │
-│   ├── 📄 emailCampaigns.ts
-│   │   Purpose: Defines the structure and content for selectable email campaigns in the onboarding flow.
-│   │   Details:
-│   │   - Exports `EmailCampaign` interface (id, name, description).
-│   │   - Exports `EmailCategory` interface (id, name, campaigns array).
-│   │   - Exports `EMAIL_CAMPAIGN_CATEGORIES`: An array of `EmailCategory` objects, populated with predefined email campaigns grouped into categories like "Welcome & Onboarding", "E-commerce Triggers", "Engagement & Re-engagement", "Scheduled & Promotional", and "Informational & Updates".
-│   │   Usage: Imported by `SelectEmailsPage.tsx` to render the selection options.
-│   │
-│   └── 📄 types.ts 
-│       Purpose: General type definitions for the application.
-│       Details: Contains `EmailSetupFormData`, `ProviderInfo`, `DnsRecord`, `InitiateEmailSetupRequest`, `InitiateEmailSetupResponse`, and other shared types. Also defines `EmailSetupDataForModal` and `DnsRecord` (for the modal in App.tsx) though these might be better co-located or in a dedicated modal types file.
-│       Usage: Imported by various components and functions across the project.
-│
+│   ├── 📄 App.css - Main CSS file for the application.
+│   ├── 📄 App.tsx - The root component of the application, handles routing and providers.
+│   ├── 📄 constants.ts - Application-wide constants.
+│   ├── 📄 emailCampaigns.ts - Defines the available email campaigns for selection.
+│   ├── 📄 index.css - Global CSS styles and Tailwind setup.
+│   ├── 📄 main.tsx - The main entry point of the React application.
+│   └── 📄 vite-env.d.ts - TypeScript declarations for Vite environment variables.
+├── 📁 features/
+│   ├── 📁 auth/
+│   │   └── 📄 useAuth.tsx - Hook for accessing authentication state and methods.
+│   ├── 📁 contexts/
+│   │   └── 📁 providers/
+│   │       ├── 📄 AIProvider.tsx - Manages all state related to AI chat interactions.
+│   │       ├── 📄 ChangesProvider.tsx - Manages the state of pending changes.
+│   │       ├── 📄 ManualEditProvider.tsx - Manages state for the manual editing panel.
+│   │       ├── 📄 ProjectProvider.tsx - Manages loading and saving the core project data.
+│   │       └── 📄 UIStateProvider.tsx - Manages global UI state (loading, view modes, etc.).
+│   ├── 📁 services/
+│   │   ├── 📄 differ.ts - Frontend service for diffing email templates.
+│   │   ├── 📄 htmlGenerator.ts - Frontend service for generating HTML from email templates.
+│   │   ├── 📄 projectService.ts - Service for fetching and updating project data.
+│   │   └── 📄 semanticParser.ts - Frontend service for parsing semantic email content.
+│   ├── 📁 types/
+│   │   ├── 📄 ai.ts - Types related to AI interactions.
+│   │   └── 📄 index.ts - Main export file for feature types.
+│   └── 📁 utils/
+│       └── 📄 placeholderUtils.ts - Utility functions related to placeholders.
+├── 📁 hooks/
+│   ├── 📄 use-mobile.tsx - Hook to detect if the user is on a mobile device.
+│   └── 📄 use-toast.ts - Hook for using the toast notification system.
+├── 📁 integrations/
+│   └── 📁 supabase/
+│       ├── 📄 client.ts - Initializes the Supabase client.
+│       └── 📄 types.ts - TypeScript types generated from the Supabase schema.
+├── 📁 lib/
+│   ├── 📄 utils.ts - General utility functions, including from shadcn/ui.
+│   ├── 📄 uuid-utils.ts - Shared utility functions for handling UUIDs.
+│   └── 📄 uuid.ts - A library for UUID generation.
 ├── 📁 pages/
-│   ├── 📄 Index.tsx
-│   │   Purpose: Main landing page component for the application.
-│   │   Details:
-│   │   - Serves as the entry point for users visiting the root URL.
-│   │   - Displays a jungle-themed layout (green background) with a themed main navigation bar.
-│   │   - Content area (Navbar + main section with textarea/image) is set to `min-h-screen`.
-│   │   - The `Footer` component is rendered separately, after the main content, making it appear below the initial viewport fold.
-│   │   - Button "make me an email marketing machine!" initiates the flow.
-│   │   - **Navigation**: The main button now navigates directly to `/optional-signup`.
-│   │   - Uses `@/components/Navbar` and `@/components/Footer`.
-│   │   Usage: Rendered at the root path ('/') for unauthenticated users.
-│   │
-│   ├── 📄 Login.tsx
-│   │   Purpose: Authentication page for users to sign in.
-│   │   Details: Themed with jungle elements: green background, yellow accents, light text. Uses the shared `@/components/Navbar` for consistent navigation. The previous custom header section has been removed.
-│   │   Usage: Path `/login`.
-│   │
-│   ├── 📄 Signup.tsx
-│   │   Purpose: User registration page.
-│   │   Details: Themed with jungle elements: green background, yellow accents, light text. Terms/Privacy links updated. Uses the shared `@/components/Navbar`; custom header removed.
-│   │   Usage: Path `/signup`.
-│   │
-│   ├── 📄 BusinessOverviewPage.tsx
-│   │   Purpose: Allows users to input or confirm their business description as the first step in the form flow.
-│   │   Details:
-│   │   - Fetches existing business description from Supabase or localStorage.
-│   │   - Provides a textarea for users to describe their business.
-│   │   - "Confirm Business Overview & Continue" button saves description to localStorage and navigates to the next step (either `/optional-signup` for guests or `/goals-form` for authenticated users).
-│   │   - Includes a decorative bouncing `businessmonkey.png` image.
-│   │   - Background is `background.png`. Footer has been removed. Layout uses image background with content overlay.
-│   │   Usage: First page in the primary user onboarding flow after the homepage.
-│   │
-│   ├── 📄 OptionalSignUpPage.tsx
-│   │   Purpose: Provides an optional sign-up point for users. Accessed directly after Index.tsx or after BusinessOverviewPage.tsx if user went back.
-│   │   Details:
-│   │   - Jungle theme, full-screen layout. Uses the shared `@/components/Navbar`.
-│   │   - Sign up form and "Continue as Guest" option.
-│   │   - "Previous" button now navigates to `/business-overview`.
-│   │   - "Sign Up & Save Progress" and "Continue as Guest" both navigate to `/goals-form`.
-│   │   Usage: Step in the multi-step onboarding flow. 
-│   │
-│   ├── 📄 GoalsFormPage.tsx
-│   │   Purpose: React component for the goals form page in the multi-step onboarding flow.
-│   │   Details:
-│   │   - Background is `/images/background3.png`. Layout uses image background with content overlay.
-│   │   - Textarea for users to input their goals as a paragraph.
-│   │   - Loads/Saves goals to `email_setups` (authenticated) or `localStorage` (guest).
-│   │   - Handles navigation and form submission.
-│   │   Usage: Part of the multi-step onboarding flow.
-│   │
-│   ├── 📄 BusinessClarificationPage.tsx
-│   │   Purpose: Placeholder page for business clarification questions, part of the multi-step onboarding flow.
-│   │   Details: Displays a jungle-themed "Under Construction" message. Uses the shared `@/components/Navbar`. Includes "Previous" and "Next" navigation buttons using shared `FORM_FLOW_ORDER` from `src/core/constants.ts`.
-│   │   Usage: Step in the multi-step onboarding flow.
-│   │
-│   ├── 📄 SelectEmailsPage.tsx
-│   │   Purpose: Allows users to select specific email campaigns they want to set up from a categorized list.
-│   │   Details:
-│   │   - Jungle theme, full-screen layout with a sticky image on the left and a scrollable checklist on the right. Uses the shared `@/components/Navbar`.
-│   │   - Imports `EMAIL_CAMPAIGN_CATEGORIES` from `src/core/emailCampaigns.ts`.
-│   │   - Displays campaigns grouped by category, each with a checkbox, name, and description.
-│   │   - Uses `useState` for `selectedCampaigns` (string array of campaign IDs) and `isLoading`/`isSaving`.
-│   │   - **Load Data (`useEffect` with `loadSelectedCampaigns`):**
-│   │     - Authenticated users: Fetches `selected_campaign_ids` from `email_setups` table.
-│   │     - Guest users: Loads `pendingSelectedCampaignIds` from `localStorage`.
-│   │   - **Save Data (`saveSelections` called by `handleNavigate`):**
-│   │     - Authenticated users: Updates `selected_campaign_ids` and sets `form_complete: false` in `email_setups`.
-│   │     - Guest users: Saves `selectedCampaigns` to `localStorage` as `pendingSelectedCampaignIds`.
-│   │   - Handles errors with toasts.
-│   │   - **Navigation**: Includes "Previous" and "Save & Continue" (Next) buttons. Uses shared `FORM_FLOW_ORDER`.
-│   │     - "Previous" button for guests also saves current selections.
-│   │     - Next step is `/website-status`.
-│   │   Usage: Step in the multi-step onboarding flow, after `GoalsFormPage`.
-│   │
-│   ├── 📄 WebsiteStatusPage.tsx
-│   │   Purpose: Guides the user through indicating if they have a website, selecting their provider, and entering their domain name.
-│   │   Details:
-│   │     - Multi-sub-step form:
-│   │       1. "Do you have a website?": Yes/No buttons. "Previous Page" (to previous route) button is visible and centered.
-│   │       2. "Who hosts your website?": Provider buttons. **Container uses `flex flex-wrap justify-center` and buttons have `w-40` to ensure centered rows, especially the last row if not full.** Text within these buttons wraps. Internal "Back" button (to sub-step 1) is centered and styled with an outline. Main "Previous Page" button is hidden.
-│   │       3. "What's your domain name?": Input field. Internal "Back" button (to sub-step 2) available. Main "Previous Page" button is hidden.
-│   │     - Main content card has a darker background (`bg-green-800 bg-opacity-75`).
-│   │     - Fetches and saves `website_provider` and `domain` to `email_setups` table or localStorage.
-│   │     - Includes a modal to inform users that a website is required if they select "No, not yet" in sub-step 1.
-│   │     - Uses `background5.png` as a full-screen background image.
-│   │     - Integrates with global loading screen: waits for `isLoadingData` (from `email_setups` or localStorage) and for `background5.png` to load/error before calling `hideLoading()`.
-│   │   Usage: Part of the main onboarding form flow (`FORM_FLOW_ORDER`).
-│   │
-│   ├── 📄 InfoClarificationPage.tsx
-│   │   Purpose: Allows users to review all their previously entered onboarding information and edit if necessary before proceeding.
-│   │   Details:
-│   │     - **NEW: Uses `background6.png` as a full-screen background image.**
-│   │     - Main content is in a centered container (`max-w-3xl`) with `z-10` to appear above the background.
-│   │     - Displays summaries of: Business Description, Goals, Selected Email Campaigns, Website Provider, and Domain Name in individual `Card` components.
-│   │     - Each section card has an "Edit" button linking to the respective form page.
-│   │     - **Data Loading (`loadData`):** Fetches all relevant fields from `email_setups` (authenticated) or `localStorage` (guest).
-│   │     - **Confirmation**: A checkbox ("Yes, all information is accurate...") must be checked to enable the "Next" button.
-│   │     - **Navigation (`handleNavigate`):**
-│   │       - "Previous" button navigates to `/website-status`.
-│   │       - "Confirm & Proceed" (Next) button:
-│   │         - If guest, navigates to `/auth-gate`.
-│   │         - If authenticated, calls `initiate-email-setup` Supabase function, then navigates to `/dns-confirmation` (or the next step in `FORM_FLOW_ORDER`, skipping `/auth-gate`).
-│   │     - **Integrates with global loading screen: waits for `isLoadingData` (from `email_setups`/localStorage) and for `background6.png` to load/error before calling `hideLoading()**.
-│   │   Usage: Step in the multi-step onboarding flow, after `WebsiteStatusPage`.
-│   │
-│   ├── 📄 AuthGatePage.tsx
-│   │   Purpose: Mandatory authentication (Sign Up or Sign In) page for guest users after they confirm their information on the InfoClarificationPage.
-│   │   Details:
-│   │   - Jungle theme, full-screen layout with Sign Up/Sign In forms. Uses the shared `@/components/Navbar`.
-│   │   - No "Continue as Guest" or "Previous" option (only a "Start Over?" link to `/`).
-│   │   - **On successful Sign Up/Sign In (`handleSubmit`):**
-│   │     - Retrieves all `pending...` data from `localStorage` (business description, goals, campaigns, website provider, domain).
-│   │     - Upserts this data into the `email_setups` table associated with the authenticated `user_id`. Sets `form_complete: false`.
-│   │     - Clears the `pending...` data from `localStorage`.
-│   │     - Navigates to `/dns-confirmation`.
-│   │   - Handles errors with toasts. Redirects already authenticated users to the next step in the flow or dashboard.
-│   │   Usage: Step in the multi-step onboarding flow, after `/info-clarification` (for guests) and before `/dns-confirmation`.
-│   │
-│   ├── 📄 DnsConfirmationPage.tsx
-│   │   Purpose: Guides the user through adding DNS records to their domain provider and allows interaction with a global DNS configuration modal.
-│   │   Details:
-│   │     - Uses the shared `@/components/Navbar`.
-│   │     - Fetches `email_setups` data (domain, `website_provider`, `dns_provider_name`, DNS records values, statuses) for the authenticated user.
-│   │     - Calls `get-domain-provider` Supabase edge function for auto-detection.
-│   │     - Displays a grid of clickable cards for DNS providers (from `DNS_PROVIDER_DISPLAY_OPTIONS`). Highlights provider based on `website_provider`, auto-detected `dns_provider_name`, or `selectedDnsProvider` from `DnsStatusContext`.
-│   │     - Clicking a provider card calls `showDnsModal(provider)` from `DnsStatusContext` to open the global `DnsConfigurationModal`.
-│   │     - **Auto-opens modal**: If `selectedDnsProvider` is set in context on page load (e.g., from notification bar click), the modal opens automatically for that provider.
-│   │     - **No longer displays overall DNS status directly** (handled by global notification bar).
-│   │     - **No longer renders its own modal instance.**
-│   │     - Retains local `handleVerifyDns` function, but this is for the page's own verification logic if any is reinstated; the global modal uses its own verification logic defined in `App.tsx`.
-│   │     - "Previous" button navigates to `/info-clarification`.
-│   │     - "Next Step" button navigates to `/website-tracking`. Button is enabled even if DNS is not fully verified, showing a toast warning instead.
-│   │     - Uses `lucide-react` icons. Jungle-themed styling.
-│   │   Usage: Step in the multi-step onboarding flow. Interacts with `DnsStatusContext` and implicitly relies on `DnsConfigurationModal` being rendered globally by `App.tsx`.
-│   │
-│   ├── 📄 WebsiteTrackingPage.tsx
-│   │   Purpose: Allows users to get their website tracking pixel script and verify its installation.
-│   │   Details:
-│   │     - Uses the shared `@/components/Navbar`. Jungle-themed styling.
-│   │     - Fetches a persistent `tracking_pixel_id` by calling the `get-or-create-tracking-id` Supabase function, using the user's `email_setup_id`.
-│   │     - Displays a static JavaScript pixel script. The script is hardcoded on the page.
-│   │       - The `EMAILORE_PIXEL_ID` in the script is dynamically replaced with the fetched `persistentTrackingId`.
-│   │       - The script includes the URL for the `ingest-tracking-event` Supabase function.
-│   │       - It automatically sends an `emailore_pixel_loaded` event when the script loads.
-│   │       - Exposes `window.emailore.track(eventName, eventData)` for custom events.
-│   │       - **Crucially, `fetch` calls within the pixel script now use `credentials: 'omit'` to allow wildcard CORS on the ingestion endpoint.**
-│   │     - Displays the pixel script with a "Copy to Clipboard" button and installation instructions.
-│   │     - Features a "Test Pixel Installation" button that calls `test-pixel-status` (passing the `email_setup_id` of the `email_setups` record, which `test-pixel-status` then uses to find the `tracking_pixel_id`).
-│   │     - Displays feedback based on the test result.
-│   │     - Navigation: "Previous" to `/dns-confirmation`, "Next" to `/subscription-plan`.
-│   │     - Integrates with global loading screen.
-│   │   Usage: Step in the multi-step onboarding flow. Provides users with their unique, persistent tracking pixel.
-│   │
-│   └── 📄 SubscriptionPlanPage.tsx
-│       Purpose: Wrapper page in the main `/pages` directory for the subscription plan selection component.
-│       Details: This page will primarily render the `PlanSelectionPage` component located at `src/components/subscription/PlanSelectionPage.tsx`. It ensures the plan selection is part of the main page structure and routing. Navigation from this page (e.g., after plan selection) will be handled by `PlanSelectionPage.tsx` itself, likely to `/dashboard` or a payment confirmation step if Stripe is integrated.
-│       Usage: New step in the multi-step onboarding flow, accessed via the route `/subscription-plan`, after `/website-tracking`.
-│
-├── 📁 services/
-│   └── 📄 differ.ts
-│       Purpose: Backend-specific adapter for the V2 template diffing service.
-│       Details:
-│         - Extends `DifferV2Core` from `src/shared/services/differ.ts`.
-│         - Currently provides no backend-specific overrides, simply inherits core diffing logic.
-│         - Exports `DifferV2` class.
-│       Usage: Used internally by backend functions like `generate-email-changes` and `manage-pending-changes` when V2 diff calculations are needed.
-│
+│   ├── 📄 AuthGatePage.tsx - A page that forces guest users to sign up or log in.
+│   ├── 📄 BlogIndexPage.tsx - Page to display a list of blog posts.
+│   ├── 📄 BlogPostPage.tsx - Page to display a single blog post.
+│   ├── 📄 BusinessClarificationPage.tsx - A step in the onboarding flow for clarifying business details.
+│   ├── 📄 BusinessOverviewPage.tsx - A step in the onboarding flow to get the business overview.
+│   ├── 📄 Dashboard.tsx - The main dashboard page for authenticated users.
+│   ├── 📄 DnsConfirmationPage.tsx - A step in the onboarding flow for DNS confirmation.
+│   ├── 📄 Editor.tsx - The main email editor page.
+│   ├── 📄 GoalsFormPage.tsx - A step in the onboarding flow to define user goals.
+│   ├── 📄 Index.tsx - The main landing page of the application.
+│   ├── 📄 InfoClarificationPage.tsx - A step in the onboarding flow to review entered information.
+│   ├── 📄 Login.tsx - The user login page.
+│   ├── 📄 NotFound.tsx - The 404 not found page.
+│   ├── 📄 OptionalSignUpPage.tsx - A step in the onboarding flow with an optional sign-up.
+│   ├── 📄 PrivacyPolicy.tsx - The privacy policy page.
+│   ├── 📄 SelectEmailsPage.tsx - A step in the onboarding flow to select email campaigns.
+│   ├── 📄 SendEmailPage.tsx - A page for sending emails.
+│   ├── 📄 Signup.tsx - The user signup page.
+│   ├── 📄 TermsOfService.tsx - The terms of service page.
+│   ├── 📄 WebsiteStatusPage.tsx - A step in the onboarding flow to check website status.
+│   └── 📄 WebsiteTrackingPage.tsx - A step in the onboarding flow for setting up website tracking.
 ├── 📁 shared/
-│   └── 📄 uuid-utils.ts
-│       Purpose: Shared, canonical utility functions for validating and cleaning UUID strings.
-│       Details: Provides `isValidUuid(id)` to check format via regex. Provides `cleanUuid(id)` to sanitize by removing trailing spaces/digits before validation.
-│       Usage: Used across frontend/backend for UUID validation/sanitization, replacing previous duplicate implementations.
-│
-├── 📄 App.tsx 
-│   Purpose: Main application component, sets up routing, providers, and global layout elements.
-│   Details:
-│     - Initializes `BrowserRouter` for client-side routing.
-│     - Wraps the application with `AuthProvider` (for user authentication state) and `QueryClientProvider` (for react-query).
-│     - Wraps the application with `DnsStatusProvider` to manage global DNS modal state and status.
-│     - **Wraps the application with `LoadingProvider` to manage global loading screen state.**
-│     - Uses `TooltipProvider` and renders `Toaster` for notifications.
-│     - Defines `ProtectedRoute` HOC to guard routes requiring authentication.
-│     - Defines `AppRoutes` component which contains the main navigation logic (useEffect) based on auth state and user's progress in the form flow. It fetches `email_setups` and `user_info` to determine redirection.
-│     - **Defines `AppRoutesWrapper` component which renders the global `LoadingScreen` (controlled by `useLoading` from `LoadingContext`), the `GlobalDnsNotificationBar`, and the `MainContentWithGlobalModal`.**
-│     - **`MainContentWithGlobalModal` renders the main `Routes` and the global `DnsConfigurationModal`.**
-│       - It fetches detailed `email_setups` data when the DNS modal is opened.
-│       - Handles DNS verification logic within the modal by calling `verify-dns-records` function.
-│       - Manages local state for the DNS modal content (records, verification status) and interacts with `DnsStatusContext` for modal visibility (`isDnsModalOpenGlobally`, `showDnsModal`, `hideDnsModal`, `selectedDnsProvider`) and global DNS status (`overallDnsStatus`, `setOverallDnsStatus`).
-│     - Defines all application routes using `react-router-dom`, including public pages, auth pages, form flow pages, and protected dashboard/editor pages.
-│   Usage: The root component rendered into the DOM.
-│
-└── 📄 .env.example
-    Purpose: Example environment variables file.
-    Details: Lists required environment variables for the project (Supabase URL/keys, API keys, etc.) with placeholder values.
-    Usage: Users copy this to `.env` and fill in their actual credentials.
-
----
-**Notes on Structure:**
-- The sitemap had some duplicate entries or unclear nesting for `src/backend/.temp/` and `src/backend/functions/`. I've tried to rationalize this into a single main `src/backend/functions/` path for the Edge Functions.
-- The `semanticParser.ts` under `src/backend/functions/_shared/services/` was noted as a "Frontend adapter" in the original read. I've kept it there but added a note. If it's purely for frontend, it should be in `src/frontend/services/`. If it's a shared core or a backend adapter, its description should reflect that. The one under `src/shared/services/` is correctly labeled as "Shared Core".
-- Added placeholder entries for typical frontend files and a shared `emailSetupTypes.ts` based on the project's needs. These would need to be confirmed or created.
----
-
-📄 dns-provider-instructions.ts
-   Purpose: Stores structured DNS setup instructions for various common DNS providers.
-        Details:
-     - Exports `DNS_PROVIDER_INSTRUCTIONS`: An array of `ProviderInstruction` objects.
-     - Each `ProviderInstruction` contains:
-       - `id`: Normalized string identifier (e.g., "cloudflare", "godaddy").
-       - `displayName`: User-friendly provider name.
-       - `logoUrl` (optional): Path/URL to a provider logo.
-       - `dnsManagementUrl` (optional): Direct link to the provider's DNS management page.
-       - `generalNotes` (optional): Array of general tips for the provider.
-       - `instructionSteps`: Array of `ProviderInstructionStep` objects (title, description, optional link).
-       - `uiFieldNames` (optional): Object mapping generic DNS field names (host, value, etc.) to provider-specific UI labels (e.g., "Name", "Content").
-       - `recordSpecificTips` (optional): Object with tips for MX, TXT, SPF, DKIM, DMARC records.
-     - Includes example data for Cloudflare, GoDaddy, and a generic "unknown" provider fallback.
-     - Exports `getInstructionsForProvider(providerName)`: A helper function that takes a provider name string, normalizes it, and returns the corresponding `ProviderInstruction` object or the "unknown" provider instructions if not found.
-   Usage: Intended to be imported by frontend components (e.g., a new DNS setup instructions page) to display tailored guidance to users based on their detected or selected DNS provider.
-
-## Database Schema
-
-This section outlines the structure of key tables in the Supabase PostgreSQL database.
-
-### ሠ Table: `email_setups`
-Purpose: Stores information related to a user's email domain setup process. This includes initial configuration, DNS settings, and verification status.
-        Details:
-  - `id`: `uuid` (Primary Key) - Unique identifier for the email setup record.
-  - `user_id`: `uuid` (Foreign Key to `auth.users`) - The user who initiated this setup.
-  - `domain`: `text` - The domain name the user is setting up (e.g., "example.com").
-  - `business_area`: `text` - User-provided business area.
-  - `business_subcategory`: `text` - User-provided business subcategory.
-  - `goals`: `TEXT[]` (Array of text) - User-selected goals for using the email service.
-  - `send_timeline`: `text` - User-indicated timeline for starting to send emails.
-  - `dns_provider_name`: `text` - Name of the DNS provider (e.g., "Cloudflare", "GoDaddy"), potentially auto-detected and set by `get-domain-provider` function.
-  - `dns_setup_strategy`: `text` - Strategy for DNS setup (e.g., "manual").
-  - `dns_records_to_set`: `TEXT[]` (Array of text) - DNS records to be set for the domain.
-  - `status`: `text` - Current status of the email setup process.
-  - `mx_record_value`: `text` - Value of the MX record for the domain.
-  - `spf_record_value`: `text` - Value of the SPF record for the domain.
-  - `dmarc_record_value`: `text` - Value of the DMARC record for the domain.
-  - `mx_status`: `text` - Status of the MX record.
-  - `spf_status`: `text` - Status of the SPF record.
-  - `dkim_status`: `text`
-
-📁 types/
-│   Purpose: Holds TypeScript definition files for the project, ensuring type safety and enabling better developer tooling for external libraries or custom JSX pragma.
-│   Details: Contains `.d.ts` files that describe the shape of JavaScript modules or add custom typings.
-│   Usage: TypeScript compiler automatically picks up these definition files. No direct import needed in most cases. Crucial for integrating libraries that don't have their own up-to-date types or for custom global type declarations.
-│   Children:
-│     └── 📄 styled-jsx.d.ts
-│         Purpose: Adds TypeScript definitions for the `styled-jsx` library, specifically for the `jsx` and `global` props on `<style>` tags.
-│         Details: Declares an augmentation for the 'react' module, extending `StyleHTMLAttributes` to include optional `jsx` and `global` boolean properties. This prevents TypeScript errors when using `styled-jsx` syntax like `<style jsx global>{`...`}</style>`.
-│         Usage: Automatically used by the TypeScript compiler to correctly type-check components using `styled-jsx`. Resolves linter errors related to unknown props on style tags.
+│   ├── 📁 config/
+│   │   └── 📄 stripe.ts - Configuration for Stripe.
+│   ├── 📁 lib/
+│   │   ├── 📄 uuid-utils.ts - Shared utility functions for handling UUIDs.
+│   │   └── 📄 uuid.ts - A library for UUID generation.
+│   ├── 📁 services/
+│   │   ├── 📄 differ.ts - Core service for diffing email templates.
+│   │   ├── 📄 htmlGenerator.ts - Core service for generating HTML from email templates.
+│   │   └── 📄 semanticParser.ts - Core service for parsing semantic email content.
+│   └── 📁 types/
+│       ├── 📄 blog.ts - Types for blog-related data structures.
+│       ├── 📄 column.ts - Type definition for a Column in the grid system.
+│       ├── 📄 common.ts - Common types shared across the application.
+│       ├── 📁 config/
+│       │   └── 📄 elementDefaults.ts - Default values for new email elements.
+│       ├── 📄 diffs.ts - Types for diff objects.
+│       ├── 📄 editor.ts - Types specific to the editor state and functionality.
+│       ├── 📄 elements.ts - Type definitions for different Email Elements (e.g., Text, Image).
+│       ├── 📄 index.ts - Main export file for shared types.
+│       ├── 📄 pendingChangeTypes.ts - Types for pending changes.
+│       ├── 📄 row.ts - Type definition for a Row in the grid system.
+│       ├── 📄 sections.ts - Type definition for a Section in the grid system.
+│       ├── 📄 styled-jsx.d.ts - Type definitions for styled-jsx.
+│       ├── 📄 template.ts - Type definition for the main EmailTemplate structure.
+│       └── 📄 validators.ts - Zod validators for data structures.
+└── 📁 types/ - Global or ambient type definitions.

@@ -23,7 +23,10 @@ import type {
     PreferencesElementProperties,
     PreviewTextElementProperties,
     ContainerElementProperties,
-    BoxElementProperties
+    BoxElementProperties,
+    Row,
+    Column,
+    ColumnStyles
 } from '@shared/types';
 
 import { HtmlGeneratorCore } from '../../shared/services/htmlGenerator';
@@ -103,32 +106,11 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
           u + #body a { color: inherit; text-decoration: none; font-size: inherit; font-family: inherit; font-weight: inherit; line-height: inherit; }
           /* Fix for older Outlook */
           table { border-collapse: collapse !important; }
+          
+          ${this.generateResponsiveStyles(template, contentWidth)}
+
           /* Add more global styles or resets here */
 
-          /* Responsive Styles */
-          @media screen and (max-width: ${contentWidth}) {
-            /* Allow table cells to stack */
-            .stack-column {
-              display: block !important;
-              width: 100% !important;
-              max-width: 100% !important;
-              direction: ltr !important;
-            }
-            /* Example: Make images full width */
-            .responsive-image img {
-              width: 100% !important;
-              height: auto !important;
-            }
-            /* Example: Adjust text size (use sparingly) */
-            .mobile-text-large {
-                font-size: 18px !important;
-                line-height: 1.4 !important;
-            }
-            /* Add more mobile-specific styles here using classes */
-          }
-
-          /* Additional client fixes */
-          /* ... (Fixes for Gmail blue links, etc.) ... */
         </style>
       </head>`;
       
@@ -168,6 +150,34 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
       </html>`;
   }
 
+  protected generateResponsiveStyles(template: EmailTemplate, contentWidth: string): string {
+    const allColumns: Column[] = template.sections.flatMap(s => s.rows.flatMap(r => r.columns));
+    
+    const columnStyles = allColumns.map(column => {
+      const mobileWidth = (column.spans.mobile / 12) * 100;
+      return `
+        .responsive-column-${column.id} {
+          width: ${mobileWidth}% !important;
+          display: block !important;
+        }
+      `;
+    }).join('');
+
+    return `
+      @media screen and (max-width: ${contentWidth}) {
+        ${columnStyles}
+
+        /* Generic stack-column as a fallback */
+        .stack-column {
+          display: block !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          direction: ltr !important;
+        }
+      }
+    `;
+  }
+
   /**
    * Generates HTML for a single section.
    * @param section The V2 EmailSection object.
@@ -176,24 +186,63 @@ export class HtmlGeneratorV2 extends HtmlGeneratorCore {
   protected generateSectionHtml(section: EmailSection): string {
     const sectionStyles = this.generateSectionStyle(section.styles);
     
-    // Generate HTML for all elements within the section
-    const elementsHtml = section.elements
-      .map(element => this.generateElementHtml(element))
-      .join('\n');
-      
-    // Wrap elements in an inner table for structure within the section cell
-    const innerTable = `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;">
-        ${elementsHtml}
-      </table>`;
-      
-    // Return the outer table row for the section
+    const rowsHtml = section.rows
+      .map(row => this.generateRowHtml(row))
+      .join('');
+
     return `
       <tr>
         <td id="section-${section.id}" style="${sectionStyles}">
-          ${innerTable}
+          ${rowsHtml}
         </td>
       </tr>`;
+  }
+
+  protected generateRowHtml(row: Row): string {
+    const columnsHtml = row.columns
+      .map(column => this.generateColumnHtml(column))
+      .join('');
+
+    // Each row is a table to ensure columns are laid out correctly.
+    return `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;">
+        <tr>
+          ${columnsHtml}
+        </tr>
+      </table>
+    `;
+  }
+
+  protected generateColumnHtml(column: Column): string {
+    const desktopWidth = (column.spans.desktop / 12) * 100;
+    const columnStyles = this.generateColumnStyle(column.styles);
+
+    const elementsHtml = column.elements
+      .map(element => this.generateElementHtml(element))
+      .join('');
+
+    return `
+      <td 
+        id="column-${column.id}" 
+        class="responsive-column-${column.id}"
+        width="${desktopWidth}%"
+        style="${columnStyles}"
+        valign="top"
+      >
+        ${elementsHtml}
+      </td>
+    `;
+  }
+
+  protected generateColumnStyle(styles: ColumnStyles | undefined): string {
+    if (!styles) return '';
+    let styleString = '';
+    if (styles.backgroundColor) styleString += `background-color:${styles.backgroundColor};`;
+    if (styles.padding) {
+      styleString += `padding:${styles.padding.top || 0} ${styles.padding.right || 0} ${styles.padding.bottom || 0} ${styles.padding.left || 0};`;
+    }
+    // Add border styles if needed
+    return styleString;
   }
 
   /**

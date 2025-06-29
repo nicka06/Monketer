@@ -168,7 +168,7 @@ serve(async (req) => {
 }\ntext: {\n  layout: { align: 'center', padding: { top: '5px', bottom: '5px' } },
   properties: { 
     text: string,
-    typography: { 
+    typography: {
       fontFamily: string | null,
       fontSize: string | null,
       fontWeight: string | null,

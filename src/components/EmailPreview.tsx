@@ -1,19 +1,18 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { EmailPreviewProps, PendingChange } from '@/features/types/editor';
 import { cn } from "@/lib/utils";
 import { EmailHtmlRenderer } from './EmailHtmlRenderer';
-import { isPlaceholder } from '@/features/services/htmlGenerator';
 import { 
-  EmailElement,
-  ImageElementProperties, 
-  ButtonElementProperties,
+  EmailTemplate,
+  PendingChange,
+  EmailPreviewProps,
 } from '@/shared/types';
-import { useEditor } from '@/features/contexts/EditorContext';
+import { useChanges } from '@/features/contexts/providers/ChangesProvider';
+import { useUIState } from '@/features/contexts/providers/UIStateProvider';
 
 /**
  * EmailPreview Component
  * 
- * A sophisticated email preview component that provides an interactive preview environment
+ * A sophisticated email preview component that provides an interact ive preview environment
  * with support for visual overlays, placeholder management, and responsive design.
  * 
  * Technical Implementation Details:
@@ -52,11 +51,8 @@ import { useEditor } from '@/features/contexts/EditorContext';
  * @param {'desktop' | 'mobile'} previewDevice - Device preview mode
  *                                              Affects container width and scaling
  * 
- * @param {EmailTemplateV2 | null} semanticTemplate - Structured template data
+ * @param {EmailTemplate | null} semanticTemplate - Structured template data
  *                                                   Used for placeholder detection and processing
- * 
- * @param {Function} onPlaceholderActivate - Callback for placeholder interaction
- *                                          Receives: { elementId, path, type }
  * 
  * State Management:
  * - Uses refs for DOM element access and measurement
@@ -95,7 +91,6 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   previewMode,
   previewDevice,
   semanticTemplate,
-  onPlaceholderActivate,
 }) => {
   /**
    * DOM References
@@ -113,13 +108,8 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   const overlayContainerRef = useRef<HTMLDivElement>(null);
   const htmlRendererRef = useRef<{ getContainer: () => HTMLDivElement | null } | null>(null);
 
-  const { 
-    handleAcceptOneChange, 
-    handleRejectOneChange, 
-    isLoading, 
-    selectElementForManualEdit, // Added for manual editing
-    selectedManualEditElementId // Added for manual editing
-  } = useEditor();
+  const { handleAcceptOneChange, handleRejectOneChange } = useChanges();
+  const { isLoading, selectedElementPath, setSelectedElementPath } = useUIState();
 
   /**
    * calculateAndApplyOverlays
@@ -177,6 +167,49 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
     const containerRect = container.getBoundingClientRect();
     const scrollY = iframeWin.scrollY;
     
+    // --- Render Overlays for Manual Editing ---
+    if (semanticTemplate && semanticTemplate.sections) {
+      semanticTemplate.sections.forEach(section => {
+        section.rows.forEach(row => {
+          row.columns.forEach(column => {
+            column.elements.forEach(element => {
+              const targetEl = iframeDoc.getElementById(element.id);
+              if (!targetEl) return;
+
+              const targetRect = targetEl.getBoundingClientRect();
+              const overlay = document.createElement('div');
+              overlay.style.position = 'absolute';
+              overlay.style.left = `${iframeRect.left + targetRect.left - containerRect.left}px`;
+              overlay.style.top = `${iframeRect.top + targetRect.top - containerRect.top + scrollY}px`;
+              overlay.style.width = `${targetRect.width}px`;
+              overlay.style.height = `${targetRect.height}px`;
+              overlay.style.cursor = 'pointer';
+              overlay.style.zIndex = '10';
+              overlay.style.pointerEvents = 'auto';
+
+              if (selectedElementPath && element.id === selectedElementPath.elementId) {
+                overlay.style.outline = '2px solid #3b82f6'; // Blue-500
+                overlay.style.outlineOffset = '2px';
+                overlay.style.boxShadow = '0 0 10px rgba(59, 130, 246, 0.5)';
+              }
+
+              overlay.onclick = (e) => {
+                e.stopPropagation();
+                setSelectedElementPath({
+                  sectionId: section.id,
+                  rowId: row.id,
+                  columnId: column.id,
+                  elementId: element.id,
+                });
+              };
+
+              overlayContainer.appendChild(overlay);
+            });
+          });
+        });
+      });
+    }
+
     // console.log("[EmailPreview] Processing Pending Changes Overlays...");
     if (Array.isArray(pendingChanges) && pendingChanges.length > 0) {
       pendingChanges.forEach((change: PendingChange) => { // PendingChange is now GranularPendingChange
@@ -267,121 +300,9 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
       });
     }
 
-    /**
-     * Section 2: Process Placeholder Overlays
-     * 
-     * Creates interactive overlays for placeholder elements (images/links).
-     * These overlays are clickable and trigger the onPlaceholderActivate callback.
-     * 
-     * Process:
-     * 1. Iterate through semantic template elements
-     * 2. Identify placeholder elements (images/links)
-     * 3. Create clickable overlays positioned absolutely
-     * 4. Add click handlers to trigger placeholder activation
-     */
-    console.log("[EmailPreview] Processing Placeholder Overlays...");
-    let placeholdersFound = 0;
-
-    // Iterate through all semantic elements to make them clickable for manual editing
-    // and to apply selected styling
-    if (semanticTemplate?.sections) {
-      semanticTemplate.sections.forEach(section => {
-        section.elements.forEach((element: EmailElement) => {
-          const targetTdElement = iframeDoc.querySelector<HTMLElement>(`td[data-element-id="${element.id}"]`);
-
-          if (targetTdElement) {
-            // Make the TD clickable for manual editing
-            targetTdElement.style.cursor = 'pointer'; // Indicate it's clickable
-            targetTdElement.addEventListener('click', (e) => {
-              // Prevent click from bubbling to potentially other handlers on inner elements if not needed
-              // For now, direct click on TD selects it.
-              e.stopPropagation(); 
-              console.log(`[EmailPreview] TD Element clicked for manual edit: ${element.id}`);
-              selectElementForManualEdit(element.id);
-            });
-
-            // Apply visual indication if this element is selected for manual editing
-            if (element.id === selectedManualEditElementId) {
-              targetTdElement.style.outline = '2px solid #3b82f6'; // Blue outline for selected
-              targetTdElement.style.outlineOffset = '0px';
-            } else {
-              targetTdElement.style.outline = 'none'; // Remove outline if not selected
-            }
-          }
-
-          // Existing placeholder logic (should be AFTER general clickability so placeholder specific UIs can be on top)
-          let isImagePlaceholder = false;
-          let isLinkPlaceholder = false;
-          
-          if (element.type === 'image') {
-            const props = element.properties as ImageElementProperties;
-            if (props.image?.src && isPlaceholder(props.image.src)) {
-              isImagePlaceholder = true;
-            }
-            if (props.image?.linkHref && isPlaceholder(props.image.linkHref)) {
-              isLinkPlaceholder = true;
-            }
-          } else if (element.type === 'button') {
-            const props = element.properties as ButtonElementProperties;
-            if (props.button?.href && isPlaceholder(props.button.href)) {
-              isLinkPlaceholder = true;
-            }
-          }
-
-          if (isImagePlaceholder || isLinkPlaceholder) {
-            const targetElement = iframeDoc.querySelector<HTMLElement>(`[data-element-id="${element.id}"]`);
-            if (!targetElement) {
-              console.warn(`[EmailPreview] Placeholder Overlay: Element [data-element-id: ${element.id}] not found in iframe. Skipping.`);
-              return;
-            }
-
-            placeholdersFound++;
-            const targetRect = targetElement.getBoundingClientRect();
-
-            // Create clickable overlay
-            const placeholderOverlay = document.createElement('div');
-            placeholderOverlay.classList.add('placeholder-overlay-clickable');
-            placeholderOverlay.style.position = 'absolute';
-            const iframeBorderWidth = 2;
-            const calculatedLeft = iframeRect.left + targetRect.left - containerRect.left + iframeBorderWidth;
-            const calculatedTop = iframeRect.top + targetRect.top - containerRect.top + scrollY + iframeBorderWidth;
-            placeholderOverlay.style.left = `${calculatedLeft}px`;
-            placeholderOverlay.style.top = `${calculatedTop}px`;
-            placeholderOverlay.style.width = `${targetRect.width}px`;
-            placeholderOverlay.style.height = `${targetRect.height}px`;
-            placeholderOverlay.style.zIndex = '10'; // Below pending change overlays
-            placeholderOverlay.style.cursor = 'pointer';
-            placeholderOverlay.style.boxSizing = 'border-box';
-            placeholderOverlay.style.border = '2px dashed blue';
-            placeholderOverlay.style.backgroundColor = 'rgba(0, 255, 0, 0.3)';
-            placeholderOverlay.setAttribute('title', isImagePlaceholder ? 'Click to upload image' : 'Click to set link');
-
-            // Determine type and path for placeholder activation
-            let path = 'unknown.path';
-            const type: 'image' | 'link' = isImagePlaceholder ? 'image' : 'link';
-            if (isImagePlaceholder && element.type === 'image') {
-              path = 'image.src';
-            } else if (isLinkPlaceholder) {
-              if (element.type === 'image') path = 'image.linkHref';
-              else if (element.type === 'button') path = 'button.href';
-            }
-            
-            // Add click handler
-            placeholderOverlay.addEventListener('click', (e) => {
-              e.stopPropagation();
-              console.log(`[EmailPreview] Placeholder overlay clicked for element with data-element-id=${element.id} (path: ${path}, type: ${type})`);
-              onPlaceholderActivate({ elementId: element.id, path: path, type: type });
-            });
-
-            overlayContainer?.appendChild(placeholderOverlay);
-          }
-        });
-      });
-      // console.log(`[EmailPreview] Placeholder Overlay calculation complete. Found ${placeholdersFound} placeholders.`);
-    } else {
-      console.log("[EmailPreview] No semantic template available to find placeholders or make elements clickable for manual edit.");
-    }
-  }, [pendingChanges, semanticTemplate, onPlaceholderActivate, handleAcceptOneChange, handleRejectOneChange, isLoading, selectElementForManualEdit, selectedManualEditElementId]); // Added dependencies
+    // The entire placeholder overlay system has been removed, as this functionality
+    // is now handled by the direct-to-element click logic for the ManualEditPanel.
+  }, [pendingChanges, semanticTemplate, handleAcceptOneChange, handleRejectOneChange, isLoading, selectedElementPath, setSelectedElementPath]);
 
   /**
    * handleContentReady

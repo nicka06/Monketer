@@ -1,5 +1,7 @@
 import { EmailPreview } from '@/components/EmailPreview';
-import { useEditor } from '@/features/contexts/EditorContext';
+import { useProject } from '@/features/contexts/providers/ProjectProvider';
+import { useUIState } from '@/features/contexts/providers/UIStateProvider';
+import { useChanges } from '@/features/contexts/providers/ChangesProvider';
 import EmailPreviewControls from './EmailPreviewControls';
 import PendingChangesBar from './PendingChangesBar';
 import { cn } from '@/lib/utils';
@@ -17,18 +19,12 @@ interface EmailPreviewPanelProps {
 }
 
 const EmailPreviewPanel = ({ fileInputRef }: EmailPreviewPanelProps) => {
-  const { 
-    projectData, 
-    livePreviewHtml, 
-    pendingChanges, 
-    isDarkMode, 
-    isMobileView,
-    handlePlaceholderActivation,
-    isLoading
-  } = useEditor();
+  const { projectData, livePreviewHtml } = useProject();
+  const { isDarkMode, isMobileView, isLoading } = useUIState();
+  const { pendingChanges } = useChanges();
   
   // Determine if we should show the preview content
-  const hasPreviewContent = projectData?.semantic_email_v2 && !isLoading;
+  const hasPreviewContent = projectData?.email_content_structured && !isLoading;
   
   // Calculate content height based on controls presence
   const contentHeight = hasPreviewContent ? "h-[calc(100%-50px)]" : "h-full";
@@ -55,8 +51,7 @@ const EmailPreviewPanel = ({ fileInputRef }: EmailPreviewPanelProps) => {
               pendingChanges={pendingChanges}
               previewMode={isDarkMode ? 'dark' : 'light'}
               previewDevice={isMobileView ? 'mobile' : 'desktop'}
-              semanticTemplate={projectData.semantic_email_v2}
-              onPlaceholderActivate={handlePlaceholderActivation}
+              semanticTemplate={projectData.email_content_structured}
             />
           </div>
         )}

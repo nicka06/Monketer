@@ -1,0 +1,379 @@
+# Modular Email System: Complete System Map
+==============================================
+
+## 1. CORE PHILOSOPHY: "Structured Freedom"
+===========================================
+
+The entire system is built to solve one problem: giving users creative freedom while guaranteeing the final email is technically perfect and reliable across all email clients.
+
+This is achieved through "Structured Freedom." We do not give the user a blank canvas. Instead, we provide a powerful set of pre-built, unbreakable building blocks and a logical grid to arrange them in. The user has the freedom to combine these blocks in near-infinite ways, but the inherent structure of the blocks themselves ensures the final construction is always stable and compatible.
+
+## 2. DATA STRUCTURE & STORAGE
+==============================
+
+### 2.1 Core JSON Structure
+The entire email is represented as a single JSON object that serves as the single source of truth:
+
+```json
+{
+  "id": "email-template-id",
+  "name": "Email Template Name", 
+  "version": 3,
+  "elements": [
+    {
+      "id": "element1",
+      "type": "header",
+      "position": {
+        "row": 0,
+        "startColumn": 0,
+        "columnSpan": 12
+      },
+      "properties": {
+        "text": "Welcome to our newsletter!",
+        "typography": {
+          "fontSize": "24px",
+          "fontWeight": "bold",
+          "color": "#333333"
+        }
+      }
+    },
+    {
+      "id": "element2",
+      "type": "button",
+      "position": {
+        "row": 1,
+        "startColumn": 3,
+        "columnSpan": 6
+      },
+      "properties": {
+        "button": {
+          "href": "https://example.com",
+          "backgroundColor": "#007bff"
+        },
+        "text": "Click Here"
+      }
+    }
+  ],
+  "globalStyles": {
+    "bodyFontFamily": "Arial, sans-serif",
+    "contentWidth": "600px"
+  }
+}
+```
+
+### 2.2 Key Data Concepts
+- **Elements**: Each piece of content (text, button, image, etc.) with unique ID
+- **Position**: Grid-based positioning with row, startColumn, and columnSpan
+- **Properties**: All editable fields from the current element types (fonts, colors, sizes, etc.)
+- **Single Source of Truth**: JSON structure drives everything - HTML is generated from this
+
+### 2.3 Element Properties Structure
+Each element type maintains its current properties structure from elements.ts, but with added positioning:
+
+```typescript
+interface EmailElement {
+  id: string;
+  type: ElementType; // 'header', 'text', 'button', 'image', etc.
+  position: {
+    row: number;
+    startColumn: number; // 0-11 (12-unit grid)
+    columnSpan: number; // 1, 2, 3, 4, 6, or 12
+  };
+  properties: ElementProperties; // All existing properties from elements.ts
+}
+```
+
+## 3. GRID SYSTEM ARCHITECTURE
+==============================
+
+### 3.1 Grid Logic
+- **12-Unit Grid**: Each row is divided into 12 logical units
+- **Flexible Cell Sizing**: Elements can span 1, 2, 3, 4, 6, or 12 units
+- **Row-Based Layout**: Each row contains one or more elements
+- **Cell Positioning**: Elements can start at any grid position (0-11)
+
+### 3.2 Grid Positioning Examples
+```
+Row 0: [Header spans 12 units] (full width)
+Row 1: [Button spans 6 units starting at position 3] (centered)
+Row 2: [Image spans 4 units at position 0] [Text spans 8 units at position 4]
+Row 3: [Button spans 2 units at position 5] [Button spans 2 units at position 7]
+Row 4: [Text spans 3 units at position 0] [Button spans 3 units at position 3] [Image spans 6 units at position 6]
+```
+
+### 3.3 Grid Unit Distribution
+- **1 unit**: Full width element (spans all 12 units)
+- **2 units**: Two elements side by side (each spans 6 units)
+- **3 units**: Three elements side by side (each spans 4 units)
+- **4 units**: Four elements side by side (each spans 3 units)
+- **6 units**: Six elements side by side (each spans 2 units)
+- **12 units**: Twelve elements side by side (each spans 1 unit)
+
+### 3.4 Position Validation Rules
+- Elements cannot overlap within the same row
+- Elements must fit within the 12-unit grid
+- Elements can span multiple rows if needed (stacking within cells)
+- New rows are created automatically when needed
+
+## 4. DRAG & DROP INTERACTION FLOW
+==================================
+
+### 4.1 Visual Feedback System
+1. **Grid Overlay**: Appears when dragging starts, shows all 12 grid units
+2. **Ghost Copy**: Original element stays in place, ghost copy follows cursor
+3. **Drop Zone Highlighting**: Shows exactly where element will land
+4. **Position Indicators**: Visual feedback showing row/column positioning
+5. **Span Visualization**: Shows how many grid units the element will occupy
+
+### 4.2 Drag Logic Sequence
+1. **Start Drag**: User clicks and drags any element
+2. **Grid Activation**: 12-column grid overlay appears immediately
+3. **Position Calculation**: System calculates which grid position cursor is over
+4. **Visual Feedback**: Highlights target position and shows ghost copy
+5. **Drop Validation**: Ensures valid positioning (no overlaps, proper spans)
+6. **Position Update**: Updates JSON structure with new position
+7. **HTML Regeneration**: System generates new HTML from updated JSON
+8. **Visual Update**: Email preview updates with new layout
+
+### 4.3 Drop Zone Logic
+- **Valid Positions**: Any grid position that doesn't create overlaps
+- **Auto-Row Creation**: New rows created automatically when needed
+- **Span Validation**: Ensures element spans fit within available space
+- **Intelligent Positioning**: System suggests optimal positions based on current layout
+
+### 4.4 Visual Feedback Details
+- **Grid Lines**: Clear visual representation of 12-unit grid
+- **Highlight Zones**: Blue/colored highlighting of valid drop zones
+- **Ghost Element**: Semi-transparent copy of element being dragged
+- **Position Labels**: Shows "Row X, Column Y" or "Position Z of 12"
+- **Span Indicators**: Visual representation of how many units element will occupy
+
+## 5. AI INTEGRATION & ELEMENT CREATION
+=======================================
+
+### 5.1 AI Understanding System
+The AI analyzes the current layout and makes intelligent positioning decisions:
+
+```typescript
+interface AILayoutAnalysis {
+  currentElements: EmailElement[];
+  availablePositions: GridPosition[];
+  layoutIntent: 'spread' | 'close' | 'center' | 'left' | 'right';
+  suggestedPosition: GridPosition;
+  recommendedSpan: number;
+}
+```
+
+### 5.2 AI Positioning Logic
+1. **Context Analysis**: AI understands current element positions and layout
+2. **Intent Recognition**: Interprets user intent ("to the right", "close together", "spread apart", etc.)
+3. **Position Calculation**: Determines optimal grid position based on intent
+4. **Span Optimization**: Chooses appropriate column span based on content and intent
+5. **Layout Intelligence**: Uses AI to understand visual hierarchy and spacing
+
+### 5.3 AI Prompt Examples & Responses
+- **"Add a button to the right"**: AI finds next available position in current row, or creates new row
+- **"Create elements close together"**: Uses 12-unit grid, positions in adjacent cells (e.g., positions 5 & 6)
+- **"Spread elements apart"**: Uses fewer units per row, positions with gaps (e.g., positions 2 & 8)
+- **"Create a nice email that promotes fish food"**: AI creates multiple elements with intelligent positioning
+- **"Add a header above the button"**: AI places header in row above button, maintaining visual hierarchy
+
+### 5.4 AI Element Creation Process
+1. **Prompt Analysis**: AI interprets user intent and content requirements
+2. **Element Selection**: Chooses appropriate element types (header, text, button, image, etc.)
+3. **Content Generation**: Creates appropriate content for each element
+4. **Position Calculation**: Determines optimal grid positions based on layout intent
+5. **JSON Generation**: Creates complete element objects with positions and properties
+6. **Layout Integration**: Integrates new elements with existing layout
+
+## 6. ELEMENT EDITING WORKFLOW
+==============================
+
+### 6.1 Click-to-Edit System
+1. **Element Selection**: User clicks on any element in the email preview
+2. **Edit Popup**: Floating panel appears with all editable properties for that element type
+3. **Property Editing**: User can modify any field from the element's properties
+4. **Live Preview**: Changes reflected immediately in the email preview
+5. **Auto-Save**: Changes automatically saved to JSON structure
+6. **HTML Regeneration**: System generates new HTML from updated JSON
+
+### 6.2 Edit Popup Structure
+```typescript
+interface EditPopup {
+  elementId: string;
+  elementType: ElementType;
+  properties: ElementProperties;
+  onPropertyChange: (propertyPath: string, value: any) => void;
+  onClose: () => void;
+  position: { x: number; y: number }; // Position near clicked element
+}
+```
+
+### 6.3 Editable Properties by Element Type
+- **Text Elements**: Font family, size, weight, color, alignment, line height
+- **Button Elements**: Text, link, background color, text color, border radius
+- **Image Elements**: Source, alt text, width, height, link, border
+- **Header Elements**: Text, level (h1-h6), typography settings
+- **All Elements**: Layout properties (margins, padding, alignment)
+
+### 6.4 Edit Interaction Details
+- **Single Element Editing**: Only one element can be edited at a time
+- **Property Validation**: Real-time validation of property values
+- **Undo/Redo**: Support for undoing property changes
+- **Keyboard Shortcuts**: Quick access to common editing actions
+
+## 7. SYSTEM INTEGRATION FLOW
+=============================
+
+### 7.1 Complete User Workflow
+1. **User Input**: User types prompt in text input (e.g., "add a button to the right")
+2. **AI Processing**: AI interprets intent and creates appropriate elements
+3. **Position Calculation**: AI determines optimal grid positions
+4. **JSON Update**: New elements added to JSON structure with positions
+5. **HTML Generation**: System generates email HTML from JSON structure
+6. **Visual Update**: Email preview updates with new elements
+7. **Drag & Drop**: User can reposition elements as needed
+8. **Edit Elements**: User can click to edit element properties
+9. **Continuous Updates**: All changes flow through JSON → HTML → Preview
+
+### 7.2 Data Flow Architecture
+```
+User Input → AI Processing → JSON Update → HTML Generation → Visual Preview
+                ↓
+            Drag & Drop → JSON Update → HTML Generation → Visual Preview
+                ↓
+            Element Edit → JSON Update → HTML Generation → Visual Preview
+                ↓
+            Property Change → JSON Update → HTML Generation → Visual Preview
+```
+
+### 7.3 State Management
+- **Single Source of Truth**: JSON structure in memory
+- **Real-time Updates**: All changes immediately reflected in preview
+- **Auto-Save**: Changes automatically persisted to database
+- **Version Control**: Support for tracking changes and reverting
+
+## 8. TECHNICAL IMPLEMENTATION
+==============================
+
+### 8.1 Core Components
+1. **Grid System**: Manages 12-unit grid logic and positioning calculations
+2. **Drag & Drop Engine**: Handles element movement and visual feedback
+3. **AI Integration**: Processes user prompts and creates elements with positioning
+4. **JSON Manager**: Maintains single source of truth and handles updates
+5. **HTML Generator**: Converts JSON structure to email-compatible HTML
+6. **Edit System**: Manages element property editing and validation
+7. **Visual Preview**: Renders email preview with interactive elements
+
+### 8.2 Key Functions & APIs
+```typescript
+// Grid positioning and validation
+calculateGridPosition(mousePosition: Point): GridPosition
+validatePosition(element: EmailElement, position: GridPosition): boolean
+findAvailablePositions(currentElements: EmailElement[]): GridPosition[]
+
+// Drag & drop operations
+handleDragStart(elementId: string): void
+handleDragMove(mousePosition: Point): void
+handleDragEnd(targetPosition: GridPosition): void
+updateElementPosition(elementId: string, newPosition: GridPosition): void
+
+// AI integration
+processUserPrompt(prompt: string, currentLayout: EmailElement[]): EmailElement[]
+calculateOptimalPosition(intent: string, currentElements: EmailElement[]): GridPosition
+generateElementContent(elementType: ElementType, context: string): ElementProperties
+
+// JSON management
+updateElementProperty(elementId: string, propertyPath: string, value: any): void
+regenerateHTML(jsonStructure: EmailTemplate): string
+saveToDatabase(projectId: string, jsonStructure: EmailTemplate): Promise<void>
+
+// Edit system
+openEditPopup(elementId: string, position: Point): void
+closeEditPopup(): void
+validatePropertyValue(propertyPath: string, value: any): boolean
+```
+
+### 8.3 File Structure
+```
+src/
+├── features/
+│   ├── modular-email/
+│   │   ├── components/
+│   │   │   ├── GridSystem.tsx
+│   │   │   ├── DragDropEngine.tsx
+│   │   │   ├── ElementEditPopup.tsx
+│   │   │   └── EmailPreview.tsx
+│   │   ├── services/
+│   │   │   ├── gridPositioning.ts
+│   │   │   ├── dragDropLogic.ts
+│   │   │   ├── aiIntegration.ts
+│   │   │   └── htmlGenerator.ts
+│   │   ├── types/
+│   │   │   ├── gridTypes.ts
+│   │   │   └── elementTypes.ts
+│   │   └── hooks/
+│   │       ├── useGridSystem.ts
+│   │       ├── useDragDrop.ts
+│   │       └── useElementEditing.ts
+```
+
+## 9. USER EXPERIENCE FLOW
+==========================
+
+### 9.1 Initial State
+- User sees email preview with existing elements
+- Text input available for AI commands
+- All elements are clickable and draggable
+- Grid overlay hidden until dragging starts
+
+### 9.2 Creating Elements
+1. User types prompt in text input
+2. AI processes and creates elements
+3. Elements appear in email preview with intelligent positioning
+4. User can immediately drag to reposition or click to edit
+
+### 9.3 Repositioning Elements
+1. User clicks and drags any element
+2. Grid overlay appears showing 12-unit grid
+3. Ghost copy follows cursor
+4. Valid drop zones are highlighted
+5. User drops element in desired position
+6. Layout updates immediately
+
+### 9.4 Editing Elements
+1. User clicks on any element
+2. Edit popup appears near the element
+3. User can modify any property
+4. Changes appear immediately in preview
+5. Popup closes when user clicks elsewhere
+
+### 9.5 Visual Feedback Throughout
+- Clear indication of draggable elements
+- Visual feedback during drag operations
+- Immediate preview updates
+- Smooth animations and transitions
+- Intuitive interaction patterns
+
+## 10. ADVANTAGES OF THIS SYSTEM
+================================
+
+### 10.1 Technical Benefits
+- **Email Client Compatibility**: Table-based layout ensures compatibility
+- **Structured Output**: Consistent, predictable HTML generation
+- **Maintainable Code**: Clear separation of concerns and modular architecture
+- **Scalable**: Easy to add new element types and features
+
+### 10.2 User Experience Benefits
+- **Intuitive**: Drag-and-drop with visual feedback
+- **Flexible**: Near-infinite layout possibilities
+- **Fast**: Real-time updates and immediate feedback
+- **Powerful**: AI integration for intelligent element creation
+
+### 10.3 Development Benefits
+- **Single Source of Truth**: JSON structure eliminates inconsistencies
+- **Testable**: Clear interfaces and predictable behavior
+- **Extensible**: Easy to add new features and element types
+- **Maintainable**: Well-defined architecture and clear data flow
+
+This system provides the perfect balance of creative freedom and technical reliability, ensuring users can create beautiful, complex email layouts while maintaining perfect email client compatibility. 

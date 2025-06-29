@@ -1,52 +1,22 @@
-// Explicitly import and re-export types from elements.ts
-export type {
-    ElementType,
-    EmailElementLayout,
-    EmailElementProperties, // Base type if needed
-    HeaderElementProperties,
-    TextElementProperties,
-    ButtonElementProperties,
-    ImageElementProperties,
-    DividerElementProperties,
-    SpacerElementProperties,
-    SubtextElementProperties,
-    QuoteElementProperties,
-    CodeElementProperties,
-    ListElementProperties,
-    IconElementProperties,
-    NavElementProperties,
-    SocialElementProperties,
-    AppStoreBadgeElementProperties,
-    UnsubscribeElementProperties,
-    PreferencesElementProperties,
-    PreviewTextElementProperties,
-    ContainerElementProperties,
-    BoxElementProperties,
-    FooterElementProperties,
-    EmailElement // The main union type
-} from './elements.ts'; 
+export * from './elements';
+export * from './sections';
+export * from './row';
+export * from './column';
+export * from './template';
+export * from './pendingChangeTypes';
+export * from './editor';
 
-// Explicitly import and re-export types from sections.ts
-export type {
-    EmailSectionStyles,
-    EmailSection
-} from './sections.ts';
+export { validateEmailTemplateV2 } from './validators';
 
-// Explicitly import and re-export types from template.ts
 export type {
-    EmailGlobalStyles,
-    EmailTemplate
-} from './template.ts';
+  PropertyChange,
+  ElementDiff,
+  SectionDiff,
+  TemplateDiffResult,
+} from './diffs';
 
-// Explicitly import and re-export types from validators.ts
-export { 
-    validateEmailTemplateV2 // Corrected name and removed others
-} from './validators.ts';
-
-// Explicitly import and re-export types from diffs.ts
-export type {
-    PropertyChange,
-    ElementDiff,
-    SectionDiff,
-    TemplateDiffResult
-} from './diffs.ts'; 
+export type { Column } from './column';
+export type { Row } from './row';
+export type { EmailSection, EmailSectionStyles } from './sections';
+export type { EmailTemplate, EmailGlobalStyles } from './template';
+export * from './validators';

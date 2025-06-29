@@ -1,6 +1,5 @@
 import { EmailElement, ElementType } from './elements.ts';
 import { EmailSection } from './sections.ts';
-import { EmailTemplate } from './template.ts';
 
 export interface PropertyChange {
   oldValue: any;

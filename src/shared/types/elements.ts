@@ -1,4 +1,4 @@
-export type ElementType = 
+export type ElementType =
   | 'header'
   | 'text'
   | 'button'
@@ -16,32 +16,9 @@ export type ElementType =
   | 'unsubscribe'
   | 'preferences'
   | 'previewText'
-  | 'container'
-  | 'box'
-  | 'footer'; // Add more types as needed
+  | 'footer';
 
-export interface EmailElementLayout {
-  width?: string;
-  height?: string;
-  maxWidth?: string;
-  margin?: {
-    top?: string;
-    right?: string;
-    bottom?: string;
-    left?: string;
-  };
-  padding?: {
-    top?: string;
-    right?: string;
-    bottom?: string;
-    left?: string;
-  };
-  align?: 'left' | 'center' | 'right';
-  valign?: 'top' | 'middle' | 'bottom';
-  backgroundColor?: string;
-}
-
-export interface EmailElementProperties { }
+export interface EmailElementProperties {}
 
 export interface HeaderElementProperties extends EmailElementProperties {
   level: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
@@ -49,14 +26,11 @@ export interface HeaderElementProperties extends EmailElementProperties {
   typography?: {
     fontFamily?: string;
     fontSize?: string;
-    fontWeight?: 'bold' | 'normal' | string; // Allow string for weights like 700
+    fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
-  fontFamily?: string;
-  align?: 'left' | 'center' | 'right';
 }
 
 export interface TextElementProperties extends EmailElementProperties {
@@ -67,23 +41,19 @@ export interface TextElementProperties extends EmailElementProperties {
     fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
-  fontFamily?: string;
-  align?: 'left' | 'center' | 'right';
 }
 
 export interface ButtonElementProperties extends EmailElementProperties {
-  button: {
-    href: string;
-    target?: '_blank' | '_self';
-    backgroundColor?: string;
-    textColor?: string;
-    borderRadius?: string;
-    border?: string; // e.g., '1px solid #000'
-  };
-  typography?: { // Optional separate typography for button text
+  href: string;
+  text: string;
+  target?: '_blank' | '_self';
+  backgroundColor?: string;
+  textColor?: string;
+  borderRadius?: string;
+  border?: string; // e.g., '1px solid #000'
+  typography?: {
     fontFamily?: string;
     fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
@@ -91,17 +61,15 @@ export interface ButtonElementProperties extends EmailElementProperties {
 }
 
 export interface ImageElementProperties extends EmailElementProperties {
-  image: {
-    src: string;
-    alt?: string;
-    width?: string;
-    height?: string;
-    linkHref?: string; // Optional link for the image
-    linkTarget?: '_blank' | '_self';
-    videoHref?: string; // Optional: Link to video if image is a poster
-    objectFit?: 'cover' | 'contain' | 'fill'; // Add objectFit property
-  };
-  border?: { // Optional border around the image
+  src: string;
+  alt?: string;
+  width?: string;
+  height?: string;
+  linkHref?: string;
+  linkTarget?: '_blank' | '_self';
+  videoHref?: string;
+  objectFit?: 'cover' | 'contain' | 'fill';
+  border?: {
     radius?: string;
     width?: string;
     style?: 'solid' | 'dashed' | 'dotted';
@@ -110,45 +78,39 @@ export interface ImageElementProperties extends EmailElementProperties {
 }
 
 export interface DividerElementProperties extends EmailElementProperties {
-  divider: {
-    color?: string;
-    height?: string; // e.g., '1px'
-    width?: string; // e.g., '100%'
-  };
+  color?: string;
+  height?: string; // e.g., '1px'
+  width?: string; // e.g., '100%'
 }
 
 export interface SpacerElementProperties extends EmailElementProperties {
-  spacer: {
-    height: string; // Required: e.g., '20px'
-  };
+  height: string; // Required: e.g., '20px'
 }
 
 export interface SubtextElementProperties extends EmailElementProperties {
   text: string;
   typography?: {
     fontFamily?: string;
-    fontSize?: string; // Typically smaller than standard text
+    fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
-    color?: string; // Often lighter than standard text
-    textAlign?: 'left' | 'center' | 'right';
+    color?: string;
     lineHeight?: string;
   };
 }
 
 export interface QuoteElementProperties extends EmailElementProperties {
   text: string;
-  citation?: string; // Optional source/attribution
+  citation?: string;
   typography?: {
     fontFamily?: string;
     fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
-    fontStyle?: 'italic' | 'normal'; // Often italicized
+    fontStyle?: 'italic' | 'normal';
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
-  border?: { // e.g., left border common for quotes
+  border?: {
     width?: string;
     style?: 'solid' | 'dashed' | 'dotted';
     color?: string;
@@ -157,10 +119,10 @@ export interface QuoteElementProperties extends EmailElementProperties {
 }
 
 export interface CodeElementProperties extends EmailElementProperties {
-  code: string; // The code content
-  language?: string; // Optional language hint (e.g., 'javascript')
+  code: string;
+  language?: string;
   typography?: {
-    fontFamily?: string; // Usually monospace
+    fontFamily?: string;
     fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
@@ -169,13 +131,13 @@ export interface CodeElementProperties extends EmailElementProperties {
   };
   backgroundColor?: string;
   borderRadius?: string;
-  padding?: string; // Padding around the code block
+  padding?: string;
 }
 
 export interface ListElementProperties extends EmailElementProperties {
-  items: string[]; // Array of list item texts
+  items: string[];
   listType: 'ordered' | 'unordered';
-  typography?: { // Style for list items
+  typography?: {
     fontFamily?: string;
     fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
@@ -183,20 +145,18 @@ export interface ListElementProperties extends EmailElementProperties {
     color?: string;
     lineHeight?: string;
   };
-  markerStyle?: { // Style for bullets/numbers
+  markerStyle?: {
     color?: string;
   };
 }
 
 export interface IconElementProperties extends EmailElementProperties {
-  icon: {
-    src: string;
-    alt?: string;
-    width?: string; // Often small, fixed size
-    height?: string;
-    linkHref?: string; // Optional link
-    linkTarget?: '_blank' | '_self';
-  };
+  src: string;
+  alt?: string;
+  width?: string;
+  height?: string;
+  linkHref?: string;
+  linkTarget?: '_blank' | '_self';
 }
 
 export interface NavElementProperties extends EmailElementProperties {
@@ -204,7 +164,7 @@ export interface NavElementProperties extends EmailElementProperties {
     text: string;
     href: string;
     target?: '_blank' | '_self';
-    typography?: { // Style per link (optional)
+    typography?: {
       fontFamily?: string;
       fontSize?: string;
       fontWeight?: 'bold' | 'normal' | string;
@@ -212,11 +172,7 @@ export interface NavElementProperties extends EmailElementProperties {
       color?: string;
     };
   }[];
-  layout?: { // Overall layout of the nav links
-    align?: 'left' | 'center' | 'right';
-    spacing?: string; // Space between links
-  };
-  typography?: { // Default style for all links
+  typography?: {
     fontFamily?: string;
     fontSize?: string;
     fontWeight?: 'bold' | 'normal' | string;
@@ -225,7 +181,7 @@ export interface NavElementProperties extends EmailElementProperties {
   };
 }
 
-export type SocialPlatform = 
+export type SocialPlatform =
   | 'facebook'
   | 'twitter'
   | 'linkedin'
@@ -240,29 +196,23 @@ export interface SocialElementProperties extends EmailElementProperties {
   links: {
     platform: SocialPlatform;
     href: string;
-    iconSrc?: string; // Required if platform is 'custom' or for overriding defaults
-    alt?: string; // Alt text for the icon
+    iconSrc?: string;
+    alt?: string;
   }[];
-  layout?: { // Layout of icons
-    align?: 'left' | 'center' | 'right';
-    spacing?: string; // Space between icons
-  };
   iconStyle?: {
     width?: string;
     height?: string;
-    borderRadius?: string; // e.g., for circular icons
+    borderRadius?: string;
   };
 }
 
 export interface AppStoreBadgeElementProperties extends EmailElementProperties {
-  badge: {
-    platform: 'apple-app-store' | 'google-play-store';
-    href: string;
-    language?: string; // e.g., 'en-us', for localized badges
-    alt?: string; // Alt text for badge image
-    width?: string;
-    height?: string;
-  };
+  platform: 'apple-app-store' | 'google-play-store';
+  href: string;
+  language?: string;
+  alt?: string;
+  width?: string;
+  height?: string;
 }
 
 export interface UnsubscribeElementProperties extends EmailElementProperties {
@@ -277,7 +227,6 @@ export interface UnsubscribeElementProperties extends EmailElementProperties {
     fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
 }
@@ -294,34 +243,12 @@ export interface PreferencesElementProperties extends EmailElementProperties {
     fontWeight?: 'bold' | 'normal' | string;
     fontStyle?: 'italic' | 'normal';
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
 }
 
 export interface PreviewTextElementProperties extends EmailElementProperties {
   text: string;
-}
-
-export interface ContainerElementProperties extends EmailElementProperties {
-  styles?: {
-    backgroundColor?: string;
-    border?: string; // e.g., '1px solid #ccc'
-    borderRadius?: string;
-    padding?: string;
-    // Add other applicable container styles
-  };
-}
-
-export interface BoxElementProperties extends EmailElementProperties {
-  styles?: {
-    backgroundColor?: string;
-    border?: string; // e.g., '1px solid #000'
-    borderRadius?: string;
-    padding?: string;
-    boxShadow?: string; // Note: poor email client support
-    // Add other applicable box styles
-  };
 }
 
 export interface FooterElementProperties extends EmailElementProperties {
@@ -331,7 +258,6 @@ export interface FooterElementProperties extends EmailElementProperties {
     fontWeight?: string;
     fontStyle?: string;
     color?: string;
-    textAlign?: 'left' | 'center' | 'right';
     lineHeight?: string;
   };
   text: string;
@@ -339,11 +265,9 @@ export interface FooterElementProperties extends EmailElementProperties {
 
 interface BaseEmailElement {
   id: string;
-  content: string; // Used differently by different types (text, alt text, button label)
-  layout: EmailElementLayout;
 }
 
-export type EmailElement = 
+export type EmailElement =
   | (BaseEmailElement & { type: 'header'; properties: HeaderElementProperties })
   | (BaseEmailElement & { type: 'text'; properties: TextElementProperties })
   | (BaseEmailElement & { type: 'button'; properties: ButtonElementProperties })
@@ -361,6 +285,4 @@ export type EmailElement =
   | (BaseEmailElement & { type: 'unsubscribe'; properties: UnsubscribeElementProperties })
   | (BaseEmailElement & { type: 'preferences'; properties: PreferencesElementProperties })
   | (BaseEmailElement & { type: 'previewText'; properties: PreviewTextElementProperties })
-  | (BaseEmailElement & { type: 'container'; properties: ContainerElementProperties })
-  | (BaseEmailElement & { type: 'box'; properties: BoxElementProperties })
-  | (BaseEmailElement & { type: 'footer'; properties: FooterElementProperties }); 
+  | (BaseEmailElement & { type: 'footer'; properties: FooterElementProperties });

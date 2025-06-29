@@ -19,6 +19,10 @@
  * - `section_add`: A new section is added.
  * - `section_delete`: An existing section is removed.
  * - `section_edit`: An existing section's properties (not its elements) are modified.
+ * - `row_add`: A new row is added.
+ * - `row_delete`: An existing row is removed.
+ * - `column_add`: A new column is added.
+ * - `column_delete`: An existing column is removed.
  */
 export type ChangeTypeAction = 
   | 'element_add' 
@@ -26,7 +30,11 @@ export type ChangeTypeAction =
   | 'element_delete' 
   | 'section_add' 
   | 'section_delete' 
-  | 'section_edit';
+  | 'section_edit'
+  | 'row_add'
+  | 'row_delete'
+  | 'column_add'
+  | 'column_delete';
   
 /**
  * Defines the possible statuses for a granular pending change.

@@ -1,7 +1,7 @@
 import { Sun, Moon, Smartphone, Monitor } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { useEditor } from '@/features/contexts/EditorContext';
+import { useUIState } from '@/features/contexts/providers/UIStateProvider';
 
 /**
  * EmailPreviewControls Component
@@ -20,7 +20,7 @@ const EmailPreviewControls = () => {
     isMobileView, 
     setIsMobileView,
     isLoading
-  } = useEditor();
+  } = useUIState();
 
   return (
     <div className="sticky top-0 z-10 bg-neutral-100 dark:bg-neutral-950 py-2 px-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">

@@ -1,7 +1,7 @@
 import { ArrowLeft, Settings, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { useEditor } from '@/features/contexts/EditorContext';
+import { useProject } from '@/features/contexts/providers/ProjectProvider';
 
 /**
  * EditorHeader Component
@@ -19,14 +19,19 @@ const EditorHeader = () => {
     isEditingTitle, 
     setIsEditingTitle, 
     handleTitleChange,
-    handleNavigateToSendPage
-  } = useEditor();
+  } = useProject();
 
   // Handle saving the title changes
   const saveTitle = () => {
     setIsEditingTitle(false);
     handleTitleChange(projectTitle);
   };
+
+  const handleNavigateToSendPage = () => {
+    // Navigate to the send page, assuming the project ID is in the URL
+    // This can be made more robust if needed.
+    navigate('../send');
+  }
 
   return (
     <header className="flex items-center justify-between p-3 border-b sticky top-0 z-10 bg-background">

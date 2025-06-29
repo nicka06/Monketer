@@ -1,17 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ChatInterface } from '@/components/ChatInterface';
-import { EditorProvider, useEditor } from '@/features/contexts/EditorContext';
 import { EmailElement } from '@/shared/types';
 import { ManualEditPanel } from '@/components/ManualEditPanel';
 import { useLoading } from '@/contexts/LoadingContext'; // Import global loading context
+import { ProjectProvider, useProject } from '@/features/contexts/providers/ProjectProvider';
+import { UIStateProvider, useUIState } from '@/features/contexts/providers/UIStateProvider';
+import { AIProvider, useAI } from '@/features/contexts/providers/AIProvider';
+import { ChangesProvider } from '@/features/contexts/providers/ChangesProvider';
+import { ManualEditProvider, useManualEdit } from '@/features/contexts/providers/ManualEditProvider';
 
 // Import our extracted components
 import EditorHeader from '@/components/editor/EditorHeader';
 import EmailPreviewPanel from '@/components/editor/EmailPreviewPanel';
 import InitialPromptScreen from '@/components/editor/InitialPromptScreen';
 import LoadingScreen from '@/components/editor/LoadingScreen';
-import PlaceholderEditModal from '@/components/editor/PlaceholderEditModal';
 
 /**
  * Email Editor Component
@@ -25,9 +28,17 @@ const Editor = () => {
   // The Editor component now just sets up the context provider
   // All the complex logic has been moved to EditorContext
   return (
-    <EditorProvider>
-      <EditorContent />
-    </EditorProvider>
+    <ProjectProvider>
+      <UIStateProvider>
+        <AIProvider>
+          <ChangesProvider>
+            <ManualEditProvider>
+              <EditorContent />
+            </ManualEditProvider>
+          </ChangesProvider>
+        </AIProvider>
+      </UIStateProvider>
+    </ProjectProvider>
   );
 };
 
@@ -38,56 +49,26 @@ const Editor = () => {
  * based on the application state from EditorContext.
  */
 const EditorContent = () => {
+  const { projectData, actualProjectId } = useProject();
   const { 
     isLoadingProject, 
-    projectData, 
     isLoading, 
+    selectedMode,
+    handleModeChange
+  } = useUIState();
+  const {
     isClarifying,
-    isCreatingFirstEmail,
     chatMessages,
     hasFirstDraft,
+    isCreatingFirstEmail,
     clarificationConversation,
-    selectedMode,
-    handleModeChange,
     handleSendMessage,
     handleSuggestionSelected,
-    handleFileSelected,
-    actualProjectId,
-    imageUploadRequested,
-    selectedManualEditElementId
-  } = useEditor();
+  } = useAI();
+  const { selectedElementId } = useUIState();
 
   const { hideLoading } = useLoading(); // Get hideLoading from global context
   const hideLoadingCalledRef = useRef(false); // Ref to prevent multiple calls
-
-  // Reference to file input for image uploads from placeholders
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Connect file input change events to the context handler
-  useEffect(() => {
-    // Process file selection and pass to context
-    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        handleFileSelected(e);
-      }
-    };
-    
-    const fileInput = fileInputRef.current;
-    if (fileInput) {
-      fileInput.addEventListener('change', handleFileInputChange as any);
-      
-      return () => {
-        fileInput.removeEventListener('change', handleFileInputChange as any);
-      };
-    }
-  }, [handleFileSelected]);
-
-  // Effect to trigger file input click when image upload is requested
-  useEffect(() => {
-    if (imageUploadRequested > 0 && fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  }, [imageUploadRequested]);
 
   // Effect to hide global loading screen once project loading is done
   useEffect(() => {
@@ -99,10 +80,10 @@ const EditorContent = () => {
   }, [isLoadingProject, hideLoading]);
 
   // Find the selected element to edit
-  const elementToEdit: EmailElement | undefined = selectedManualEditElementId && projectData?.semantic_email_v2 ? 
-    projectData.semantic_email_v2.sections
-      .flatMap(section => section.elements)
-      .find(element => element.id === selectedManualEditElementId) 
+  const elementToEdit: EmailElement | undefined = selectedElementId && projectData?.email_content_structured ?
+    projectData.email_content_structured.sections
+      .flatMap(section => section.rows.flatMap(row => row.columns.flatMap(col => col.elements)))
+      .find(element => element.id === selectedElementId)
     : undefined;
 
   // Initial loading state
@@ -136,20 +117,12 @@ const EditorContent = () => {
             className="overflow-hidden relative"
           >
             {/* Show loading screen during generation, otherwise show the preview */}
-            {(isLoading || isCreatingFirstEmail || (isClarifying && !projectData?.semantic_email_v2) || 
-              (!projectData?.semantic_email_v2 && !isClarifying && chatMessages.length > 0)) ? (
+            {(isLoading || isCreatingFirstEmail || (isClarifying && !projectData?.email_content_structured) || 
+              (!projectData?.email_content_structured && !isClarifying && chatMessages.length > 0)) ? (
               <LoadingScreen type={isClarifying ? 'clarifying' : 'generating'} />
             ) : (
-              <EmailPreviewPanel fileInputRef={fileInputRef} />
+              <EmailPreviewPanel fileInputRef={null} />
             )}
-
-            {/* Hidden file input for image uploads */}
-            <input 
-              type="file"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              accept="image/*"
-            />
           </ResizablePanel>
           
           {/* Resizable handle between panels */}
@@ -185,9 +158,6 @@ const EditorContent = () => {
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
-
-      {/* Modal for editing link placeholders */}
-      <PlaceholderEditModal />
     </div>
   );
 };

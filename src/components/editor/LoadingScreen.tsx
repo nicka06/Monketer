@@ -1,6 +1,7 @@
 import { Mail } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { useEditor } from '@/features/contexts/EditorContext';
+import { useUIState } from '@/features/contexts/providers/UIStateProvider';
+import { useAI } from '@/features/contexts/providers/AIProvider';
 
 /**
  * LoadingScreen Component
@@ -17,7 +18,8 @@ interface LoadingScreenProps {
 }
 
 const LoadingScreen = ({ type = 'generating' }: LoadingScreenProps) => {
-  const { progress, isClarifying } = useEditor();
+  const { progress } = useUIState();
+  const { isClarifying } = useAI();
   
   // Use passed type or determine based on context
   const displayType = type === 'clarifying' || isClarifying ? 'clarifying' : type;

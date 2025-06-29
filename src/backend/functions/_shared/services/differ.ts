@@ -70,4 +70,4 @@ export class DifferV2 extends DifferCore {
   }
   
   // Any Deno/Supabase specific methods or overrides can be added here
-} 
+}

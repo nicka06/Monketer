@@ -1,5 +1,8 @@
-import { EmailElement } from './elements.ts';
+import { Row } from './row';
 
+/**
+ * Defines the styling for a section, which acts as a full-width container.
+ */
 export interface EmailSectionStyles {
   backgroundColor?: string;
   padding?: {
@@ -8,16 +11,13 @@ export interface EmailSectionStyles {
     bottom?: string;
     left?: string;
   };
-  border?: {
-    width?: string;
-    style?: 'solid' | 'dashed' | 'dotted';
-    color?: string;
-  }; 
-  // Add other section-specific styles as needed
 }
 
+/**
+ * An email section, which is a full-width container for rows of content.
+ */
 export interface EmailSection {
   id: string;
-  elements: EmailElement[];
   styles: EmailSectionStyles;
-} 
+  rows: Row[];
+}

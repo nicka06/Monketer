@@ -3,7 +3,8 @@ import type {
     EmailTemplate,
     EmailSection,
     EmailElement,
-    EmailElementLayout,
+    Row,
+    Column,
     EmailSectionStyles,
     EmailGlobalStyles,
     HeaderElementProperties,
@@ -23,8 +24,6 @@ import type {
     UnsubscribeElementProperties,
     PreferencesElementProperties,
     PreviewTextElementProperties,
-    ContainerElementProperties,
-    BoxElementProperties,
     FooterElementProperties
 } from '@shared/types';
 
@@ -170,384 +169,221 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
       </html>`;
   }
 
-  /**
-   * Generates HTML for a single section.
-   * @param section The V2 EmailSection object.
-   * @returns The HTML string for the section (typically a <tr>).
-   */
   protected generateSectionHtml(section: EmailSection): string {
     const sectionStyles = this.generateSectionStyle(section.styles);
-    
-    // Generate HTML for all elements within the section
-    const elementsHtml = section.elements
-      .map(element => this.generateElementHtml(element))
-      .join('\n');
-      
-    // Wrap elements in an inner table for structure within the section cell
-    const innerTable = `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;">
-        ${elementsHtml}
-      </table>`;
-      
-    // Return the outer table row for the section
+    const rowsHtml = section.rows.map(row => this.generateRowHtml(row)).join('');
+
     return `
       <tr>
         <td id="section-${section.id}" data-section-id="${section.id}" style="${sectionStyles}">
-          ${innerTable}
+          ${rowsHtml}
         </td>
       </tr>`;
   }
 
-  /**
-   * Generates HTML for a single element.
-   * @param element The V2 EmailElement object.
-   * @returns The HTML string for the element (typically a <tr> containing the element).
-   */
+  protected generateRowHtml(row: Row): string {
+    const columnsHtml = row.columns.map(column => this.generateColumnHtml(column)).join('');
+    return `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-spacing: 0;">
+        <tr>
+          ${columnsHtml}
+        </tr>
+      </table>`;
+  }
+
+  protected generateColumnHtml(column: Column): string {
+    const elementsHtml = column.elements.map(element => this.generateElementHtml(element)).join('');
+    const columnWidth = `${(100 / 12) * column.styles.gridSpan}%`;
+    const columnStyles = this.generateColumnStyle(column.styles);
+
+    return `
+      <td class="stack-column" valign="top" style="width: ${columnWidth}; ${columnStyles}">
+        ${elementsHtml}
+      </td>`;
+  }
+
   protected generateElementHtml(element: EmailElement): string {
-    const layoutStyles = this.generateLayoutStyle(element.layout);
     let elementContent = '';
 
     switch (element.type) {
       case 'header':
-        const headerProps = element.properties as HeaderElementProperties;
+        const headerProps = element.properties;
         const headerStyles = this.generateTypographyStyle(headerProps.typography);
-        elementContent = `<${headerProps.level || 'h2'} style="margin:0; ${headerStyles}">${element.content}</${headerProps.level || 'h2'}>`;
+        elementContent = `<${headerProps.level || 'h2'} style="margin:0; ${headerStyles}">${headerProps.text}</${headerProps.level || 'h2'}>`;
         break;
 
       case 'text':
-        const textProps = element.properties as TextElementProperties;
+        const textProps = element.properties;
         const textStyles = this.generateTypographyStyle(textProps.typography);
-        elementContent = `<p style="margin:0; ${textStyles}">${element.content}</p>`;
+        elementContent = `<p style="margin:0; ${textStyles}">${textProps.text}</p>`;
         break;
 
       case 'button':
-        const btnProps = element.properties as ButtonElementProperties;
-        const defaultText = 'Button';
-        const defaultHref = '#';
-        const defaultTarget = '_blank';
-        const defaultTextColor = '#ffffff';
-        const defaultBgColor = '#007bff';
-        const defaultBorderRadius = '0px';
-        const defaultPadding = { top: '10px', right: '25px', bottom: '10px', left: '25px' };
-        const defaultBorder = undefined;
-
-        const buttonStyle = `display:inline-block; 
-          ${this.generateBorderStyle(btnProps.button?.border ?? defaultBorder)} 
-          padding:${element.layout?.padding?.top ?? defaultPadding.top} ${element.layout?.padding?.right ?? defaultPadding.right} ${element.layout?.padding?.bottom ?? defaultPadding.bottom} ${element.layout?.padding?.left ?? defaultPadding.left}; 
-          color:${btnProps.button?.textColor ?? defaultTextColor}; 
-          background-color:${btnProps.button?.backgroundColor ?? defaultBgColor}; 
-          text-decoration:none; 
-          border-radius:${btnProps.button?.borderRadius ?? defaultBorderRadius};
+        const btnProps = element.properties;
+        const buttonStyle = `display:inline-block;
+          padding: 10px 25px;
+          color:${btnProps.textColor || '#ffffff'};
+          background-color:${btnProps.backgroundColor || '#007bff'};
+          text-decoration:none;
+          border-radius:${btnProps.borderRadius || '0px'};
           ${this.generateTypographyStyle(btnProps.typography)}`;
 
-        const buttonText = element.content || defaultText;
-        const buttonHref = btnProps.button?.href ?? defaultHref;
-        const buttonTarget = btnProps.button?.target ?? defaultTarget;
-
-        const buttonHtml = `<a href="${buttonHref}" target="${buttonTarget}" style="${buttonStyle}">${buttonText}</a>`;
-
-        const finalAlign = element.layout?.align || 'left';
-        console.log(`[HtmlGeneratorCore] Button (ID: ${element.id}): element.layout.align is '${element.layout?.align}', finalAlign for inner TD is '${finalAlign}'.`);
-
-        elementContent = `
-          <table border="0" cellspacing="0" cellpadding="0" role="presentation" style="display: inline-table;">
-            <tr>
-              <td align="${finalAlign}" bgcolor="${btnProps.button?.backgroundColor ?? defaultBgColor}">
-                ${buttonHtml}
-              </td>
-            </tr>
-          </table>`;
+        elementContent = `<a href="${btnProps.href}" target="${btnProps.target || '_blank'}" style="${buttonStyle}">${btnProps.text}</a>`;
         break;
 
       case 'image':
-        const imageProps = element.properties as ImageElementProperties;
-        const img = imageProps.image || { src: '#', alt: '' };
-        const imgBorder = this.generateBorderStyle(imageProps.border);
-        
-        const defaultImageWidth = '150px';
-        const defaultImageHeight = '150px';
-
-        const imageWidth = (typeof img.width === 'string' && img.width.endsWith('px')) ? img.width : defaultImageWidth;
-        const imageHeight = (typeof img.height === 'string' && img.height.endsWith('px')) ? img.height : defaultImageHeight;
-
-        const imgTag = `<img src="${img.src}" alt="${img.alt || ''}" width="${imageWidth.replace('px','')}" height="${imageHeight.replace('px','')}" style="display:block; max-width:100%; height:auto; ${imgBorder}" />`;
-        
-        if (img.linkHref) {
-          elementContent = `<a href="${img.linkHref}" target="${img.linkTarget || '_blank'}">${imgTag}</a>`;
-        } else {
-          elementContent = imgTag;
-        }
+        const imgProps = element.properties;
+        const imgTag = `<img src="${imgProps.src}" alt="${imgProps.alt || ''}" width="${imgProps.width || '100%'}" style="display:block; height:auto; border:0; max-width:100%;">`;
+        elementContent = imgProps.linkHref ? `<a href="${imgProps.linkHref}" target="${imgProps.linkTarget || '_blank'}">${imgTag}</a>` : imgTag;
         break;
 
       case 'divider':
-        const dividerProps = element.properties as DividerElementProperties;
-        const div = dividerProps.divider || {};
-        elementContent = `<hr style="border:none; border-top:${div.height || '1px'} solid ${div.color || '#cccccc'}; margin: 10px 0; width:${div.width || '100%'};" />`;
+        const divProps = element.properties;
+        elementContent = `<hr style="border:none; border-top:${divProps.height || '1px'} solid ${divProps.color || '#cccccc'}; margin: 10px 0; width:${divProps.width || '100%'};" />`;
         break;
 
       case 'spacer':
-        const spacerProps = element.properties as SpacerElementProperties;
-        const sp = spacerProps.spacer || { height: '20px' };
-        elementContent = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td style="height:${sp.height}; line-height:${sp.height}; font-size:${sp.height};">&nbsp;</td></tr></table>`;
+        const spacerProps = element.properties;
+        elementContent = `<div style="height:${spacerProps.height}; line-height:${spacerProps.height}; font-size:1px;">&nbsp;</div>`;
         break;
 
+      // Other cases would be filled in here following the same pattern...
       case 'subtext':
-        const subtextProps = element.properties as SubtextElementProperties;
-        const subtextStyles = this.generateTypographyStyle(subtextProps.typography);
-        elementContent = `<p style="margin:0; ${subtextStyles}">${element.content}</p>`;
+        const subtextProps = element.properties;
+        const subtextStyles = this.generateTypographyStyle(subtextProps.typography, { color: '#6c757d', fontSize: '12px' });
+        elementContent = `<p style="margin:0; ${subtextStyles}">${subtextProps.text}</p>`;
         break;
 
       case 'quote':
-        const quoteProps = element.properties as QuoteElementProperties;
+        const quoteProps = element.properties;
         const quoteStyles = this.generateTypographyStyle(quoteProps.typography);
-        elementContent = `<blockquote style="margin:0; padding-left: 10px; border-left: 3px solid #ccc; ${quoteStyles}">${element.content}</blockquote>`;
+        elementContent = `<blockquote style="margin:0; padding-left: 10px; border-left: 3px solid ${quoteProps.border?.color || '#ccc'}; ${quoteStyles}">${quoteProps.text}</blockquote>`;
         break;
 
       case 'code':
-        const codeProps = element.properties as CodeElementProperties;
-        const codeStyles = this.generateTypographyStyle(codeProps.typography, { fontFamily: 'monospace', fontSize: '14px' });
-        const codeBg = codeProps.backgroundColor ? `background-color:${codeProps.backgroundColor};` : 'background-color:#f8f9fa;';
-        const codePadding = codeProps.padding || '10px';
-        const codeRadius = codeProps.borderRadius || '4px';
-        elementContent = `<div style="${codeBg} border-radius:${codeRadius}; padding:${codePadding}; overflow:auto;"><pre style="margin:0; white-space:pre-wrap; word-wrap:break-word;"><code style="${codeStyles}">${element.content}</code></pre></div>`;
+        const codeProps = element.properties;
+        const codeStyles = this.generateTypographyStyle(codeProps.typography, { fontFamily: 'monospace' });
+        elementContent = `<pre style="background:${codeProps.backgroundColor || '#f4f4f4'}; border-radius:${codeProps.borderRadius || '4px'}; padding:${codeProps.padding || '10px'};"><code style="${codeStyles}">${codeProps.code}</code></pre>`;
         break;
-        
+
       case 'list':
-        const listProps = element.properties as ListElementProperties;
+        const listProps = element.properties;
+        const listItemsHtml = listProps.items.map(item => `<li>${item}</li>`).join('');
         const listTag = listProps.listType === 'ordered' ? 'ol' : 'ul';
-        const listItemStyles = this.generateTypographyStyle(listProps.typography);
-        const listItemsHtml = listProps.items?.map(item => `<li style="${listItemStyles}">${item}</li>`).join('\n') || ''; 
-        elementContent = `<${listTag} style="margin:0; padding-left:25px; ${listProps.markerStyle?.color ? `color:${listProps.markerStyle.color};` : ''}">
-          ${listItemsHtml}
-        </${listTag}>`;
+        const listStyles = this.generateTypographyStyle(listProps.typography);
+        elementContent = `<${listTag} style="${listStyles}">${listItemsHtml}</${listTag}>`;
         break;
 
       case 'icon':
-        const iconProps = element.properties as IconElementProperties;
-        const ico = iconProps.icon || { src: '#' };
-        const iconStyles = `width:${ico.width || '24px'}; height:${ico.height || 'auto'}; display:inline-block; vertical-align:middle;`;
-        const iconTag = `<img src="${ico.src}" alt="${ico.alt || ''}" style="${iconStyles}" width="${ico.width || '24'}" ${ico.height ? `height="${ico.height}"` : ''}/>`;
-        if (ico.linkHref) {
-          elementContent = `<a href="${ico.linkHref}" target="${ico.linkTarget || '_blank'}" style="text-decoration:none; line-height:1;">${iconTag}</a>`;
-        } else {
-          elementContent = iconTag;
-        }
+        const iconProps = element.properties;
+        elementContent = `<img src="${iconProps.src}" alt="${iconProps.alt || ''}" width="${iconProps.width || '24'}" height="${iconProps.height || '24'}" style="display:block;">`;
         break;
-
+      
       case 'nav':
-        const navProps = element.properties as NavElementProperties;
-        const defaultLinkStyle = this.generateTypographyStyle(navProps.typography);
-        const linksHtml = navProps.links?.map(link => {
-          const linkStyle = this.generateTypographyStyle(link.typography, navProps.typography);
-          return `<a href="${link.href}" target="${link.target || '_blank'}" style="text-decoration:none; ${linkStyle} ${navProps.layout?.spacing ? `padding: 0 ${navProps.layout.spacing};` : 'padding: 0 10px;'}">${link.text}</a>`;
-        }).join('') || '';
-        elementContent = `<p style="margin:0; ${defaultLinkStyle}">${linksHtml}</p>`;
+        const navProps = element.properties;
+        const linkStyle = this.generateTypographyStyle(navProps.typography, { color: '#007bff', textDecoration: 'none' });
+        const linksHtml = navProps.links.map(link => {
+          return `<a href="${link.href}" target="${link.target || '_blank'}" style="text-decoration:none; ${linkStyle} padding: 0 10px;">${link.text}</a>`;
+        }).join('');
+        elementContent = `<p style="margin:0; text-align:center;">${linksHtml}</p>`;
         break;
 
       case 'social':
-        const socialProps = element.properties as SocialElementProperties;
-        const iconsHtml = socialProps.links?.map(link => {
-          const iconSrc = link.iconSrc || `#${link.platform}-icon`; 
-          const iconAlt = link.alt || `${link.platform} link`;
-          const iconWidth = socialProps.iconStyle?.width || '32px';
-          const iconHeight = socialProps.iconStyle?.height || 'auto';
-          const iconRadius = socialProps.iconStyle?.borderRadius || '0';
-          const iconTag = `<img src="${iconSrc}" alt="${iconAlt}" width="${iconWidth.replace('px','')}" style="display:block; width:${iconWidth}; height:${iconHeight}; border-radius:${iconRadius};" />`;
-          return `<a href="${link.href}" target="_blank" style="text-decoration:none; display:inline-block; ${socialProps.layout?.spacing ? `padding: 0 ${socialProps.layout.spacing};` : 'padding: 0 5px;'}">${iconTag}</a>`;
-        }).join('') || '';
-        elementContent = `<p style="margin:0;">${iconsHtml}</p>`;
+        const socialProps = element.properties;
+        const socialLinksHtml = socialProps.links.map(link => {
+          const iconTag = `<img src="${link.iconSrc || '#'}" width="24" height="24" alt="${link.alt || link.platform}" style="display: block;">`;
+          return `<a href="${link.href}" target="_blank" style="text-decoration:none; display:inline-block; padding: 0 5px;">${iconTag}</a>`;
+        }).join('');
+        elementContent = `<p style="margin:0; text-align:center;">${socialLinksHtml}</p>`;
         break;
 
       case 'appStoreBadge':
-        const badgeProps = element.properties as AppStoreBadgeElementProperties;
-        const bdg = badgeProps.badge;
-        const badgeSrc = `#${bdg.platform}-badge`; 
-        const badgeAlt = bdg.alt || `${bdg.platform} badge`;
-        const badgeWidth = bdg.width || '135px'; 
-        const badgeHeight = bdg.height || 'auto';
-        const badgeTag = `<img src="${badgeSrc}" alt="${badgeAlt}" width="${badgeWidth.replace('px','')}" style="display:inline-block; width:${badgeWidth}; height:${badgeHeight};"/>`;
-        elementContent = `<a href="${bdg.href}" target="_blank">${badgeTag}</a>`;
+        const badgeProps = element.properties;
+        const badgeUrl = badgeProps.href;
+        const badgeImg = badgeProps.platform === 'apple-app-store'
+          ? 'https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg'
+          : 'https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png';
+        elementContent = `<a href="${badgeUrl}" target="_blank"><img src="${badgeImg}" alt="${badgeProps.alt || 'Download'}" width="${badgeProps.width || '135'}" style="display:inline-block;"></a>`;
         break;
 
       case 'unsubscribe':
-        const unsubProps = element.properties as UnsubscribeElementProperties;
-        const unsubLinkStyle = this.generateTypographyStyle(unsubProps.typography, { fontSize: '12px', color: '#6c757d' });
-        const unsubLink = unsubProps.link || { text: 'Unsubscribe', href: '#' };
-        elementContent = `<p style="margin:0; ${unsubLinkStyle}"><a href="${unsubLink.href}" target="${unsubLink.target || '_blank'}" style="color:inherit;">${unsubLink.text}</a></p>`;
+        const unsubProps = element.properties;
+        const unsubStyles = this.generateTypographyStyle(unsubProps.typography, { fontSize: '12px', color: '#6c757d' });
+        elementContent = `<a href="${unsubProps.link.href || '#[UNSUB_LINK]'}" target="${unsubProps.link.target || '_blank'}" style="${unsubStyles}">${unsubProps.link.text || 'Unsubscribe'}</a>`;
         break;
 
       case 'preferences':
-        const prefProps = element.properties as PreferencesElementProperties;
-        const prefLinkStyle = this.generateTypographyStyle(prefProps.typography, { fontSize: '12px', color: '#6c757d' });
-        const prefLink = prefProps.link || { text: 'Preferences', href: '#' };
-        elementContent = `<p style="margin:0; ${prefLinkStyle}"><a href="${prefLink.href}" target="${prefLink.target || '_blank'}" style="color:inherit;">${prefLink.text}</a></p>`;
+        const prefProps = element.properties;
+        const prefStyles = this.generateTypographyStyle(prefProps.typography, { fontSize: '12px', color: '#6c757d' });
+        elementContent = `<a href="${prefProps.link.href || '#[PREFERENCES_LINK]'}" target="${prefProps.link.target || '_blank'}" style="${prefStyles}">${prefProps.link.text || 'Manage Preferences'}</a>`;
         break;
 
       case 'previewText':
-        const previewProps = element.properties as PreviewTextElementProperties;
-        elementContent = `<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
-                            ${previewProps.text}
-                            ${'&zwnj;&nbsp;'.repeat(100)}
-                          </div>`;
-        break;
-
-      case 'container':
-      case 'box':
-        elementContent = `<!-- ${element.type} Element (ID: ${element.id}) -->`;
+        const previewProps = element.properties;
+        elementContent = `<div style="display:none; max-height:0; overflow:hidden;">${previewProps.text}</div>`;
         break;
 
       case 'footer':
-        const footerProps = element.properties as FooterElementProperties;
-        const footerStyles = this.generateTypographyStyle(footerProps.typography);
-        elementContent = `<div style="margin:0; ${footerStyles}">${element.content}</div>`;
+        const footerProps = element.properties;
+        const footerStyles = this.generateTypographyStyle(footerProps.typography, { fontSize: '12px', color: '#6c757d', textAlign: 'center' });
+        elementContent = `<div style="margin:0; ${footerStyles}">${footerProps.text}</div>`;
         break;
 
       default:
-        console.error('[HtmlGeneratorCore] Unhandled element type encountered:', element);
-        elementContent = `<!-- Unhandled Element Type: ${(element as any).type} -->`;
+        const _exhaustiveCheck: never = element;
+        elementContent = `<!-- Unsupported element type -->`;
+        break;
     }
 
-    return `
-      <tr>
-        <td id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
-          ${elementContent}
-        </td>
-      </tr>`;
+    return `<div data-element-id="${element.id}">${elementContent}</div>`;
   }
 
-  /**
-   * Helper to generate inline style strings from style objects.
-   * @param styles An object containing CSS style properties.
-   * @returns An inline style string.
-   */
   protected generateStyleString(styles: Record<string, any> | undefined): string {
     if (!styles) return '';
-    
-    let styleString = '';
-    for (const key in styles) {
-      const value = styles[key];
-      if (value !== undefined && value !== null) {
-        if (typeof value === 'object') {
-          // Handle nested objects like margin, padding
-          for (const subKey in value) {
-            const subValue = value[subKey];
-            if (subValue !== undefined && subValue !== null) {
-              styleString += `${this.camelToKebab(key)}-${this.camelToKebab(subKey)}: ${subValue}; `;
-            }
-          }
-        } else {
-          styleString += `${this.camelToKebab(key)}: ${value}; `;
-        }
-      }
-    }
-    return styleString.trim();
+    return Object.entries(styles)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => `${this.camelToKebab(key)}:${value};`)
+      .join(' ');
   }
-  
-  /**
-   * Helper to generate layout style strings.
-   * Correctly maps semantic alignment properties to the 'text-align' CSS property.
-   * @param layout Element layout properties.
-   * @returns An inline style string for layout.
-   */
-  protected generateLayoutStyle(layout: EmailElementLayout | undefined): string {
-    console.log("[HtmlGeneratorCore] generateLayoutStyle input:", JSON.stringify(layout));
-    if (!layout) return '';
-    
-    // Create a mutable copy of the layout styles
-    const styles: Record<string, any> = { ...layout };
 
-    // Check if 'align' property exists and map it to 'text-align'
-    if (styles.align) {
-      console.log(`[HtmlGeneratorCore] Mapping layout.align ('${styles.align}') to textAlign.`);
-      styles.textAlign = styles.align; // Map to correct CSS property
-      delete styles.align;             // Remove the original invalid property
-    }
-    
-    // Generate the style string using the corrected styles object
-    const styleString = this.generateStyleString(styles);
-    console.log("[HtmlGeneratorCore] generateLayoutStyle output:", styleString);
-    return styleString;
-  }
-  
-  /**
-   * Helper to generate typography style strings.
-   * @param typography Typography properties.
-   * @param defaults Default typography values.
-   * @returns An inline style string for typography.
-   */
   protected generateTypographyStyle(typography: any, defaults: Record<string, any> = {}): string {
     const styles = { ...defaults, ...(typography || {}) };
     return this.generateStyleString(styles);
   }
   
-  /**
-   * Helper to generate border style strings.
-   * @param border Border properties.
-   * @param defaults Default border values.
-   * @returns An inline style string for borders.
-   */
-  protected generateBorderStyle(border: any, defaults: Record<string, any> = {}): string {
-    if (!border && !Object.keys(defaults).length) return '';
-    const styles = { ...defaults, ...(border || {}) };
-    let borderString = '';
-    if (styles.width || styles.style || styles.color) {
-      borderString = `border:${styles.width || '1px'} ${styles.style || 'solid'} ${styles.color || '#000000'};`;
+  protected generateColumnStyle(styles: Column['styles']): string {
+    const styleObj: Record<string, any> = {};
+    if (styles.backgroundColor) styleObj.backgroundColor = styles.backgroundColor;
+    if (styles.textAlign) styleObj.textAlign = styles.textAlign;
+    if (styles.padding) {
+      styleObj.padding = `${styles.padding.top || '0'} ${styles.padding.right || '0'} ${styles.padding.bottom || '0'} ${styles.padding.left || '0'}`;
     }
-    const radiusString = styles.radius ? `border-radius:${styles.radius};` : '';
-    return `${borderString} ${radiusString}`.trim();
-  }
-
-  /**
-   * Helper to generate section style strings.
-   * @param styles Section style properties.
-   * @returns An inline style string for sections.
-   */
-  protected generateSectionStyle(styles: EmailSectionStyles | undefined): string {
-    if (!styles) return '';
-    
-    let styleObj = { ...styles }; // Copy to potentially modify
-    if (styleObj.padding) {
-      Object.assign(styleObj, {
-        paddingTop: styleObj.padding.top,
-        paddingRight: styleObj.padding.right,
-        paddingBottom: styleObj.padding.bottom,
-        paddingLeft: styleObj.padding.left,
-      });
-      delete styleObj.padding;
-    }
-    if (styleObj.border) {
-       Object.assign(styleObj, {
-        borderWidth: styleObj.border.width,
-        borderStyle: styleObj.border.style,
-        borderColor: styleObj.border.color,
-      });
-      delete styleObj.border;
-    }
-    
     return this.generateStyleString(styleObj);
   }
 
-  /**
-   * Helper to generate global body style strings.
-   * @param styles Global style properties.
-   * @returns An inline style string for body.
-   */
-  protected generateGlobalBodyStyle(styles: EmailGlobalStyles | undefined): string {
-      if (!styles) return '';
-      const bodySpecificStyles = {
-          fontFamily: styles.bodyFontFamily,
-          color: styles.bodyTextColor
-          // Removed backgroundColor from body styles
-      };
-      return this.generateStyleString(bodySpecificStyles);
+  protected generateSectionStyle(styles: EmailSectionStyles | undefined): string {
+    const styleObj: Record<string, any> = { ...styles };
+    if (styleObj.padding) {
+      styleObj.padding = `${styleObj.padding.top || '0'} ${styleObj.padding.right || '0'} ${styleObj.padding.bottom || '0'} ${styleObj.padding.left || '0'}`;
+    }
+    if (styleObj.border) {
+        const border = styleObj.border as { width?: string; style?: string; color?: string };
+        styleObj['border'] = `${border.width || '1px'} ${border.style || 'solid'} ${border.color || '#000000'}`;
+    }
+    return this.generateStyleString(styleObj);
   }
 
-  /**
-   * Helper to convert camelCase to kebab-case for CSS properties.
-   * @param str String in camelCase.
-   * @returns String in kebab-case.
-   */
+  protected generateGlobalBodyStyle(styles: EmailGlobalStyles | undefined): string {
+    if (!styles) return '';
+    const styleObj = {
+      'font-family': styles.bodyFontFamily,
+      'color': styles.bodyTextColor,
+      'background-color': styles.bodyBackgroundColor,
+    };
+    return this.generateStyleString(styleObj);
+  }
+
   protected camelToKebab(str: string): string {
-    return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
   }
 }
