@@ -455,91 +455,52 @@ export async function getUserProjects() {
 }
 
 // Get a specific project and its latest version
-export async function getProject(projectId: string) {
+export const getProject = async (id: string): Promise<{ project: Project; pendingChanges: PendingChange[] } | null> => {
   try {
     const { data, error } = await supabase
       .from('projects')
-      // Select all needed fields, including the new ones
       .select(`
-        id,
-        name,
-        last_edited_at,
-        created_at,
-        is_archived,
-        current_html,
-        semantic_email,
-        semantic_email_v2,
-        version
+        *,
+        pending_changes (
+          id,
+          project_id,
+          status,
+          created_at,
+          batch_id,
+          change_type,
+          target_id,
+          target_parent_id,
+          old_content,
+          new_content,
+          ai_rationale,
+          updated_at
+        )
       `)
-      .eq('id', projectId)
+      .eq('id', id)
+      .order('created_at', { foreignTable: 'pending_changes', ascending: false })
       .single();
 
-    if (error) handleSupabaseError(error);
-    if (!data) throw new Error('Project not found');
-
-    // Fetch related chat messages
-    const { data: chatMessages, error: chatError } = await supabase
-      .from('chat_messages')
-      .select('id, project_id, content, created_at, role')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
-
-    if (chatError) handleSupabaseError(chatError);
-
-    // Fetch related pending changes - V2 structure
-    const { data: pendingChangesDataV2, error: pendingChangesErrorV2 } = await supabase
-      .from('pending_changes')
-      .select('id, project_id, batch_id, change_type, target_id, target_parent_id, old_content, new_content, status, ai_rationale, created_at, updated_at')
-      .eq('project_id', projectId)
-      .eq('status', 'pending') // Fetch all statuses, filtering can happen in context if needed, or keep for only pending
-      .order('created_at', { ascending: true });
-
-    if (pendingChangesErrorV2) {
-      handleSupabaseError(pendingChangesErrorV2);
+    if (error) {
+      handleSupabaseError(error);
+      return null;
     }
 
-    // Map project data
-    const project: Project = {
-      id: data.id,
-      name: data.name,
-      lastEditedAt: new Date(data.last_edited_at),
-      createdAt: new Date(data.created_at),
-      isArchived: data.is_archived,
-      current_html: data.current_html,
-      semantic_email: null, // V1 is null
-      semantic_email_v2: data.semantic_email_v2 as EmailTemplateV2 | null, // Add missing field
-      version: data.version
-    };
+    if (!data) {
+      return null;
+    }
 
-    // Convert chat messages
-    const formattedMessages: ChatMessage[] = (chatMessages || []).map((msg: any) => ({
-      id: msg.id,
-      project_id: msg.project_id,
-      content: msg.content,
-      timestamp: new Date(msg.created_at),
-      role: msg.role
-    }));
+    const project = data as Project;
+    const pendingChanges = (data.pending_changes || []) as PendingChange[];
 
-    // Convert pending changes (GranularPendingChange)
-    // No complex mapping needed if all columns are selected and match the type
-    const formattedGranularChanges: PendingChange[] = (pendingChangesDataV2 || []) as PendingChange[];
+    // The faulty migration logic has been removed from here.
+    // The data is now passed directly to the components as-is from the database.
 
-    // Ensure V2 conversion: If semantic_email_v2 is null, but V1 exists, attempt conversion
-    let finalSemanticEmail: EmailTemplateV2 | null = null;
-
-    return {
-      project,
-      // Kept emailContent mapping for backward compatibility if needed, but prefer semantic_email
-      emailContent: data.semantic_email as EmailTemplate | null, 
-      chatMessages: formattedMessages,
-      pendingChanges: formattedGranularChanges // Use the correctly typed and fetched granular changes
-    };
-
+    return { project, pendingChanges };
   } catch (error) {
     console.error('Error fetching project:', error);
-    throw error;
+    return null;
   }
-}
+};
 
 // Save a chat message (updated signature)
 export async function saveChatMessage(message: ChatMessage): Promise<ChatMessage | null> {

@@ -5,7 +5,9 @@ export type {
     EmailElementProperties, // Base type if needed
     HeaderElementProperties,
     TextElementProperties,
+    TextElement,
     ButtonElementProperties,
+    ButtonElement,
     ImageElementProperties,
     DividerElementProperties,
     SpacerElementProperties,
@@ -42,6 +44,10 @@ export type {
 export { 
     validateEmailTemplateV2 // Corrected name and removed others
 } from './validators.ts';
+
+
+export * from './row.ts';
+export * from './column.ts';
 
 // Explicitly import and re-export types from diffs.ts
 export type {

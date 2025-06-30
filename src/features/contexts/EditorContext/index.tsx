@@ -40,6 +40,8 @@ import { EditorContextType, InteractionMode, TargetMessageType } from './types';
 import { useEditorState } from './useEditorState';
 import { useProjectManagement } from './useProjectManagement';
 import { useChatActions } from './useChatActions';
+import { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 
 // Helper for message type validation
 const VALID_TARGET_MESSAGE_TYPES: ReadonlyArray<TargetMessageType> = [
@@ -110,6 +112,51 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     console.log(`[EditorContext|selectElementForManualEdit] Selecting element: ${elementId}`);
     state.setSelectedManualEditElementId(elementId);
   }, [state.setSelectedManualEditElementId]);
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    setProjectData((prevProjectData) => {
+      if (!prevProjectData?.semantic_email_v2) return prevProjectData;
+
+      const newProjectData = JSON.parse(JSON.stringify(prevProjectData));
+      const sections = newProjectData.semantic_email_v2.sections;
+
+      let activeColumn, oldIndex = -1, overColumn, newIndex = -1;
+
+      // Find the column and index for the active and over elements
+      for (const section of sections) {
+        for (const row of section.elements) { // Note: `elements` contains rows
+          if (row.type === 'row') {
+            for (const column of row.columns) {
+              const activeIdx = column.elements.findIndex(el => el.id === active.id);
+              if (activeIdx !== -1) {
+                activeColumn = column;
+                oldIndex = activeIdx;
+              }
+              const overIdx = column.elements.findIndex(el => el.id === over.id);
+              if (overIdx !== -1) {
+                overColumn = column;
+                newIndex = overIdx;
+              }
+            }
+          }
+        }
+      }
+
+      // For now, only handle sorting within the same column
+      if (activeColumn && overColumn && activeColumn === overColumn && oldIndex !== -1 && newIndex !== -1) {
+        activeColumn.elements = arrayMove(activeColumn.elements, oldIndex, newIndex);
+        return newProjectData;
+      }
+
+      // Return original data if we can't handle the drag event (e.g., cross-column)
+      return prevProjectData;
+    });
+  };
 
   const commitManualEditsToDatabase = useCallback(async () => {
     if (!projectData || !projectData.semantic_email_v2 || !actualProjectId) {
@@ -1210,6 +1257,7 @@ export const EditorProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     selectedManualEditElementId: state.selectedManualEditElementId,
     selectElementForManualEdit,
     commitManualEditsToDatabase,
+    onDragEnd,
   };
   
   return (

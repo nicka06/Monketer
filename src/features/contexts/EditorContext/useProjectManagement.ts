@@ -212,7 +212,12 @@ export const useProjectManagement = ({
         } 
         else {
           console.log('No project identifiers in URL, starting fresh');
-          setIsLoadingProject(false);
+          setProjectData(null);
+          setActualProjectId(null);
+          setChatMessages(() => []);
+          setPendingChanges([]);
+          setLivePreviewHtml(null);
+          setHasFirstDraft(false);
           setIsCreatingFirstEmail(true);
           
           const storedPrompt = localStorage.getItem('initialEmailPrompt');
@@ -235,11 +240,7 @@ export const useProjectManagement = ({
     };
 
     initializeEditor();
-  }, [
-      projectId, username, projectName, navigate, toast, fetchAndSetProject, 
-      setIsLoadingProject, setCurrentUsername, setIsCreatingFirstEmail, 
-      setInitialInputValue
-  ]);
+  }, [projectId, username, projectName, fetchAndSetProject, navigate, toast, setCurrentUsername, setInitialInputValue, setProjectData, setActualProjectId, setChatMessages, setPendingChanges, setLivePreviewHtml, setHasFirstDraft, setIsCreatingFirstEmail, setIsLoadingProject]);
 
   const handleRefreshProject = useCallback(async () => {
     if (!actualProjectId) {

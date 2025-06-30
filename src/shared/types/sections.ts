@@ -1,4 +1,4 @@
-import { EmailElement } from './elements.ts';
+import { type RowElement } from './row.ts';
 
 export interface EmailSectionStyles {
   backgroundColor?: string;
@@ -18,6 +18,6 @@ export interface EmailSectionStyles {
 
 export interface EmailSection {
   id: string;
-  elements: EmailElement[];
+  elements: RowElement[];
   styles: EmailSectionStyles;
 } 

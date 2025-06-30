@@ -10,6 +10,7 @@ import type { Project, PendingChange, ExtendedChatMessage, SimpleClarificationMe
 import type { EmailTemplate as EmailTemplateV2 } from '../../../shared/types';
 import type { HtmlGeneratorV2 } from '@/features/services/htmlGenerator';
 import type React from 'react';
+import { DragEndEvent } from '@dnd-kit/core';
 
 /**
  * The specific types of messages that can exist in the chat.
@@ -61,6 +62,7 @@ export interface EditorContextType {
   setIsEditingTitle: React.Dispatch<React.SetStateAction<boolean>>;
   currentBatchId: string | null;
   setCurrentBatchId: React.Dispatch<React.SetStateAction<string | null>>;
+  onDragEnd: (event: DragEndEvent) => void;
   
   // UI States
   isLoading: boolean;

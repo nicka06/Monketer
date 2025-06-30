@@ -3,6 +3,8 @@ import type {
     EmailTemplate,
     EmailSection,
     EmailElement,
+    RowElement,
+    ColumnElement,
     EmailElementLayout,
     EmailSectionStyles,
     EmailGlobalStyles,
@@ -178,22 +180,15 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
   protected generateSectionHtml(section: EmailSection): string {
     const sectionStyles = this.generateSectionStyle(section.styles);
     
-    // Generate HTML for all elements within the section
-    const elementsHtml = section.elements
-      .map(element => this.generateElementHtml(element))
+    // Updated to iterate over rows and call the new row generator
+    const rowsHtml = section.elements
+      .map(row => this.generateRowHtml(row))
       .join('\n');
       
-    // Wrap elements in an inner table for structure within the section cell
-    const innerTable = `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;">
-        ${elementsHtml}
-      </table>`;
-      
-    // Return the outer table row for the section
     return `
       <tr>
         <td id="section-${section.id}" data-section-id="${section.id}" style="${sectionStyles}">
-          ${innerTable}
+          ${rowsHtml}
         </td>
       </tr>`;
   }
@@ -407,12 +402,12 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
         elementContent = `<!-- Unhandled Element Type: ${(element as any).type} -->`;
     }
 
+    // The element is now placed inside a column, so we remove the `<tr><td>` wrapper
+    // and use a simple div for styling.
     return `
-      <tr>
-        <td id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
-          ${elementContent}
-        </td>
-      </tr>`;
+      <div id="element-${element.id}" data-element-id="${element.id}" style="${layoutStyles}">
+        ${elementContent}
+      </div>`;
   }
 
   /**
@@ -549,5 +544,33 @@ export class HtmlGeneratorCore implements IHtmlGenerator {
    */
   protected camelToKebab(str: string): string {
     return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+  }
+
+  protected generateRowHtml(row: RowElement): string {
+    const rowLayoutStyles = this.generateLayoutStyle(row.layout);
+    const columnsHtml = row.columns.map(column => this.generateColumnHtml(column)).join('');
+
+    // Each row is a table to contain columns for email client compatibility
+    return `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%; ${rowLayoutStyles}">
+        <tr>
+          ${columnsHtml}
+        </tr>
+      </table>
+    `;
+  }
+
+  protected generateColumnHtml(column: ColumnElement): string {
+    const columnWidth = (column.width / 12) * 100;
+    const columnLayoutStyles = this.generateLayoutStyle(column.layout);
+    
+    // Elements are stacked inside this column's table cell
+    const elementsHtml = column.elements.map(element => this.generateElementHtml(element)).join('');
+
+    return `
+      <td width="${columnWidth}%" valign="top" style="${columnLayoutStyles}">
+        ${elementsHtml}
+      </td>
+    `;
   }
 }

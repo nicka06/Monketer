@@ -343,10 +343,13 @@ interface BaseEmailElement {
   layout: EmailElementLayout;
 }
 
+export type ButtonElement = BaseEmailElement & { type: 'button'; properties: ButtonElementProperties };
+export type TextElement = BaseEmailElement & { type: 'text'; properties: TextElementProperties };
+
 export type EmailElement = 
   | (BaseEmailElement & { type: 'header'; properties: HeaderElementProperties })
-  | (BaseEmailElement & { type: 'text'; properties: TextElementProperties })
-  | (BaseEmailElement & { type: 'button'; properties: ButtonElementProperties })
+  | TextElement
+  | ButtonElement
   | (BaseEmailElement & { type: 'image'; properties: ImageElementProperties })
   | (BaseEmailElement & { type: 'divider'; properties: DividerElementProperties })
   | (BaseEmailElement & { type: 'spacer'; properties: SpacerElementProperties })

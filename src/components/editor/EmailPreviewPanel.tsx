@@ -1,4 +1,4 @@
-import { EmailPreview } from '@/components/EmailPreview';
+import EmailPreview from '@/components/EmailPreview';
 import { useEditor } from '@/features/contexts/EditorContext';
 import EmailPreviewControls from './EmailPreviewControls';
 import PendingChangesBar from './PendingChangesBar';
@@ -18,12 +18,7 @@ interface EmailPreviewPanelProps {
 
 const EmailPreviewPanel = ({ fileInputRef }: EmailPreviewPanelProps) => {
   const { 
-    projectData, 
-    livePreviewHtml, 
-    pendingChanges, 
-    isDarkMode, 
-    isMobileView,
-    handlePlaceholderActivation,
+    projectData,
     isLoading
   } = useEditor();
   
@@ -32,9 +27,6 @@ const EmailPreviewPanel = ({ fileInputRef }: EmailPreviewPanelProps) => {
   
   // Calculate content height based on controls presence
   const contentHeight = hasPreviewContent ? "h-[calc(100%-50px)]" : "h-full";
-  
-  // Get the HTML content to display
-  const htmlContent = livePreviewHtml || projectData?.current_html || '';
   
   return (
     <div 
@@ -50,14 +42,7 @@ const EmailPreviewPanel = ({ fileInputRef }: EmailPreviewPanelProps) => {
         {/* Email Preview - Only render when we have actual content and not loading */}
         {hasPreviewContent && (
           <div className="h-full overflow-auto">
-            <EmailPreview
-              currentHtml={htmlContent}
-              pendingChanges={pendingChanges}
-              previewMode={isDarkMode ? 'dark' : 'light'}
-              previewDevice={isMobileView ? 'mobile' : 'desktop'}
-              semanticTemplate={projectData.semantic_email_v2}
-              onPlaceholderActivate={handlePlaceholderActivation}
-            />
+            <EmailPreview />
           </div>
         )}
         
